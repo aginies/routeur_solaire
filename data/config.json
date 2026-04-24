@@ -1,0 +1,87 @@
+{
+    "name": "Solaire-WROOM",
+    "cpu_freq": 240,
+    "internal_led_pin": 2,
+    "max_esp32_temp": 65.0,
+
+    "e_wifi": true,
+    "wifi_ssid": "",
+    "wifi_password": "",
+    "wifi_static_ip": "",
+    "wifi_subnet": "",
+    "wifi_gateway": "",
+    "wifi_dns": "",
+
+    "ap_ssid": "W_Solaire",
+    "ap_password": "12345678",
+    "ap_hidden_ssid": false,
+    "ap_channel": 6,
+    "ap_ip": "192.168.66.1",
+
+    "ssr_pin": 12,
+    "relay_pin": 13,
+    "ds18b20_pin": 14,
+    "fan_pin": 5,
+    "zx_pin": 15,
+
+    "shelly_em_ip": "10.0.10.60",
+    "e_shelly_mqtt": true,
+    "shelly_mqtt_topic": "shellies/homeassistant/emeter/0/power",
+    "fake_shelly": false,
+    "poll_interval": 1,
+
+    "equipment_name": "Ballon",
+    "equipment_max_power": 2300.0,
+    "export_setpoint": 0.0,
+
+    "delta": 50.0,
+    "deltaneg": 0.0,
+    "compensation": 100.0,
+
+    "burst_period": 0.5,
+    "min_power_threshold": 10.0,
+    "min_off_time": 1,
+    "boost_minutes": 60,
+
+    "force_equipment": false,
+    "e_force_window": false,
+    "force_start": "22:05",
+    "force_end": "05:55",
+
+    "night_start": "22:00",
+    "night_end": "05:50",
+    "night_poll_interval": 15,
+
+    "e_ssr_temp": true,
+    "ssr_max_temp": 65.0,
+
+    "e_fan": true,
+    "fan_temp_offset": 10,
+
+    "shelly_timeout": 10,
+
+    "e_jsy": false,
+    "jsy_uart_id": 2,
+    "jsy_tx": 17,
+    "jsy_rx": 16,
+
+    "control_mode": "phase",
+    "half_period_us": 10000,
+    "zx_busypoll_us": 1000,
+    "zx_timeout_ms": 500,
+    "debug_phase": false,
+
+    "e_mqtt": true,
+    "mqtt_ip": "10.0.10.101",
+    "mqtt_port": 1883,
+    "mqtt_user": "",
+    "mqtt_password": "",
+    "mqtt_name": "GuiboSolar",
+    "mqtt_retain": false,
+    "mqtt_keepalive": 60,
+    "mqtt_discovery_prefix": "homeassistant",
+    "mqtt_report_interval": 10,
+
+    "web_user": "",
+    "web_password": ""
+}
