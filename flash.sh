@@ -20,11 +20,34 @@ usage() {
     echo "  -h, --help  Show this help message"
 }
 
+# Cleanup function to restore config if swapped
+cleanup() {
+    if [ -f "data/config.json.bak" ]; then
+        echo "--- Restoring original config.json ---"
+        mv data/config.json.bak data/config.json
+    fi
+}
+trap cleanup EXIT
+
 # Parse options
 while [[ "$#" -gt 0 ]]; do
     case $1 in
-        -e) ENV="$2"; shift ;;
-        -d) STATS_DAYS="$2"; shift ;;
+        -e) 
+            if [[ -n "$2" && "$2" != -* ]]; then
+                ENV="$2"; shift
+            else
+                echo "Error: Argument for $1 is missing" >&2
+                exit 1
+            fi
+            ;;
+        -d) 
+            if [[ -n "$2" && "$2" != -* ]]; then
+                STATS_DAYS="$2"; shift
+            else
+                echo "Error: Argument for $1 is missing" >&2
+                exit 1
+            fi
+            ;;
         -t|--test) RUN_TESTS=true ;;
         --compress) COMPRESS=true ;;
         --skip-fs) SKIP_FS=true ;;
@@ -40,9 +63,11 @@ if [ "$RUN_TESTS" = true ]; then
     pio test -e native
     echo "--- TESTS PASSED ---"
     # If we only wanted tests, we can exit here
-    if [ "$#" -eq 0 ] && [ "$ENV" == "s3" ]; then
-        echo "Exiting after tests. To flash, run without --test or specify an environment."
-        exit 0
+    if [ "$ENV" == "s3" ] && [ "$SKIP_FS" == false ] && [ "$COMPRESS" == false ] && [ -z "$STATS_DAYS" ]; then
+         # Check if user passed other arguments. If not, exit.
+         # Actually simpler: if they didn't specify an env, assume they only wanted tests.
+         # But the user might want tests then flash.
+         echo "Tests finished."
     fi
 fi
 
@@ -71,7 +96,7 @@ fi
 
 # Handle Stats Days override
 if [ -n "$STATS_DAYS" ]; then
-    export PLATFORMIO_BUILD_FLAGS="-D MAX_STATS_DAYS=$STATS_DAYS"
+    export PLATFORMIO_BUILD_FLAGS="${PLATFORMIO_BUILD_FLAGS} -D MAX_STATS_DAYS=$STATS_DAYS"
     echo "--- OVERRIDE: MAX_STATS_DAYS=$STATS_DAYS ---"
 fi
 
@@ -88,12 +113,6 @@ if [ "$SKIP_FS" = false ]; then
     fi
     echo "--- 3. Building and Uploading Filesystem (LittleFS) ---"
     pio run -e $PIO_ENV -t uploadfs
-fi
-
-# Cleanup swapped config if we did it
-if [ "$ENV" == "wroom" ] && [ -f "data/config.json.bak" ]; then
-    echo "--- Restoring original config.json ---"
-    mv data/config.json.bak data/config.json
 fi
 
 echo "--- DONE! ---"
