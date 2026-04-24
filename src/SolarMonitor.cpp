@@ -41,7 +41,12 @@ void SolarMonitor::init(const Config& config) {
     _config = &config;
     _dataMutex = xSemaphoreCreateMutex();
     _zxEventGroup = xEventGroupCreate();
-    _ctrl = new IncrementalController(config.delta, config.deltaneg, config.compensation, config.equipment_max_power);
+    _ctrl = new IncrementalController(
+        (int32_t)(config.delta * 1000.0f),
+        (int32_t)(config.deltaneg * 1000.0f),
+        (int32_t)config.compensation,
+        (int32_t)(config.equipment_max_power * 1000.0f)
+    );
     _ssrPinCached = config.ssr_pin;
 
     Serial.println("--- Hardware Init ---");
@@ -450,7 +455,12 @@ void SolarMonitor::monitorTask(void* pvParameters) {
                 _currentDuty = 1.0;
             } else {
                 float effectiveGrid = currentGridPower - _config->export_setpoint;
-                _currentDuty = _ctrl->update(_currentDuty, effectiveGrid);
+                int32_t currentDutyMilli = (int32_t)(_currentDuty * 1000.0f);
+                int32_t gridPowerMw = (int32_t)(effectiveGrid * 1000.0f);
+                
+                int32_t newDutyMilli = _ctrl->update(currentDutyMilli, gridPowerMw);
+                _currentDuty = (float)newDutyMilli / 1000.0f;
+
                 float maxDuty = _config->max_duty_percent / 100.0f;
                 if (_currentDuty > maxDuty) _currentDuty = maxDuty;
                 Serial.printf("Ctrl: Grid=%.1fW, Setpoint=%.0fW, Duty=%.1f%%\n", currentGridPower, _config->export_setpoint, _currentDuty * 100.0);

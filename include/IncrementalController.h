@@ -1,23 +1,24 @@
 #ifndef INCREMENTALCONTROLLER_H
 #define INCREMENTALCONTROLLER_H
 
-#ifdef NATIVE_TEST
 #include <stdint.h>
-#else
-#include <Arduino.h>
-#endif
 
 class IncrementalController {
 public:
-    IncrementalController(float delta, float deltaneg, float compensation, float maxPower);
-    float update(float currentDuty, float gridPower);
+    // Units: mW for power, 0-100 for compensation factor, mW for maxPower
+    IncrementalController(int32_t delta_mw, int32_t deltaneg_mw, int32_t compensation, int32_t maxPower_mw);
+    
+    // currentDutyMilli: 0-1000 (0.1% steps), gridPower_mw: mW
+    // Returns new duty in milli-units (0-1000)
+    int32_t update(int32_t currentDutyMilli, int32_t gridPower_mw);
+    
     void reset();
 
 private:
-    float _delta;
-    float _deltaneg;
-    float _compensation;
-    float _maxPower;
+    int32_t _delta;
+    int32_t _deltaneg;
+    int32_t _compensation;
+    int32_t _maxPower;
 };
 
 #endif

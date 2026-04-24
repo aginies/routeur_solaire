@@ -1,44 +1,38 @@
 #include <unity.h>
-#include "../../src/IncrementalController.cpp" // Include source for native testing
+#include "../../src/IncrementalController.cpp" 
 
 void setUp(void) {}
 void tearDown(void) {}
 
-void test_initialization_swaps_delta(void) {
-    IncrementalController ctrl(0.0f, 50.0f, 100.0f, 2000.0f);
-    // Testing swaps requires access to private or checking output logic
-    // We can infer swap by checking behavior when importing vs exporting
-}
-
 void test_duty_decreases_on_import(void) {
-    // Delta=50, Deltaneg=0, Comp=100, MaxP=2000
-    IncrementalController ctrl(50.0f, 0.0f, 100.0f, 2000.0f);
-    float initialDuty = 0.5f;
-    float gridPower = 100.0f; // Importing 100W (above delta 50W)
+    // Delta=50W (50000mW), Deltaneg=0, Comp=100, MaxP=2000W (2000000mW)
+    IncrementalController ctrl(50000, 0, 100, 2000000);
+    int32_t initialDuty = 500; // 50.0%
+    int32_t gridPower = 100000; // 100W (above delta 50W)
     
-    float newDuty = ctrl.update(initialDuty, gridPower);
+    int32_t newDuty = ctrl.update(initialDuty, gridPower);
     TEST_ASSERT_TRUE(newDuty < initialDuty);
 }
 
 void test_duty_increases_on_export(void) {
-    IncrementalController ctrl(50.0f, 0.0f, 100.0f, 2000.0f);
-    float initialDuty = 0.5f;
-    float gridPower = -50.0f; // Exporting 50W (below deltaneg 0W)
+    IncrementalController ctrl(50000, 0, 100, 2000000);
+    int32_t initialDuty = 500; // 50.0%
+    int32_t gridPower = -50000; // -50W (below deltaneg 0W)
     
-    float newDuty = ctrl.update(initialDuty, gridPower);
+    int32_t newDuty = ctrl.update(initialDuty, gridPower);
     TEST_ASSERT_TRUE(newDuty > initialDuty);
 }
 
 void test_duty_boundaries(void) {
-    IncrementalController ctrl(50.0f, 0.0f, 100.0f, 2000.0f);
+    IncrementalController ctrl(50000, 0, 100, 2000000);
     
-    // Test 0%% lower bound
-    float duty0 = ctrl.update(0.0f, 1000.0f);
-    TEST_ASSERT_EQUAL_FLOAT(0.0f, duty0);
+    // Test 0% lower bound (should stay 0 even with high import)
+    int32_t duty0 = ctrl.update(0, 1000000);
+    TEST_ASSERT_EQUAL_INT32(0, duty0);
     
-    // Test 100%% upper bound
-    float duty100 = ctrl.update(1.0f, -1000.0f);
-    TEST_ASSERT_EQUAL_FLOAT(1.0f, duty100);
+    // Test 100% upper bound (should stay 1000 even with high export)
+    int32_t duty100 = ctrl.update(1000, -1000000);
+    TEST_ASSERT_EQUAL_INT32(1000, duty100);
 }
 
 int main(int argc, char **argv) {
