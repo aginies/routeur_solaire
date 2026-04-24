@@ -17,7 +17,7 @@ void setup() {
     Serial.begin(115200);
 
     // Initialize Watchdog
-    esp_task_wdt_init(10, true); // 10s timeout, panic on failure
+    esp_task_wdt_init(30, true); // 30s timeout to allow for night mode intervals
     esp_task_wdt_add(NULL);      // Add current (main) task
 
     if (!LittleFS.begin(true)) {

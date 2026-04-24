@@ -506,6 +506,12 @@
                 const d = await r.json();
                 applyStatus(d);
 
+                // Update chart if in night mode (already throttled by 10s poll)
+                // or periodically in normal mode
+                if (d.night_mode) {
+                    updateChart();
+                }
+
                 // Dynamic Polling Adjustment
                 const newMode = d.night_mode ? 'night' : 'normal';
                 if (newMode !== currentPollingMode) {
@@ -572,7 +578,7 @@
         }
 
         async function updateChart() {
-            if (nightMode || typeof Chart === 'undefined') return;
+            if (typeof Chart === 'undefined') return;
             try {
                 const r = await fetch('/history');
                 const history = await r.json();

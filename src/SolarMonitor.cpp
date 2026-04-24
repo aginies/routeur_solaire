@@ -325,11 +325,11 @@ void SolarMonitor::historyTask(void* pvParameters) {
             historyWriteIdx = (historyWriteIdx + 1) % MAX_HISTORY;
             if (historyCount < MAX_HISTORY) historyCount++;
             xSemaphoreGive(_dataMutex);
-            }
+        }
 
-            vTaskDelay(pdMS_TO_TICKS(5000));
-            }
-            }
+        vTaskDelay(pdMS_TO_TICKS(5000));
+    }
+}
 
 void SolarMonitor::monitorTask(void* pvParameters) {
     esp_task_wdt_add(NULL); // Add this task to TWDT
@@ -359,10 +359,9 @@ void SolarMonitor::monitorTask(void* pvParameters) {
             Logger::logData(dataLine);
         }
 
-        // 1. Safety Cutoffs (Internal ESP32 Temp)
-        float espTemp = temperatureRead(); // Built-in ESP32
+        // 1. Update State & Safety
+        float espTemp = temperatureRead();
         
-        // Update Night Mode status
         time_t t_now;
         time(&t_now);
         struct tm ti;
@@ -376,7 +375,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
             emergencyMode = true;
             _currentDuty = 0.0;
             digitalWrite(_config->ssr_pin, LOW);
-            digitalWrite(_config->relay_pin, HIGH); // Relay OFF (Active Low)
+            digitalWrite(_config->relay_pin, HIGH); // Relay OFF
             vTaskDelay(pdMS_TO_TICKS(2000));
             continue;
         }
@@ -386,25 +385,22 @@ void SolarMonitor::monitorTask(void* pvParameters) {
             readTemperatures();
             lastTempRead = now;
 
-            // Safety Cutoff (Water/SSR)
             if (_config->e_ssr_temp && currentSsrTemp >= _config->ssr_max_temp) {
                 Logger::log("SAFETY: External Overheat!", true);
                 emergencyMode = true;
                 _currentDuty = 0.0;
                 digitalWrite(_config->ssr_pin, LOW);
-                digitalWrite(_config->relay_pin, HIGH); // Relay OFF (Active Low)
+                digitalWrite(_config->relay_pin, HIGH);
                 vTaskDelay(pdMS_TO_TICKS(2000));
                 continue;
             }
 
-            // Recovery from safety
             if (emergencyMode) {
-                digitalWrite(_config->relay_pin, LOW); // Relay ON (Active Low)
+                digitalWrite(_config->relay_pin, LOW); // Relay ON
                 emergencyMode = false;
                 Logger::log("SAFETY: Conditions normal, relay restored.");
             }
 
-            // Fan Control
             if (_config->e_fan && _config->e_ssr_temp) {
                 float lowThreshold = _config->ssr_max_temp - _config->fan_temp_offset;
                 if (currentSsrTemp >= _config->ssr_max_temp) testFanSpeed(100);
@@ -415,14 +411,9 @@ void SolarMonitor::monitorTask(void* pvParameters) {
 
         // 3. Grid Power Retrieval
         float gridPower = -99999.0;
-
-        if (_config->e_shelly_mqtt) {
-            if (MqttManager::hasLatestMqttGridPower) {
-                gridPower = MqttManager::latestMqttGridPower;
-                MqttManager::hasLatestMqttGridPower = false;
-            } else {
-                gridPower = getShellyPower();
-            }
+        if (_config->e_shelly_mqtt && MqttManager::hasLatestMqttGridPower) {
+            gridPower = MqttManager::latestMqttGridPower;
+            MqttManager::hasLatestMqttGridPower = false;
         } else {
             gridPower = getShellyPower();
         }
@@ -436,9 +427,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
                 Logger::log("Grid Power Recovered");
             }
         } else {
-            // Check for timeout (account for longer poll interval in night mode)
-            uint32_t effectiveTimeout = max((uint32_t)(_config->shelly_timeout * 1000),
-                                            (uint32_t)(currentPollInterval * 2000));
+            uint32_t effectiveTimeout = max((uint32_t)(_config->shelly_timeout * 1000), (uint32_t)(currentPollInterval * 2000));
             if (now - _lastGoodPoll >= effectiveTimeout) {
                 if (!safeState) {
                     Logger::log("WATCHDOG: Shelly timeout!", true);
@@ -449,7 +438,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
             }
         }
 
-        // 4. Mode Selection — never redirect during safe/emergency state
+        // 4. Mode Selection
         if (safeState || emergencyMode) {
             _currentDuty = 0.0;
             forceModeActive = false;
@@ -468,14 +457,12 @@ void SolarMonitor::monitorTask(void* pvParameters) {
             }
         }
 
-        // Update equipmentPower for logging/UI
         equipmentPower = _currentDuty * _config->equipment_max_power;
 
-        // 5. Stats Update
+        // 5. Stats & MQTT
         StatsManager::update(currentGridPower, equipmentPower, now - lastStatsUpdate);
         lastStatsUpdate = now;
 
-        // 6. MQTT Report
         if (_config->e_mqtt && (now - lastMqttReport >= (_config->mqtt_report_interval * 1000))) {
             lastMqttReport = now;
             MqttManager::publishStatus(
@@ -491,7 +478,12 @@ void SolarMonitor::monitorTask(void* pvParameters) {
             );
         }
 
-        vTaskDelay(pdMS_TO_TICKS(currentPollInterval * 1000));
+        // Watchdog-friendly sleep
+        int sleepSeconds = currentPollInterval;
+        for (int i = 0; i < sleepSeconds; i++) {
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            esp_task_wdt_reset();
+        }
     }
 }
 
