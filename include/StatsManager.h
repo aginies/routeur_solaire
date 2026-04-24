@@ -10,6 +10,9 @@
 #include <ESPAsyncWebServer.h>
 #endif
 #include <map>
+#ifndef NATIVE_TEST
+#include <Preferences.h>
+#endif
 
 struct DailyStats {
     float import = 0;

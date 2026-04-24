@@ -9,6 +9,8 @@
 #ifdef NATIVE_TEST
 #define millis() 0
 #define round(x) std::round(x)
+#else
+static Preferences prefs;
 #endif
 
 std::map<String, DailyStats> StatsManager::_history;
@@ -19,6 +21,19 @@ float StatsManager::totalExportToday = 0;
 
 void StatsManager::init() {
 #ifndef NATIVE_TEST
+    prefs.begin("solar_stats", false);
+    totalImportToday = prefs.getFloat("import", 0);
+    totalRedirectToday = prefs.getFloat("redirect", 0);
+    totalExportToday = prefs.getFloat("export", 0);
+
+    String lastDay = prefs.getString("last_day", "");
+    String today = getTodayKey();
+    if (lastDay != "" && lastDay != today && today != "1970-01-01") {
+        totalImportToday = 0;
+        totalRedirectToday = 0;
+        totalExportToday = 0;
+    }
+
     if (!LittleFS.exists("/stats.json")) {
         File file = LittleFS.open("/stats.json", "w");
         if (file) {
@@ -110,6 +125,16 @@ void StatsManager::update(float gridPower, float equipmentPower, uint32_t interv
     totalExportToday = ds.export_wh;
 
 #ifndef NATIVE_TEST
+    // Save to NVS every 1 minute for resilience, LittleFS every 5 minutes
+    static uint32_t lastNvsSave = 0;
+    if (millis() - lastNvsSave > 60000) {
+        prefs.putFloat("import", totalImportToday);
+        prefs.putFloat("redirect", totalRedirectToday);
+        prefs.putFloat("export", totalExportToday);
+        prefs.putString("last_day", key);
+        lastNvsSave = millis();
+    }
+
     if (millis() - _lastSave > 300000) { // Save every 5 minutes
         save();
         _lastSave = millis();

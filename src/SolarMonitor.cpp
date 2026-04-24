@@ -2,6 +2,7 @@
 #include "Logger.h"
 #include "MqttManager.h"
 #include "StatsManager.h"
+#include "Utils.h"
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <esp_task_wdt.h>
@@ -374,6 +375,15 @@ void SolarMonitor::monitorTask(void* pvParameters) {
         int currMin = ti.tm_hour * 60 + ti.tm_min;
         nightModeActive = isNight(currMin);
         int currentPollInterval = nightModeActive ? _config->night_poll_interval : _config->poll_interval;
+
+        // Dynamic CPU Frequency scaling
+        static int currentFreq = -1;
+        int targetFreq = nightModeActive ? 80 : _config->cpu_freq;
+        if (targetFreq != currentFreq) {
+            Utils::setCpuFrequency(targetFreq);
+            currentFreq = targetFreq;
+            Logger::log("CPU Frequency set to " + String(targetFreq) + " MHz");
+        }
 
         if (espTemp >= _config->max_esp32_temp) {
             Logger::log("SAFETY: ESP32 Overheat!", true);
