@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solaire</title>
+    <script src="/chart.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #1a1a2e;
+            --card-bg: #16213e;
+            --text-color: #eee;
+            --accent-color: #f0c040;
+            --muted-text: #aaa;
+            --log-bg: #0d0d1a;
+            --border-color: #333;
+        }
+        
+        body.light-mode {
+            --bg-color: #f0f2f5;
+            --card-bg: #ffffff;
+            --text-color: #333;
+            --accent-color: #e67e22;
+            --muted-text: #666;
+            --log-bg: #f9f9f9;
+            --border-color: #ddd;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            padding: 20px;
+            transition: background 0.3s, color 0.3s;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 24px;
+            position: relative;
+        }
+        h1 { color: var(--accent-color); font-size: 1.6em; }
+        #dateTime { font-size: 0.9em; color: var(--muted-text); margin-top: 4px; }
+        
+        #themeToggle {
+            position: absolute;
+            top: 0;
+            right: 0;
+            background: none;
+            border: 1px solid var(--border-color);
+            color: var(--accent-color);
+            padding: 5px 10px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.8em;
+        }
+
+        .mqtt-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.7em;
+            font-weight: bold;
+            margin-top: 8px;
+            text-transform: uppercase;
+        }
+        .mqtt-ok { background: #27ae60; color: #fff; }
+        .mqtt-err { background: #e74c3c; color: #fff; }
+        .mqtt-off { background: #555; color: #ccc; }
+
+        .cards {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            justify-content: center;
+            margin-bottom: 24px;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 24px 16px;
+            flex: 1 1 180px;
+            min-width: 150px;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            border: 1px solid var(--border-color);
+        }
+        .chart-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 16px;
+            max-width: 800px;
+            margin: 0 auto 24px auto;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            border: 1px solid var(--border-color);
+        }
+        .card .label {
+            font-size: 0.85em;
+            color: var(--muted-text);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            height: 34px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .card .value {
+            font-size: 2em;
+            font-weight: bold;
+        }
+        .card .unit { font-size: 0.7em; color: var(--muted-text); margin-left: 4px; }
+        .positive { color: #e74c3c; }
+        .negative { color: #2ecc71; }
+        .neutral  { color: var(--accent-color); }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 14px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: 600;
+            margin-top: 6px;
+        }
+        .badge-on  { background: #27ae60; color: #fff; }
+        .badge-off { background: #555; color: #ccc; }
+        .badge-force { background: #e67e22; color: #fff; }
+
+        /* Collapsible Details Styles */
+        details.collapsible-box {
+            max-width: 800px;
+            margin: 0 auto 15px auto;
+            background: var(--card-bg);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+        }
+        details.collapsible-box summary {
+            padding: 12px 15px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.95em;
+            background: #0f3460;
+            color: #f0c040;
+            list-style: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-left: 4px solid #f0c040;
+        }
+        details.collapsible-box summary {
+            list-style: none;
+        }
+        details.collapsible-box summary::-webkit-details-marker { display: none; }
+        summary::after {
+            content: '▶';
+            font-size: 0.7em;
+            display: inline-block;
+            transition: transform 0.3s;
+            color: #f0c040;
+        }
+        details[open] summary::after {
+            transform: rotate(90deg);
+        }
+
+        .health-content {
+            padding: 15px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 10px;
+            font-size: 0.85em;
+        }
+        .health-item { display: flex; flex-direction: column; }
+        .health-label { color: var(--muted-text); font-size: 0.8em; margin-bottom: 2px; }
+        .health-value { font-weight: bold; color: var(--text-color); }
+
+        .error-box {
+            background: #c0392b;
+            color: #fff;
+            padding: 10px 16px;
+            border-radius: 8px;
+            text-align: center;
+            margin-bottom: 16px;
+            display: none;
+        }
+        .footer {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 24px;
+        }
+        .footer a {
+            background: #0f3460;
+            color: #eee;
+            padding: 10px 18px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 0.9em;
+            transition: background 0.2s;
+        }
+        .footer a:hover { background: #1a5276; }
+        
+        /* Tab Styles */
+        .tab-container {
+            display: flex;
+            gap: 5px;
+            padding: 10px 15px 0 15px;
+            background: var(--card-bg);
+        }
+        .tab-btn {
+            background: #0f3460;
+            color: #aaa;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px 6px 0 0;
+            cursor: pointer;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+        .tab-btn.active {
+            background: var(--log-bg);
+            color: var(--accent-color);
+            border-bottom: 2px solid var(--accent-color);
+        }
+
+        .log-box {
+            background: var(--log-bg);
+            padding: 12px;
+            height: 200px;
+            overflow-y: auto;
+            scrollbar-width: none;
+            font-size: 0.78em;
+            font-family: monospace;
+            color: var(--text-color);
+            white-space: pre-wrap;
+            line-height: 1.4;
+            display: flex;
+            flex-direction: column;
+        }
+        .log-entry { display: block; margin-bottom: 2px; width: 100%%; }
+        .log-safety { color: #ff4d4d; font-weight: bold; }
+        .log-error  { color: #ff4d4d; }
+        .log-force  { color: #ffa500; }
+        .log-ok     { color: #2ecc71; }
+        .log-info   { color: #90EE90; }
+        .log-dim    { color: #666; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Gestion Solaire</h1>
+        <div id="dateTime">--/--/---- --:--</div>
+        <button id="themeToggle" onclick="toggleTheme()">☀️ Mode</button>
+        <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+            <div id="shellyStatus" class="mqtt-badge mqtt-off">SHELLY: --</div>
+            <div id="mqttStatus" class="mqtt-badge mqtt-off" style="display: none;">MQTT: --</div>
+        </div>
+    </div>
+
+    <div id="errorBox" class="error-box"></div>
+    <div id="nightBox" class="error-box" style="background: #2c3e50; border: 1px solid #34495e;">Pas de production possible (Mode Nuit) [<span id="nightTime">--:--</span>]</div>
+
+    <div class="cards">
+        <div class="card">
+            <div class="label">
+                <span>Puissance réseau</span>
+                <span id="gridSource" style="text-transform:none; font-size:0.9em; color:#888;">(...)</span>
+            </div>
+            <div class="value" id="gridPower">—<span class="unit">W</span></div>
+        </div>
+        <div class="card">
+            <div class="label"><span>%EQUIPMENT_NAME%</span></div>
+            <div class="value" id="equipmentPower">—<span class="unit">W</span></div>
+        </div>
+        <div class="card" id="ssrTempCard">
+            <div class="label"><span>Temp SSR</span></div>
+            <div class="value" id="ssrTemp">—<span class="unit">°C</span></div>
+            <div id="fanStatus" style="margin-top: 8px; display: none;">
+                <span class="badge badge-on" id="fanBadge">Ventilateur: 0%%</span>
+            </div>
+        </div>
+        <div class="card">
+            <div class="label"><span>Mode forcé</span></div>
+
+            <div id="forceMode"><span class="badge badge-off">Inactif</span></div>
+            <div style="margin-top: 12px;">
+                <form action="/boost" method="POST" style="display:flex; gap: 4px; justify-content: center;">
+                    <select name="min" style="padding: 4px; background: #0d0d1a; color: #eee; border: 1px solid #444; border-radius: 4px; font-size: 0.8em;">
+                        <option value="60" selected>1 h</option>
+                        <option value="120">2 h</option>
+                        <option value="180">3 h</option>
+                    </select>
+                    <button type="submit" class="badge badge-force" style="border:none; cursor:pointer; margin-top:0;">Boost</button>
+                </form>
+                <form action="/cancel_boost" method="POST" id="cancelBoostForm" style="display:none; margin-top:6px; justify-content: center;">
+                    <button type="submit" class="badge badge-off" style="border:none; cursor:pointer; margin-top:0;">Annuler Boost</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div id="todaySummary" style="font-size: 0.75em; color: #666; text-align: center; margin-top: 15px; letter-spacing: 0.05em; opacity: 0.8;">
+        Aujourd'hui : <span id="sumImport" style="color:#e74c3c">—</span> réseau | 
+        <span id="sumRedirect" style="color:#2ecc71">—</span> redirigé | 
+        <span id="sumExport" style="color:#f1c40f">—</span> injecté
+    </div>
+
+    <div id="chartCard" class="chart-card" style="display: none;">
+        <canvas id="powerChart"></canvas>
+    </div>
+
+    <div id="safeStateBox" class="error-box"></div>
+    
+    <details class="collapsible-box" id="logDetails">
+        <summary>Journaux (Logs)</summary>
+        <div class="tab-container">
+            <button id="tabSys" class="tab-btn active" onclick="setLogMode('sys')">Système</button>
+            <button id="tabData" class="tab-btn" onclick="setLogMode('data')">Données (1m)</button>
+        </div>
+        <div class="log-box" id="logBox">Chargement...</div>
+    </details>
+
+    <details class="collapsible-box">
+        <summary>Santé du Système</summary>
+        <div class="health-content">
+            <div class="health-item">
+                <span class="health-label">WiFi RSSI</span>
+                <span class="health-value" id="healthRssi">— dBm</span>
+            </div>
+            <div class="health-item">
+                <span class="health-label">CPU Temp</span>
+                <span class="health-value" id="healthCpuTemp">— °C</span>
+            </div>
+            <div class="health-item">
+                <span class="health-label">RAM Libre</span>
+                <span class="health-value" id="healthRam">— KB</span>
+            </div>
+            <div class="health-item">
+                <span class="health-label">PSRAM Libre</span>
+                <span class="health-value" id="healthPsram">— KB</span>
+            </div>
+            <div class="health-item">
+                <span class="health-label">Uptime</span>
+                <span class="health-value" id="healthUptime">—</span>
+            </div>
+        </div>
+    </details>
+
+    <div class="footer">
+        <a href="/web_config">Configuration</a>
+        %STATS_LINK%
+        <a href="/RESET_device" onclick="return confirm('Redémarrer le device ?')">Reset</a>
+    </div>
+    <div style="text-align: center; font-size: 0.7em; color: #555; margin-top: 15px;">
+        <a href="https://github.com/aginies/domotique/tree/main/solar" target="_blank" style="background:none; color:inherit; padding:0;">Version %VERSION%</a>
+    </div>
+
+    <script>
+        let powerChart = null;
+        let logMode = 'sys'; // 'sys' or 'data'
+        let nightMode = false;
+
+        function setLogMode(mode) {
+            logMode = mode;
+            document.getElementById('tabSys').classList.toggle('active', mode === 'sys');
+            document.getElementById('tabData').classList.toggle('active', mode === 'data');
+            updateLog();
+        }
+
+        function updateDateTime() {
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('fr-FR');
+            const timeStr = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+            document.getElementById('dateTime').textContent = dateStr + ' ' + timeStr;
+        }
+
+        function applyStatus(d) {
+            if (!d) return;
+
+            const num = (v, def = "—") => {
+                if (v === null || v === undefined || isNaN(v)) return def;
+                return parseFloat(v).toFixed(1);
+            };
+
+            try {
+                // Grid Power
+                const gp = parseFloat(d.grid_power);
+                const gpEl = document.getElementById('gridPower');
+                if (gpEl) {
+                    gpEl.innerHTML = num(d.grid_power) + '<span class="unit">W</span>';
+                    if (!isNaN(gp)) {
+                        gpEl.className = 'value ' + (gp > 0.5 ? 'positive' : (gp < -0.5 ? 'negative' : 'neutral'));
+                    }
+                }
+                const gsEl = document.getElementById('gridSource');
+                if (gsEl) gsEl.textContent = '(' + (d.grid_source || '...') + ')';
+
+                // Equipment Power
+                const epEl = document.getElementById('equipmentPower');
+                if (epEl) epEl.innerHTML = num(d.equipment_power) + '<span class="unit">W</span>';
+
+                // Force Mode & Boost
+                const fmEl = document.getElementById('forceMode');
+                if (fmEl) {
+                    fmEl.innerHTML = d.force_mode ? '<span class="badge badge-force">Forcé</span>' : '<span class="badge badge-off">Inactif</span>';
+                }
+                const cbEl = document.getElementById('cancelBoostForm');
+                if (cbEl) cbEl.style.display = d.boost_active ? 'flex' : 'none';
+
+                // SSR Temperature
+                const ssrCard = document.getElementById('ssrTempCard');
+                if (ssrCard) ssrCard.style.display = d.e_ssr_temp ? '' : 'none';
+                const ssrEl = document.getElementById('ssrTemp');
+                if (ssrEl) {
+                    if (d.ssr_temp !== null && d.ssr_temp !== undefined) {
+                        ssrEl.innerHTML = num(d.ssr_temp) + '<span class="unit">°C</span>';
+                    } else {
+                        ssrEl.innerHTML = '—<span class="unit">°C</span>';
+                    }
+                    const fanEl = document.getElementById('fanStatus');
+                    const fanBadge = document.getElementById('fanBadge');
+                    if (fanEl && fanBadge) {
+                        fanEl.style.display = d.fan_active ? 'block' : 'none';
+                        fanBadge.textContent = 'Ventilateur: ' + (d.fan_percent || 0) + '%%';
+                    }
+                }
+
+                // Summary
+                const si = document.getElementById('sumImport');
+                if (si && d.total_import !== undefined) si.textContent = (parseFloat(d.total_import) / 1000).toFixed(2) + ' kWh';
+                const sr = document.getElementById('sumRedirect');
+                if (sr && d.total_redirect !== undefined) sr.textContent = (parseFloat(d.total_redirect) / 1000).toFixed(2) + ' kWh';
+                const se = document.getElementById('sumExport');
+                if (se && d.total_export !== undefined) se.textContent = (parseFloat(d.total_export) / 1000).toFixed(2) + ' kWh';
+
+                // Night Mode
+                nightMode = !!d.night_mode;
+                const nb = document.getElementById('nightBox');
+                if (nb) nb.style.display = nightMode ? 'block' : 'none';
+                const nt = document.getElementById('nightTime');
+                if (nt && d.rtc_time) nt.textContent = d.rtc_time;
+                const cc = document.getElementById('chartCard');
+                if (cc && nightMode) cc.style.display = 'none';
+
+                // Safe State
+                const ss = document.getElementById('safeStateBox');
+                if (ss) {
+                    if (d.emergency_mode) {
+                        ss.textContent = 'SOLAR SAFETY: Emergency shutdown';
+                        ss.style.display = 'block';
+                    } else if (d.safe_state) {
+                        ss.textContent = 'SAFE STATE: Shelly EM offline';
+                        ss.style.display = 'block';
+                    } else ss.style.display = 'none';
+                }
+
+                // Status Badges (Shelly & MQTT)
+                const shEl = document.getElementById('shellyStatus');
+                if (shEl) {
+                    if (d.shelly_mqtt_enabled) {
+                        shEl.style.display = "inline-block";
+                        shEl.textContent = d.shelly_link ? "Shelly MQTT: OK" : "Shelly MQTT: ERR";
+                        shEl.className = d.shelly_link ? "mqtt-badge mqtt-ok" : "mqtt-badge mqtt-err";
+                    } else { shEl.style.display = "none"; }
+                }
+
+                const mqEl = document.getElementById('mqttStatus');
+                if (mqEl) {
+                    if (d.mqtt_enabled) {
+                        mqEl.style.display = "inline-block";
+                        mqEl.textContent = d.mqtt_status ? "EMETTEUR MQTT: OK" : "EMETTEUR MQTT: ERR";
+                        mqEl.className = d.mqtt_status ? "mqtt-badge mqtt-ok" : "mqtt-badge mqtt-err";
+                    } else { mqEl.style.display = "none"; }
+                }
+
+                // Health Diagnostics
+                if (document.getElementById('healthRssi')) document.getElementById('healthRssi').textContent = (d.rssi || 0) + ' dBm';
+                const hct = document.getElementById('healthCpuTemp');
+                if (hct) hct.textContent = num(d.esp_temp) + ' °C';
+                const hram = document.getElementById('healthRam');
+                if (hram) hram.textContent = (d.free_ram !== undefined) ? Math.round(d.free_ram / 1024) + ' KB' : '—';
+                if (document.getElementById('healthPsram')) document.getElementById('healthPsram').textContent = d.total_psram > 0 ? Math.round(d.free_psram / 1024) + ' KB' : 'N/A';
+                
+                const hu = document.getElementById('healthUptime');
+                if (hu && d.uptime !== undefined) {
+                    const up = parseInt(d.uptime);
+                    const h = Math.floor(up / 3600);
+                    const m = Math.floor((up %% 3600) / 60);
+                    const s = up %% 60;
+                    hu.textContent = `${h}h ${m}m ${s}s`;
+                }
+
+            } catch (err) { console.error("ApplyStatus error:", err); }
+        }
+
+        let statusInterval = null;
+        let currentPollingMode = null; // 'normal' or 'night'
+
+        async function updateStatus() {
+            try {
+                const r = await fetch('/status');
+                const d = await r.json();
+                applyStatus(d);
+
+                // Dynamic Polling Adjustment
+                const newMode = d.night_mode ? 'night' : 'normal';
+                if (newMode !== currentPollingMode) {
+                    currentPollingMode = newMode;
+                    const delay = (newMode === 'night') ? 10000 : 1000;
+                    if (statusInterval) clearInterval(statusInterval);
+                    statusInterval = setInterval(updateStatus, delay);
+                    console.log("Polling adjusted to " + delay + "ms (" + newMode + " mode)");
+                }
+            } catch(e) { console.error("UpdateStatus error:", e); }
+        }
+
+        function toggleTheme() {
+            const body = document.body;
+            const btn = document.getElementById('themeToggle');
+            const isLight = body.classList.toggle('light-mode');
+            btn.textContent = isLight ? '🌙 Dark' : '☀️ Light';
+            localStorage.setItem('theme', isLight ? 'light' : 'dark');
+            if (powerChart) updateChartStyle();
+        }
+
+        // Initialize theme
+        if (localStorage.getItem('theme') === 'light') {
+            document.body.classList.add('light-mode');
+            document.getElementById('themeToggle').textContent = '🌙 Dark';
+        }
+
+        function updateChartStyle() {
+            if (!powerChart) return;
+            const isLight = document.body.classList.contains('light-mode');
+            const textColor = isLight ? '#333' : '#ccc';
+            const gridColor = isLight ? '#eee' : '#333';
+            
+            powerChart.options.scales.x.ticks.color = textColor;
+            powerChart.options.scales.x.grid.color = gridColor;
+            powerChart.options.scales.y.ticks.color = textColor;
+            powerChart.options.plugins.legend.labels.color = textColor;
+            powerChart.update();
+        }
+
+        async function updateLog() {
+            if (!document.getElementById('logDetails').open) return;
+            try {
+                const endpoint = logMode === 'sys' ? '/get_log_action' : '/get_solar_data';
+                const r = await fetch(endpoint);
+                const text = await r.text();
+                const lines = text.trim().split('\n');
+                const logBox = document.getElementById('logBox');
+                if (!logBox) return;
+
+                logBox.innerHTML = lines.map(line => {
+                    let cls = '';
+                    const l = line.toUpperCase();
+                    if (l.includes('SAFETY') || l.includes('WATCHDOG')) cls = 'log-safety';
+                    else if (l.includes('ERROR')) cls = 'log-error';
+                    else if (l.includes('FORCE') || l.includes('BOOST')) cls = 'log-force';
+                    else if (l.includes('CONNECTED') || l.includes('ONLINE')) cls = 'log-ok';
+                    else if (l.includes('[OFF]')) cls = 'log-dim';
+                    else if (l.includes('SOLAR')) cls = 'log-info';
+                    return `<span class="log-entry ${cls}">${line}</span>`;
+                }).join('');
+                logBox.scrollTop = logBox.scrollHeight;
+            } catch(e) {}
+        }
+
+        async function updateChart() {
+            if (nightMode || typeof Chart === 'undefined') return;
+            try {
+                const r = await fetch('/history');
+                const history = await r.json();
+                if (!history || history.length === 0) return;
+
+                document.getElementById('chartCard').style.display = 'block';
+
+                const labels = history.map(p => {
+                    const date = new Date(p.t * 1000);
+                    return date.getHours().toString().padStart(2, '0') + ':' + 
+                           date.getMinutes().toString().padStart(2, '0');
+                });
+                const gridData = history.map(p => p.g);
+                const equipmentData  = history.map(p => p.e);
+                const ssrTempData = history.map(p => p.s);
+
+                if (!powerChart) {
+                    const ctx = document.getElementById('powerChart').getContext('2d');
+                    powerChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: 'Réseau (W)',
+                                data: gridData,
+                                borderColor: '#ff9800',
+                                backgroundColor: 'rgba(255, 152, 0, 0.05)',
+                                fill: true,
+                                tension: 0.3,
+                                pointRadius: 0,
+                                yAxisID: 'y'
+                            }, {
+                                label: 'Redirigé (W)',
+                                data: equipmentData,
+                                borderColor: '#2ecc71',
+                                backgroundColor: 'rgba(46, 204, 113, 0.1)',
+                                fill: true,
+                                tension: 0.3,
+                                pointRadius: 0,
+                                yAxisID: 'y'
+                            }, {
+                                label: 'Temp SSR (°C)',
+                                data: ssrTempData,
+                                borderColor: '#3498db',
+                                borderDash: [5, 5],
+                                fill: false,
+                                tension: 0.3,
+                                pointRadius: 0,
+                                yAxisID: 'y1'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            interaction: { mode: 'index', intersect: false },
+                            plugins: {
+                                legend: { labels: { color: '#ccc' } }
+                            },
+                            scales: {
+                                x: { ticks: { color: '#999', maxRotation: 0, autoSkip: true, maxTicksLimit: 6 }, grid: { color: '#333' } },
+                                y: { type: 'linear', position: 'left', ticks: { color: '#999' }, grid: { color: '#333' } },
+                                y1: { type: 'linear', position: 'right', ticks: { color: '#3498db' }, grid: { drawOnChartArea: false } }
+                            }
+                        }
+                    });
+                } else {
+                    powerChart.data.labels = labels;
+                    powerChart.data.datasets[0].data = gridData;
+                    powerChart.data.datasets[1].data = equipmentData;
+                    powerChart.data.datasets[2].data = ssrTempData;
+                    powerChart.update('none');
+                }
+            } catch(e) {}
+        }
+
+        updateStatus(); // Initial call starts the interval chain
+        updateLog();
+        updateChart();
+        updateDateTime();
+        setInterval(updateLog, 15000); // Slower logs in web UI
+        setInterval(updateChart, 30000); // Slower chart in web UI
+        setInterval(updateDateTime, 5000);
+    </script>
+</body>
+</html>

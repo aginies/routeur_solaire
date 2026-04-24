@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuration Solaire</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #1a1a2e;
+            color: #eee;
+        }
+        h1, h2 { color: #f0c040; margin: 0; }
+        .form-container {
+            background-color: #16213e;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            max-width: 700px;
+            margin: 20px auto;
+        }
+        .form-group { margin-bottom: 18px; }
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+            color: #ccc;
+        }
+        input[type="text"],
+        input[type="password"],
+        input[type="number"],
+        select {
+            width: 100%%;
+            padding: 10px;
+            border: 1px solid #444;
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-size: 15px;
+            background-color: #0d0d1a;
+            color: #eee;
+        }
+        
+        /* Collapsible Sections */
+        details {
+            background-color: #1a1a2e;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border: 1px solid #333;
+            overflow: hidden;
+        }
+        summary {
+            background-color: #0f3460;
+            padding: 15px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1.1em;
+            color: #f0c040;
+            list-style: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-left: 4px solid #f0c040;
+        }
+        summary::-webkit-details-marker { display: none; }
+        summary::after {
+            content: '▶';
+            font-size: 0.7em;
+            display: inline-block;
+            transition: transform 0.3s;
+            color: #f0c040;
+        }
+        details[open] summary::after {
+            transform: rotate(90deg);
+        }
+        .section-content {
+            padding: 20px;
+            border-top: 1px solid #333;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        input[type="submit"] {
+            background-color: #f0c040;
+            color: #1a1a2e;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 700;
+            flex-grow: 1;
+        }
+        input[type="submit"]:hover { background-color: #d4a800; }
+        .cancel-button {
+            background-color: #555;
+            color: #eee;
+            padding: 12px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        .reset-button {
+            background-color: #c0392b;
+            color: #fff;
+            padding: 12px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        .reboot-banner {
+            background-color: #e67e22;
+            color: #fff;
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: 600;
+            text-align: center;
+        }
+        .header { text-align: center; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div class="form-container">
+        <div class="header">
+            <h1>Configuration %NAME% (%VERSION%)</h1>
+        </div>
+        %REBOOT_BANNER%
+        
+        <form id="configForm" action="/save_config" method="POST">
+            <div class="form-group" style="padding: 0 10px;">
+                <label for="NAME">Nom du système</label>
+                <input type="text" id="NAME" name="NAME" value="%NAME%">
+            </div>
+
+            <div class="form-group" style="padding: 0 10px;">
+                <label for="TIMEZONE">Fuseau horaire (Timezone)</label>
+                <select id="TIMEZONE" name="TIMEZONE">
+                    <option value="CET-1CEST,M3.5.0,M10.5.0/3" %TZ_PARIS%>Paris, Bruxelles, Berlin, Madrid</option>
+                    <option value="GMT0BST,M3.5.0,M10.5.0/3"   %TZ_LONDON%>Londres, Dublin, Lisbonne</option>
+                    <option value="EET-2EEST,M3.5.0,M10.5.0/3" %TZ_ATHENS%>Athènes, Helsinki, Kiev</option>
+                    <option value="UTC0"                       %TZ_UTC%>UTC / GMT</option>
+                </select>
+                <p style="font-size: 0.8em; color: #888; margin-top: 4px;">Utilisé pour la synchronisation de l'heure (NTP) et les logs.</p>
+            </div>
+
+            <!-- 1. PARTIE CONNECTIVITÉ -->
+            <details>
+                <summary>Connectivité (WiFi, Shelly, MQTT)</summary>
+                <div class="section-content">
+                    <h3>WiFi</h3>
+                    <div class="form-group">
+                        <label for="E_WIFI">Utiliser un réseau existant:</label>
+                        <select id="E_WIFI" name="E_WIFI">
+                            <option value="True"  %EXTERNAL_WIFI_YES%>True</option>
+                            <option value="False" %EXTERNAL_WIFI_NO%>False</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="WIFI_SSID">WiFi SSID:</label>
+                        <input type="text" id="WIFI_SSID" name="WIFI_SSID" value="%WIFI_SSID%">
+                    </div>
+                    <div class="form-group">
+                        <label for="WIFI_PASSWORD">WiFi Password:</label>
+                        <input type="password" id="WIFI_PASSWORD" name="WIFI_PASSWORD" value="%WIFI_PASSWORD%">
+                    </div>
+                    <div class="form-group">
+                        <label for="WIFI_STATIC_IP">Static IP (laisser vide pour DHCP):</label>
+                        <input type="text" id="WIFI_STATIC_IP" name="WIFI_STATIC_IP" value="%WIFI_STATIC_IP%">
+                    </div>
+                    <div class="form-group">
+                        <label for="WIFI_SUBNET">Subnet Mask:</label>
+                        <input type="text" id="WIFI_SUBNET" name="WIFI_SUBNET" value="%WIFI_SUBNET%">
+                    </div>
+                    <div class="form-group">
+                        <label for="WIFI_GATEWAY">Gateway:</label>
+                        <input type="text" id="WIFI_GATEWAY" name="WIFI_GATEWAY" value="%WIFI_GATEWAY%">
+                    </div>
+                    <div class="form-group">
+                        <label for="WIFI_DNS">DNS Server:</label>
+                        <input type="text" id="WIFI_DNS" name="WIFI_DNS" value="%WIFI_DNS%">
+                    </div>
+                    <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
+                    
+                    <h3>Shelly EM</h3>
+                    <div class="form-group">
+                        <label for="SHELLY_EM_IP">IP du Shelly EM:</label>
+                        <input type="text" id="SHELLY_EM_IP" name="SHELLY_EM_IP" value="%SHELLY_EM_IP%">
+                    </div>
+                    <div class="form-group">
+                        <label for="E_SHELLY_MQTT">Mode MQTT (plus rapide):</label>
+                        <select id="E_SHELLY_MQTT" name="E_SHELLY_MQTT">
+                            <option value="True"  %SHELLY_MQTT_YES%>Activé (reçoit les données via MQTT)</option>
+                            <option value="False" %SHELLY_MQTT_NO%>Désactivé (utilise le mode HTTP standard)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="SHELLY_MQTT_TOPIC">Topic MQTT Shelly:</label>
+                        <input type="text" id="SHELLY_MQTT_TOPIC" name="SHELLY_MQTT_TOPIC" value="%SHELLY_MQTT_TOPIC%">
+                    </div>
+                    <div class="form-group">
+                        <label for="POLL_INTERVAL">Intervalle de lecture HTTP (secondes):</label>
+                        <input type="number" id="POLL_INTERVAL" name="POLL_INTERVAL" value="%POLL_INTERVAL%">
+                    </div>
+                    <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
+
+                    <h3>MQTT (Status & Discovery)</h3>
+                    <div class="form-group">
+                        <label for="E_MQTT">Activer MQTT:</label>
+                        <select id="E_MQTT" name="E_MQTT">
+                            <option value="True"  %MQTT_YES%>True</option>
+                            <option value="False" %MQTT_NO%>False</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="MQTT_IP">IP du serveur MQTT:</label>
+                        <input type="text" id="MQTT_IP" name="MQTT_IP" value="%MQTT_IP%">
+                    </div>
+                    <div class="form-group">
+                        <label for="MQTT_PORT">Port MQTT:</label>
+                        <input type="number" id="MQTT_PORT" name="MQTT_PORT" value="%MQTT_PORT%">
+                    </div>
+                    <div class="form-group">
+                        <label for="MQTT_USER">Utilisateur MQTT:</label>
+                        <input type="text" id="MQTT_USER" name="MQTT_USER" value="%MQTT_USER%">
+                    </div>
+                    <div class="form-group">
+                        <label for="MQTT_PASSWORD">Mot de passe MQTT:</label>
+                        <input type="password" id="MQTT_PASSWORD" name="MQTT_PASSWORD" value="%MQTT_PASSWORD%">
+                    </div>
+                    <div class="form-group">
+                        <label for="MQTT_NAME">Nom MQTT (préfixe topic):</label>
+                        <input type="text" id="MQTT_NAME" name="MQTT_NAME" value="%MQTT_NAME%">
+                    </div>
+                </div>
+            </details>
+
+            <!-- 2. PARTIE RÉGULATION -->
+            <details>
+                <summary>Régulation & Modes</summary>
+                <div class="section-content">
+                    <h3>Paramètres Diverteur</h3>
+                    <div class="form-group">
+                        <label for="EQUIPMENT_NAME">Nom de l'équipement:</label>
+                        <input type="text" id="EQUIPMENT_NAME" name="EQUIPMENT_NAME" value="%EQUIPMENT_NAME%">
+                    </div>
+                    <div class="form-group">
+                        <label for="EQUIPMENT_MAX_POWER">Puissance max équipement (W):</label>
+                        <input type="number" id="EQUIPMENT_MAX_POWER" name="EQUIPMENT_MAX_POWER" value="%EQUIPMENT_MAX_POWER%">
+                    </div>
+                    <div class="form-group">
+                        <label for="MAX_DUTY_PERCENT">Puissance max redirigee (100 = pas de limite):</label>
+                        <input type="number" step="1" min="0" max="100" id="MAX_DUTY_PERCENT" name="MAX_DUTY_PERCENT" value="%MAX_DUTY_PERCENT%">
+                    </div>
+                    <div class="form-group">
+                        <label for="EXPORT_SETPOINT">Consigne réseau (W, 0 = zéro export):</label>
+                        <input type="number" id="EXPORT_SETPOINT" name="EXPORT_SETPOINT" value="%EXPORT_SETPOINT%">
+                    </div>
+                    <div class="form-group">
+                        <label for="DELTA">Seuil haut Delta (W, import max tolere):</label>
+                        <input type="number" step="1" id="DELTA" name="DELTA" value="%DELTA%">
+                    </div>
+                    <div class="form-group">
+                        <label for="DELTANEG">Seuil bas Deltaneg (W, export max tolere):</label>
+                        <input type="number" step="1" id="DELTANEG" name="DELTANEG" value="%DELTANEG%">
+                    </div>
+                    <div class="form-group">
+                        <label for="COMPENSATION">Gain compensation (100 = standard):</label>
+                        <input type="number" step="1" id="COMPENSATION" name="COMPENSATION" value="%COMPENSATION%">
+                    </div>
+                    <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
+
+                    <h3>Mode Forcé & Nuit</h3>
+                    <div class="form-group">
+                        <label for="FORCE_EQUIPMENT">Activer le mode forcé manuel:</label>
+                        <select id="FORCE_EQUIPMENT" name="FORCE_EQUIPMENT">
+                            <option value="True"  %FORCE_EQUIPMENT_YES%>True</option>
+                            <option value="False" %FORCE_EQUIPMENT_NO%>False</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="E_FORCE_WINDOW">Activer la plage forcée régulière:</label>
+                        <select id="E_FORCE_WINDOW" name="E_FORCE_WINDOW">
+                            <option value="True"  %FORCE_WINDOW_YES%>True</option>
+                            <option value="False" %FORCE_WINDOW_NO%>False</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="FORCE_START">Début Force (HH:MM):</label>
+                        <input type="text" id="FORCE_START" name="FORCE_START" value="%FORCE_START%">
+                    </div>
+                    <div class="form-group">
+                        <label for="FORCE_END">Fin Force (HH:MM):</label>
+                        <input type="text" id="FORCE_END" name="FORCE_END" value="%FORCE_END%">
+                    </div>
+                    <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
+
+                    <div class="form-group">
+                        <label for="NIGHT_START">Début Mode Nuit (HH:MM):</label>
+                        <input type="text" id="NIGHT_START" name="NIGHT_START" value="%NIGHT_START%">
+                    </div>
+                    <div class="form-group">
+                        <label for="NIGHT_END">Fin Mode Nuit (HH:MM):</label>
+                        <input type="text" id="NIGHT_END" name="NIGHT_END" value="%NIGHT_END%">
+                    </div>
+                    <div class="form-group">
+                        <label for="NIGHT_POLL_INTERVAL">Intervalle de lecture Nuit (secondes):</label>
+                        <input type="number" id="NIGHT_POLL_INTERVAL" name="NIGHT_POLL_INTERVAL" value="%NIGHT_POLL_INTERVAL%">
+                    </div>
+                </div>
+            </details>
+
+            <!-- 3. PARTIE HARDWARE -->
+            <details>
+                <summary>Hardware & Pins</summary>
+                <div class="section-content">
+                    <h3>JSY-MK-194 (Local Wired)</h3>
+                    <div class="form-group">
+                        <label for="E_JSY">Activer JSY (UART):</label>
+                        <select id="E_JSY" name="E_JSY">
+                            <option value="True"  %JSY_YES%>Activé</option>
+                            <option value="False" %JSY_NO%>Désactivé</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="JSY_UART_ID">UART ID:</label>
+                        <input type="number" id="JSY_UART_ID" name="JSY_UART_ID" value="%JSY_UART_ID%">
+                    </div>
+                    <div class="form-group">
+                        <label for="JSY_TX">GPIO Pin TX:</label>
+                        <input type="number" id="JSY_TX" name="JSY_TX" value="%JSY_TX%">
+                    </div>
+                    <div class="form-group">
+                        <label for="JSY_RX">GPIO Pin RX:</label>
+                        <input type="number" id="JSY_RX" name="JSY_RX" value="%JSY_RX%">
+                    </div>
+                    <div class="form-group">
+                        <label for="ZX_PIN">GPIO Pin ZX (Zero-Crossing):</label>
+                        <input type="number" id="ZX_PIN" name="ZX_PIN" value="%ZX_PIN%">
+                    </div>
+                    <div class="form-group">
+                        <label for="CONTROL_MODE">Mode de régulation SSR:</label>
+                        <select id="CONTROL_MODE" name="CONTROL_MODE">
+                            <option value="burst" %MODE_BURST%>Burst (Période fixe, ex: 0.5s)</option>
+                            <option value="cycle_stealing" %MODE_CYCLE%>Cycle Stealing (Zero-Crossing, plus fluide)</option>
+                            <option value="trame" %MODE_TRAME%>Mode Trame (Bresenham, réparti sur 1s)</option>
+                            <option value="phase" %MODE_PHASE%>Contrôle de Phase (Smooth, Random SSR requis)</option>
+                        </select>
+                        <p style="font-size: 0.8em; color: #888; margin-top: 4px;">Cycle Stealing nécessite un signal Zero-Crossing sur ZX_PIN.</p>
+                    </div>
+                    <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
+
+                    <h3>Ventilateur Refroidissement SSR</h3>
+                    <div class="form-group">
+                        <label for="E_FAN">Activer le ventilateur:</label>
+                        <select id="E_FAN" name="E_FAN">
+                            <option value="True"  %FAN_YES%>True</option>
+                            <option value="False" %FAN_NO%>False</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="FAN_PIN">Pin GPIO Ventilateur:</label>
+                        <input type="number" id="FAN_PIN" name="FAN_PIN" value="%FAN_PIN%">
+                    </div>
+                    <div class="form-group">
+                        <label for="FAN_TEMP_OFFSET">Seuil activation (°C sous max SSR):</label>
+                        <input type="number" id="FAN_TEMP_OFFSET" name="FAN_TEMP_OFFSET" value="%FAN_TEMP_OFFSET%">
+                    </div>
+                    <div class="form-group">
+                        <label>Test manuel:</label>
+                        <div style="display: flex; gap: 8px;">
+                            <button type="button" onclick="testFan(0)" style="flex:1; padding: 8px; background: #555; color: white; border: none; border-radius: 4px;">0%%</button>
+                            <button type="button" onclick="testFan(50)" style="flex:1; padding: 8px; background: #e67e22; color: white; border: none; border-radius: 4px;">50%%</button>
+                            <button type="button" onclick="testFan(100)" style="flex:1; padding: 8px; background: #27ae60; color: white; border: none; border-radius: 4px;">100%%</button>
+                        </div>
+                        <p id="fanTestMsg" style="font-size: 0.8em; color: #aaa; margin-top: 4px; display: none;"></p>
+                    </div>
+                    <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
+
+                    <h3>Sonde température (DS18B20) - SSR</h3>
+                    <div class="form-group">
+                        <label for="E_SSR_TEMP">Activer la sonde SSR:</label>
+                        <select id="E_SSR_TEMP" name="E_SSR_TEMP">
+                            <option value="True"  %SSR_TEMP_YES%>True</option>
+                            <option value="False" %SSR_TEMP_NO%>False</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="SSR_MAX_TEMP">Température max sécurité SSR (°C):</label>
+                        <input type="number" step="0.5" id="SSR_MAX_TEMP" name="SSR_MAX_TEMP" value="%SSR_MAX_TEMP%">
+                    </div>
+                    <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
+
+                    <h3>ESP32 Config</h3>
+                    <div class="form-group">
+                        <label for="CPU_FREQ">Fréquence CPU ESP32:</label>
+                        <select id="CPU_FREQ" name="CPU_FREQ">
+                            <option value="20"  %SELECTED_20%>20 MHz</option>
+                            <option value="40"  %SELECTED_40%>40 MHz</option>
+                            <option value="80"  %SELECTED_80%>80 MHz</option>
+                            <option value="160" %SELECTED_160%>160 MHz</option>
+                            <option value="240" %SELECTED_240%>240 MHz</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="I_LED_PIN">Internal LED Pin:</label>
+                        <input type="number" id="I_LED_PIN" name="I_LED_PIN" value="%I_LED_PIN%">
+                    </div>
+                    <div class="form-group">
+                        <label for="SSR_PIN">SSR Pin (PWM):</label>
+                        <input type="number" id="SSR_PIN" name="SSR_PIN" value="%SSR_PIN%">
+                    </div>
+                    <div class="form-group">
+                        <label for="RELAY_PIN">Relay Pin (enable circuit):</label>
+                        <input type="number" id="RELAY_PIN" name="RELAY_PIN" value="%RELAY_PIN%">
+                    </div>
+                </div>
+            </details>
+
+            <!-- 4. PARTIE EXPÉRIMENTALE -->
+            <details>
+                <summary>🛠 Expérimental</summary>
+                <div class="section-content">
+                    <div class="form-group">
+                        <label for="FAKE_SHELLY">Activer FAKE_SHELLY (Mode simulation):</label>
+                        <select id="FAKE_SHELLY" name="FAKE_SHELLY">
+                            <option value="True"  %FAKE_SHELLY_YES%>True</option>
+                            <option value="False" %FAKE_SHELLY_NO%>False</option>
+                        </select>
+                    </div>
+                </div>
+            </details>
+
+            <div class="button-group">
+                <input type="submit" value="Sauvegarder">
+                <a href="/" class="cancel-button">Annuler</a>
+                <a href="/RESET_device" class="reset-button" onclick="return confirm('Redémarrer le device ?')">Reset</a>
+            </div>
+        </form>
+
+        <!-- 5. MISE À JOUR (OTA) -->
+        <details style="margin-top: 20px;">
+            <summary>🚀 Mise à jour (OTA)</summary>
+            <div class="section-content">
+                <form method='POST' action='/update' enctype='multipart/form-data' id='upload_form'>
+                    <div class="form-group">
+                        <label>Sélectionner le fichier firmware (.bin):</label>
+                        <input type='file' id='update_file' name='update' accept='.bin' style="width: 100%%; padding: 10px; border: 1px solid #444; border-radius: 8px; background: #0d0d1a; color: #eee;">
+                    </div>
+                    <div class="button-group">
+                        <input type='button' id='update_btn' value='Mettre à jour' onclick="startUpdate()" style="background-color: #e67e22; color: #fff; padding: 12px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 700; flex-grow: 1;">
+                    </div>
+                </form>
+                <div id='prg_container' style="margin-top: 15px; display: none;">
+                    <label id='prg_label'>Mise à jour en cours...</label>
+                    <div style="width: 100%%; background-color: #333; border-radius: 8px; margin-top: 8px; height: 20px; overflow: hidden; border: 1px solid #444;">
+                        <div id='prg_bar' style="width: 0%%; height: 100%%; background-color: #f0c040; transition: width 0.3s;"></div>
+                    </div>
+                    <p id='prg_status' style="font-size: 0.9em; color: #aaa; margin-top: 8px; text-align: center;"></p>
+                </div>
+            </div>
+        </details>
+    </div>
+
+    <script>
+        const configForm = document.getElementById('configForm');
+        // No need for explicit server URL in same-origin C++ server
+        
+        function testFan(speed) {
+            const msg = document.getElementById('fanTestMsg');
+            msg.style.display = 'block';
+            msg.textContent = 'Envoi...';
+            fetch('/test_fan?speed=' + speed, { method: 'POST' })
+                .then(r => r.json())
+                .then(d => {
+                    msg.textContent = d.success ? 'Test: OK ('+speed+'%%)' : 'Erreur';
+                    msg.style.color = d.success ? '#2ecc71' : '#e74c3c';
+                    setTimeout(() => { msg.style.display = 'none'; }, 3000);
+                });
+        }
+
+        function startUpdate() {
+            const fileInput = document.getElementById('update_file');
+            if (fileInput.files.length === 0) {
+                alert('Veuillez sélectionner un fichier .bin');
+                return;
+            }
+            if (!confirm('Voulez-vous vraiment lancer la mise à jour ? Le système redémarrera.')) {
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('update', fileInput.files[0]);
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/update', true);
+
+            const prgContainer = document.getElementById('prg_container');
+            const prgBar = document.getElementById('prg_bar');
+            const prgStatus = document.getElementById('prg_status');
+            const updateBtn = document.getElementById('update_btn');
+
+            prgContainer.style.display = 'block';
+            updateBtn.disabled = true;
+            updateBtn.style.opacity = '0.5';
+
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable) {
+                    const percent = Math.round((e.loaded / e.total) * 100);
+                    prgBar.style.width = percent + '%%';
+                    prgStatus.textContent = `Téléchargement: ${percent}%% (${Math.round(e.loaded/1024)} KB / ${Math.round(e.total/1024)} KB)`;
+                }
+            });
+
+            xhr.onload = () => {
+                if (xhr.status === 200 && xhr.responseText === 'OK') {
+                    prgStatus.textContent = 'Mise à jour réussie ! Redémarrage en cours...';
+                    prgStatus.style.color = '#2ecc71';
+                    setTimeout(() => { window.location.href = '/'; }, 5000);
+                } else {
+                    prgStatus.textContent = 'Erreur lors de la mise à jour: ' + xhr.responseText;
+                    prgStatus.style.color = '#e74c3c';
+                    updateBtn.disabled = false;
+                    updateBtn.style.opacity = '1';
+                }
+            };
+
+            xhr.onerror = () => {
+                prgStatus.textContent = 'Erreur réseau lors de la mise à jour.';
+                prgStatus.style.color = '#e74c3c';
+                updateBtn.disabled = false;
+                updateBtn.style.opacity = '1';
+            };
+
+            xhr.send(formData);
+        }
+    </script>
+</body>
+</html>
