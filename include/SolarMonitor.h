@@ -46,7 +46,7 @@ public:
     // Actions
     static void startBoost(int minutes = -1);
     static void cancelBoost();
-    static bool testFanSpeed(int percent);
+    static bool setFanSpeed(int percent, bool isTest = false);
     static String getHistoryJson();
     static void streamHistoryJson(AsyncWebServerRequest *request);
 
