@@ -8,6 +8,7 @@ SKIP_FS=false
 COMPRESS=false
 STATS_DAYS=""
 RUN_TESTS=false
+MONITOR=false
 
 usage() {
     echo "Usage: $0 [options]"
@@ -15,6 +16,7 @@ usage() {
     echo "  -e <env>    Target environment: 's3' (default), 'wroom' (mini kit), or 'native' (for tests)"
     echo "  -d <days>   Override MAX_STATS_DAYS (history limit)"
     echo "  -t, --test  Run unit tests on host (native environment)"
+    echo "  -m, --monitor Launch serial monitor after flashing"
     echo "  --compress  Gzip HTML/JS files before uploading FS"
     echo "  --skip-fs   Skip building and uploading filesystem"
     echo "  -h, --help  Show this help message"
@@ -49,6 +51,7 @@ while [[ "$#" -gt 0 ]]; do
             fi
             ;;
         -t|--test) RUN_TESTS=true ;;
+        -m|--monitor) MONITOR=true ;;
         --compress) COMPRESS=true ;;
         --skip-fs) SKIP_FS=true ;;
         -h|--help) usage; exit 0 ;;
@@ -116,6 +119,8 @@ if [ "$SKIP_FS" = false ]; then
 fi
 
 echo "--- DONE! ---"
-echo "Starting Serial Monitor (Press Ctrl+C to stop)..."
-sleep 2
-pio device monitor -e $PIO_ENV --filter time --filter colorize --filter debug
+if [ "$MONITOR" = true ]; then
+    echo "Starting Serial Monitor (Press Ctrl+C to stop)..."
+    sleep 2
+    pio device monitor -e $PIO_ENV --filter time --filter colorize --filter debug
+fi
