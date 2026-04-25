@@ -417,12 +417,14 @@
                 const day = statsData[selectedDate];
                 if (day) {
                     hasData = true;
+                    // Always show 24 hours for daily view if we have hourly data
                     if (day.h_import && day.h_redirect) {
                         labels       = Array.from({length: 24}, (_, i) => `${i}h`);
                         importData   = day.h_import.map(v => v / 1000);
                         redirectData = day.h_redirect.map(v => v / 1000);
                         exportData   = day.h_export ? day.h_export.map(v => v / 1000) : Array(24).fill(0);
                     } else {
+                        // Fallback for days without hourly breakdown
                         labels       = [selectedDate.split('-').reverse().join('/')];
                         importData   = [day.import / 1000];
                         redirectData = [day.redirect / 1000];
@@ -430,7 +432,8 @@
                     }
                     totalActiveSecs = day.active_time || 0;
                 }
-            } else if (currentView === 'week') {
+            }
+ else if (currentView === 'week') {
                 for (let i = 6; i >= 0; i--) {
                     const ds = addDays(selectedDate, -i);
                     const [y, m, d] = ds.split('-').map(Number);
