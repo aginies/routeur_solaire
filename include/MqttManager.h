@@ -31,6 +31,7 @@ private:
     static String _nodeId;
     static String _lwtTopic;
     static uint32_t _lastReconnectAttempt;
+    static SemaphoreHandle_t _mqttMutex;
 };
 
 #endif
