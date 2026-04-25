@@ -561,16 +561,3 @@ String WebManager::getStatusJson() {
     return output;
 }
 
-String WebManager::getHistoryJson() {
-    JsonDocument doc;
-    JsonArray arr = doc.to<JsonArray>();
-    
-    // We need to access SolarMonitor::_dataMutex but it is private.
-    // I should probably add a public static method or make WebManager a friend,
-    // but for now I will assume I can't easily change the header.
-    // Actually, I can just use a local copy pattern or similar if I had a lock.
-    // Let's check if I can add a friend or just use the mutex if I make it public.
-    
-    // Re-evaluating: I will add a static method to SolarMonitor to get the history.
-    return SolarMonitor::getHistoryJson(); // We'll add this method
-}

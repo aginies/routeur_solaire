@@ -44,9 +44,10 @@ void Logger::log(const String& message, bool critical) {
     Serial.println(logEntry);
     _logBuffer.push_back(logEntry);
     
+    bool shouldFlush = (_logBuffer.size() >= 50);
     xSemaphoreGive(_mutex);
 
-    if (critical) {
+    if (critical || shouldFlush) {
         flushAll();
     }
 }
@@ -54,7 +55,9 @@ void Logger::log(const String& message, bool critical) {
 void Logger::logData(const String& message) {
     if (_mutex == nullptr || xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) != pdTRUE) return;
     _dataBuffer.push_back(message);
+    bool shouldFlush = (_dataBuffer.size() >= 50);
     xSemaphoreGive(_mutex);
+    if (shouldFlush) flushAll();
 }
 
 void Logger::loop() {

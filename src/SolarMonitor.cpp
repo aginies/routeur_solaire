@@ -124,6 +124,8 @@ void SolarMonitor::startTasks() {
     if (_config->control_mode == "burst") {
         xTaskCreate(burstControlTask, "burstTask", 2048, NULL, 5, NULL);
     } else if (_config->control_mode == "cycle_stealing" || _config->control_mode == "zero_crossing") {
+        pinMode(_config->zx_pin, INPUT_PULLUP);
+        attachInterrupt(digitalPinToInterrupt(_config->zx_pin), handleZxInterrupt, RISING);
         xTaskCreate(cycleStealingTask, "cycleTask", 4096, NULL, 5, NULL);
     } else if (_config->control_mode == "trame") {
         pinMode(_config->zx_pin, INPUT_PULLUP);
@@ -172,52 +174,47 @@ void SolarMonitor::burstControlTask(void* pvParameters) {
 }
 
 void SolarMonitor::cycleStealingTask(void* pvParameters) {
-    pinMode(_config->zx_pin, INPUT_PULLUP);
-    int lastZx = digitalRead(_config->zx_pin);
-    uint32_t lastZxTime = micros();
+    uint32_t localZxCount = 0;
     float accumulator = 0;
     
-    Logger::log("Cycle Stealing Task Started on pin " + String(_config->zx_pin));
+    Logger::log("Cycle Stealing Task Started (Interrupt Driven) on pin " + String(_config->zx_pin));
 
     while (true) {
-        // High-precision busy polling for Zero-Crossing
-        int currentZx = digitalRead(_config->zx_pin);
-        if (currentZx != lastZx) {
-            // ZX Detected!
-            lastZx = currentZx;
-            uint32_t now = micros();
-            uint32_t diff = now - lastZxTime;
-            lastZxTime = now;
+        // Wait for ZX interrupt event
+        xEventGroupWaitBits(_zxEventGroup, 0x01, pdTRUE, pdFALSE, pdMS_TO_TICKS(100));
 
-            // Safety: Only process if frequency is reasonable (40-70Hz -> 7-12ms per half cycle)
-            if (diff > 5000 && diff < 15000) {
-                accumulator += _currentDuty;
-                
-                if (accumulator >= 1.0) {
-                    digitalWrite(_config->ssr_pin, HIGH);
-                    equipmentActive = true;
-                    accumulator -= 1.0;
-                } else {
-                    digitalWrite(_config->ssr_pin, LOW);
-                    equipmentActive = false;
-                }
-                
-                // Update equipment power display
+        while (localZxCount < _zxCounter) {
+            localZxCount++;
+            
+            accumulator += _currentDuty;
+            
+            if (accumulator >= 1.0) {
+                digitalWrite(_config->ssr_pin, HIGH);
+                equipmentActive = true;
+                accumulator -= 1.0;
+            } else {
+                digitalWrite(_config->ssr_pin, LOW);
+                equipmentActive = false;
+            }
+            
+            // Update equipment power display periodically
+            if (localZxCount % 10 == 0) {
                 float actualMaxPower = _config->equipment_max_power * (currentGridVoltage / 230.0f) * (currentGridVoltage / 230.0f);
                 equipmentPower = _currentDuty * actualMaxPower;
             }
         }
-        
-        // Watchdog for ZX signal
-        if (micros() - lastZxTime > 200000) { // 200ms without ZX
-            digitalWrite(_config->ssr_pin, LOW);
-            equipmentActive = false;
-            vTaskDelay(pdMS_TO_TICKS(100));
-        }
 
-        // Tiny yield to keep watchdog happy
-        if (micros() % 1000 < 50) {
-             vTaskDelay(1);
+        // Watchdog for ZX signal
+        static uint32_t lastCheck = 0;
+        static uint32_t lastCount = 0;
+        if (millis() - lastCheck > 500) {
+            if (_zxCounter == lastCount) {
+                // No pulses!
+                digitalWrite(_config->ssr_pin, LOW);
+                equipmentActive = false;
+            }
+            lastCount = _zxCounter;
+            lastCheck = millis();
         }
     }
 }
@@ -737,29 +734,6 @@ bool SolarMonitor::setFanSpeed(int percent, bool isTest) {
     fanPercent = percent;
     fanActive = (percent > 0);
     return true;
-}
-
-String SolarMonitor::getHistoryJson() {
-    JsonDocument doc;
-    JsonArray arr = doc.to<JsonArray>();
-    
-    if (powerHistory && _dataMutex && xSemaphoreTake(_dataMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-        for (int i = 0; i < historyCount; i++) {
-            int idx = (historyWriteIdx - historyCount + i + maxHistory) % maxHistory;
-            const auto& p = powerHistory[idx];
-            JsonObject obj = arr.add<JsonObject>();
-            obj["t"] = p.t;
-            obj["g"] = p.g;
-            obj["e"] = p.e;
-            obj["s"] = p.s;
-            obj["f"] = p.f;
-        }
-        xSemaphoreGive(_dataMutex);
-    }
-    
-    String output;
-    serializeJson(doc, output);
-    return output;
 }
 
 void SolarMonitor::streamHistoryJson(AsyncWebServerRequest *request) {

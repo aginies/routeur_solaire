@@ -227,33 +227,6 @@ void StatsManager::save() {
 }
 
 #ifndef NATIVE_TEST
-String StatsManager::getStatsJson() {
-    JsonDocument doc;
-    if (_statsMutex && xSemaphoreTake(_statsMutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
-        for (auto const& [date, ds] : _history) {
-            JsonObject obj = doc[date].to<JsonObject>();
-            obj["import"] = ds.import;
-            obj["redirect"] = ds.redirect;
-            obj["export"] = ds.export_wh;
-            obj["active_time"] = ds.active_time;
-
-            JsonArray h_imp = obj["h_import"].to<JsonArray>();
-            JsonArray h_red = obj["h_redirect"].to<JsonArray>();
-            JsonArray h_exp = obj["h_export"].to<JsonArray>();
-            for (int i = 0; i < 24; i++) {
-                h_imp.add(ds.h_import[i]);
-                h_red.add(ds.h_redirect[i]);
-                h_exp.add(ds.h_export[i]);
-            }
-        }
-        xSemaphoreGive(_statsMutex);
-    }
-
-    String output;
-    serializeJson(doc, output);
-    return output;
-}
-
 void StatsManager::streamStatsJson(AsyncWebServerRequest *request) {
     AsyncResponseStream *response = request->beginResponseStream("application/json");
 

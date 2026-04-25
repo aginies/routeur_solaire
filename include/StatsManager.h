@@ -30,7 +30,6 @@ public:
     static void update(float gridPower, float equipmentPower, uint32_t intervalMs);
     static void save();
 #ifndef NATIVE_TEST
-    static String getStatsJson();
     static void streamStatsJson(AsyncWebServerRequest *request);
 #endif
 
