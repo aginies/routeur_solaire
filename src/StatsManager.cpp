@@ -192,7 +192,9 @@ void StatsManager::save() {
     #endif
 
     // Limit in-memory history to save RAM
-    if (_statsMutex) xSemaphoreTake(_statsMutex, portMAX_DELAY);
+    // Copy history under mutex then release it before slow LittleFS I/O
+    if (_statsMutex == nullptr || xSemaphoreTake(_statsMutex, pdMS_TO_TICKS(1000)) != pdTRUE) return;
+
     while (_history.size() > MAX_STATS_DAYS) {
         _history.erase(_history.begin());
     }
@@ -203,7 +205,7 @@ void StatsManager::save() {
         obj["redirect"] = round(ds.redirect * 10) / 10.0;
         obj["export"] = round(ds.export_wh * 10) / 10.0;
         obj["active_time"] = ds.active_time;
-        
+
         JsonArray h_imp = obj["h_import"].to<JsonArray>();
         JsonArray h_red = obj["h_redirect"].to<JsonArray>();
         JsonArray h_exp = obj["h_export"].to<JsonArray>();
@@ -213,8 +215,9 @@ void StatsManager::save() {
             h_exp.add(round(ds.h_export[i] * 10) / 10.0);
         }
     }
-    if (_statsMutex) xSemaphoreGive(_statsMutex);
+    xSemaphoreGive(_statsMutex);
 
+    // SLOW I/O: Outside the mutex!
     File file = LittleFS.open("/stats.json", "w");
     if (file) {
         serializeJson(doc, file);
@@ -226,24 +229,26 @@ void StatsManager::save() {
 #ifndef NATIVE_TEST
 String StatsManager::getStatsJson() {
     JsonDocument doc;
-    if (_statsMutex) xSemaphoreTake(_statsMutex, portMAX_DELAY);
-    for (auto const& [date, ds] : _history) {
-        JsonObject obj = doc[date].to<JsonObject>();
-        obj["import"] = ds.import;
-        obj["redirect"] = ds.redirect;
-        obj["export"] = ds.export_wh;
-        obj["active_time"] = ds.active_time;
+    if (_statsMutex && xSemaphoreTake(_statsMutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+        for (auto const& [date, ds] : _history) {
+            JsonObject obj = doc[date].to<JsonObject>();
+            obj["import"] = ds.import;
+            obj["redirect"] = ds.redirect;
+            obj["export"] = ds.export_wh;
+            obj["active_time"] = ds.active_time;
 
-        JsonArray h_imp = obj["h_import"].to<JsonArray>();
-        JsonArray h_red = obj["h_redirect"].to<JsonArray>();
-        JsonArray h_exp = obj["h_export"].to<JsonArray>();
-        for (int i = 0; i < 24; i++) {
-            h_imp.add(ds.h_import[i]);
-            h_red.add(ds.h_redirect[i]);
-            h_exp.add(ds.h_export[i]);
+            JsonArray h_imp = obj["h_import"].to<JsonArray>();
+            JsonArray h_red = obj["h_redirect"].to<JsonArray>();
+            JsonArray h_exp = obj["h_export"].to<JsonArray>();
+            for (int i = 0; i < 24; i++) {
+                h_imp.add(ds.h_import[i]);
+                h_red.add(ds.h_redirect[i]);
+                h_exp.add(ds.h_export[i]);
+            }
         }
+        xSemaphoreGive(_statsMutex);
     }
-    if (_statsMutex) xSemaphoreGive(_statsMutex);
+
     String output;
     serializeJson(doc, output);
     return output;
@@ -254,36 +259,37 @@ void StatsManager::streamStatsJson(AsyncWebServerRequest *request) {
 
     response->print("{");
     bool first = true;
-    
-    if (_statsMutex) xSemaphoreTake(_statsMutex, portMAX_DELAY);
-    for (auto const& [key, ds] : _history) {
-        if (!first) {
-            response->print(",");
-        }
-        first = false;
 
-        response->printf("\"%s\":{", key.c_str());
-        response->printf("\"import\":%.2f,", ds.import);
-        response->printf("\"redirect\":%.2f,", ds.redirect);
-        response->printf("\"export\":%.2f,", ds.export_wh);
-        response->printf("\"active_time\":%u,", ds.active_time);
+    if (_statsMutex && xSemaphoreTake(_statsMutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+        for (auto const& [key, ds] : _history) {
+            if (!first) {
+                response->print(",");
+            }
+            first = false;
 
-        response->print("\"h_import\":[");
-        for (int i = 0; i < 24; i++) {
-            response->printf("%.2f%s", ds.h_import[i], (i == 23) ? "" : ",");
+            response->printf("\"%s\":{", key.c_str());
+            response->printf("\"import\":%.2f,", ds.import);
+            response->printf("\"redirect\":%.2f,", ds.redirect);
+            response->printf("\"export\":%.2f,", ds.export_wh);
+            response->printf("\"active_time\":%u,", ds.active_time);
+
+            response->print("\"h_import\":[");
+            for (int i = 0; i < 24; i++) {
+                response->printf("%.2f%s", ds.h_import[i], (i == 23) ? "" : ",");
+            }
+            response->print("],\"h_redirect\":[");
+            for (int i = 0; i < 24; i++) {
+                response->printf("%.2f%s", ds.h_redirect[i], (i == 23) ? "" : ",");
+            }
+            response->print("],\"h_export\":[");
+            for (int i = 0; i < 24; i++) {
+                response->printf("%.2f%s", ds.h_export[i], (i == 23) ? "" : ",");
+            }
+            response->print("]}");
         }
-        response->print("],\"h_redirect\":[");
-        for (int i = 0; i < 24; i++) {
-            response->printf("%.2f%s", ds.h_redirect[i], (i == 23) ? "" : ",");
-        }
-        response->print("],\"h_export\":[");
-        for (int i = 0; i < 24; i++) {
-            response->printf("%.2f%s", ds.h_export[i], (i == 23) ? "" : ",");
-        }
-        response->print("]}");
+        xSemaphoreGive(_statsMutex);
     }
-    if (_statsMutex) xSemaphoreGive(_statsMutex);
-    
+
     response->print("}");
     request->send(response);
 }

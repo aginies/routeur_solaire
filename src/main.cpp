@@ -19,6 +19,7 @@ void setup() {
     // Initialize Watchdog
     esp_task_wdt_init(30, true); // 30s timeout to allow for night mode intervals
     esp_task_wdt_add(NULL);      // Add current (main) task
+    vTaskPrioritySet(NULL, 2);   // Increase priority slightly above typical background tasks
 
     if (!LittleFS.begin(true)) {
         Serial.println("LittleFS Mount Failed");

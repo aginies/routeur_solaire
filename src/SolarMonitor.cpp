@@ -117,22 +117,22 @@ void SolarMonitor::init(const Config& config) {
 }
 
 void SolarMonitor::startTasks() {
-    xTaskCreate(monitorTask, "monitorTask", 4096, NULL, 1, NULL);
+    xTaskCreate(monitorTask, "monitorTask", 4096, NULL, 3, NULL); // Priority 3
     xTaskCreate(historyTask, "historyTask", 2048, NULL, 1, NULL);
     xTaskCreate(tempTask, "tempTask", 4096, NULL, 1, NULL);
 
     if (_config->control_mode == "burst") {
         xTaskCreate(burstControlTask, "burstTask", 2048, NULL, 5, NULL);
     } else if (_config->control_mode == "cycle_stealing" || _config->control_mode == "zero_crossing") {
-        xTaskCreate(cycleStealingTask, "cycleTask", 4096, NULL, 10, NULL); // Higher priority for ZX
+        xTaskCreate(cycleStealingTask, "cycleTask", 4096, NULL, 5, NULL);
     } else if (_config->control_mode == "trame") {
         pinMode(_config->zx_pin, INPUT_PULLUP);
         attachInterrupt(digitalPinToInterrupt(_config->zx_pin), handleZxInterrupt, RISING);
-        xTaskCreate(trameControlTask, "trameTask", 4096, NULL, 10, NULL);
+        xTaskCreate(trameControlTask, "trameTask", 4096, NULL, 5, NULL);
     } else if (_config->control_mode == "phase") {
         pinMode(_config->zx_pin, INPUT_PULLUP);
         attachInterrupt(digitalPinToInterrupt(_config->zx_pin), handleZxInterrupt, RISING);
-        xTaskCreate(phaseControlTask, "phaseTask", 4096, NULL, 10, NULL);
+        xTaskCreate(phaseControlTask, "phaseTask", 4096, NULL, 5, NULL);
     }
 }
 
@@ -243,8 +243,11 @@ void SolarMonitor::trameControlTask(void* pvParameters) {
         xEventGroupWaitBits(_zxEventGroup, 0x01, pdTRUE, pdFALSE, pdMS_TO_TICKS(100));
         
         // We might have missed some or got one, use the counter for stability
-        while (localZxCount < _zxCounter) {
+        int loopCount = 0;
+        while (localZxCount < _zxCounter && loopCount < 200) {
             localZxCount++;
+            loopCount++;
+            esp_task_wdt_reset();
             
             float duty = _currentDuty;
             accumulator += duty;
@@ -269,6 +272,7 @@ void SolarMonitor::trameControlTask(void* pvParameters) {
                 equipmentPower = duty * actualMaxPower;
             }
         }
+        localZxCount = _zxCounter;
 
         // Watchdog: if no ZX for a while
         static uint32_t lastCheck = 0;
@@ -295,8 +299,11 @@ void SolarMonitor::phaseControlTask(void* pvParameters) {
         // Wait for ZX interrupt event
         xEventGroupWaitBits(_zxEventGroup, 0x01, pdTRUE, pdFALSE, pdMS_TO_TICKS(100));
         
-        while (localZxCount < _zxCounter) {
+        int loopCount = 0;
+        while (localZxCount < _zxCounter && loopCount < 200) {
             localZxCount++;
+            loopCount++;
+            esp_task_wdt_reset();
             
             float duty = _currentDuty;
             float actualMaxPower = _config->equipment_max_power * (currentGridVoltage / 230.0f) * (currentGridVoltage / 230.0f);
@@ -325,6 +332,7 @@ void SolarMonitor::phaseControlTask(void* pvParameters) {
                 digitalWrite(_config->ssr_pin, LOW);
             }
         }
+        localZxCount = _zxCounter;
 
         // Watchdog: if no ZX for a while
         static uint32_t lastCheck = 0;
@@ -518,17 +526,39 @@ void SolarMonitor::monitorTask(void* pvParameters) {
             }
         }
 
-        // 4. Mode Selection
+        // 4. Mode Selection & Physical Safety
+        bool isBoost = (millis() / 1000) < boostEndTime;
+        forceModeActive = (isBoost || _config->force_equipment || inForceWindow());
+
         if (safeState || emergencyMode) {
+            // CRITICAL FAULT: Hard stop
             _currentDuty = 0.0;
             forceModeActive = false;
+            digitalWrite(_config->ssr_pin, LOW);
+            digitalWrite(_config->relay_pin, HIGH); // Open Relay (Safety)
+        } else if (forceModeActive) {
+            // MANUAL OVERRIDE: Full power
+            if (digitalRead(_config->relay_pin) == HIGH) {
+                Logger::log("MANUAL BOOST: Closing Relay.");
+                digitalWrite(_config->relay_pin, LOW);
+            }
+            _currentDuty = 1.0;
+        } else if (nightModeActive) {
+            // IDLE NIGHT: Physical shutdown
+            if (digitalRead(_config->relay_pin) == LOW) {
+                Logger::log("NIGHT MODE: Disconnecting Relay for SSR protection.");
+                digitalWrite(_config->relay_pin, HIGH); // Open Relay
+            }
+            _currentDuty = 0.0;
+            digitalWrite(_config->ssr_pin, LOW);
         } else {
-            bool isBoost = (millis() / 1000) < boostEndTime;
-            forceModeActive = (isBoost || _config->force_equipment || inForceWindow());
+            // NORMAL OPERATION: Proportional Control
+            if (digitalRead(_config->relay_pin) == HIGH) {
+                Logger::log("DAY MODE: Restoring Relay.");
+                digitalWrite(_config->relay_pin, LOW);
+            }
 
-            if (forceModeActive) {
-                _currentDuty = 1.0;
-            } else if (hasFreshData) {
+            if (hasFreshData) {
                 // SENSOR LAG PROTECTION: 
                 // Shelly EM averages power over ~1 second. If we react to every single 1s update,
                 // we are always looking at "stale" data from before our last adjustment.

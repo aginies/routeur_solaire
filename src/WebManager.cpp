@@ -44,7 +44,9 @@ void WebManager::loop() {
         static uint32_t lastBroadcast = 0;
         if (millis() - lastBroadcast >= 1000) {
             lastBroadcast = millis();
-            _ws.textAll(getStatusJson());
+            if (_ws.count() > 0) {
+                _ws.textAll(getStatusJson());
+            }
         }
     }
     if (_rebootRequested) {
