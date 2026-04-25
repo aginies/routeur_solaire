@@ -201,15 +201,18 @@ void WebManager::setupRoutes() {
         request->send(LittleFS, "/web_command.html", "text/html", false, templateProcessor);
     });
 
-    _server.on("/status", HTTP_GET, [](AsyncWebServerRequest *request) {
+    _server.on("/status", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
         request->send(200, "application/json", getStatusJson());
     });
 
-    _server.on("/history", HTTP_GET, [](AsyncWebServerRequest *request) {
+    _server.on("/history", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
         SolarMonitor::streamHistoryJson(request);
     });
 
-    _server.on("/boost", HTTP_POST, [](AsyncWebServerRequest *request) {
+    _server.on("/boost", HTTP_POST, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
         int minutes = -1;
         if (request->hasParam("min")) {
             minutes = request->getParam("min")->value().toInt();
@@ -218,12 +221,14 @@ void WebManager::setupRoutes() {
         request->redirect("/");
     });
 
-    _server.on("/cancel_boost", HTTP_POST, [](AsyncWebServerRequest *request) {
+    _server.on("/cancel_boost", HTTP_POST, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
         SolarMonitor::cancelBoost();
         request->redirect("/");
     });
 
-    _server.on("/test_fan", HTTP_POST, [](AsyncWebServerRequest *request) {
+    _server.on("/test_fan", HTTP_POST, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
         if (request->hasParam("speed")) {
             int speed = request->getParam("speed")->value().toInt();
             Serial.printf("Web: Hit /test_fan (speed: %d%%)\n", speed);
@@ -396,31 +401,6 @@ void WebManager::setupRoutes() {
         } else {
             request->send(500, "text/html", "<html><body><h1>Error saving config</h1></body></html>");
         }
-    });
-
-    _server.on("/stats", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
-        if (!authRequired(request)) return;
-        
-        File file = LittleFS.open("/web_stats.html", "r");
-        if (!file) {
-            request->send(404, "text/plain", "File not found");
-            return;
-        }
-        
-        String html = file.readString();
-        file.close();
-        
-        if (_config) {
-            html.replace("%NAME%", _config->name);
-        }
-        html.replace("%VERSION%", FIRMWARE_VERSION);
-        
-        request->send(200, "text/html", html);
-    });
-
-    _server.on("/get_stats", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
-        if (!authRequired(request)) return;
-        StatsManager::streamStatsJson(request);
     });
 
     // Import/Export Stats
