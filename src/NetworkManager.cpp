@@ -45,6 +45,8 @@ void NetworkManager::setupSTA() {
     }
 
     if (WiFi.status() == WL_CONNECTED) {
+        WiFi.setSleep(false); // Disable power save for stability
+        WiFi.setTxPower(WIFI_POWER_19_5dBm);
         Logger::log("Connected! IP: " + WiFi.localIP().toString());
         _isAP = false;
         
@@ -66,7 +68,7 @@ void NetworkManager::setupAP() {
     WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
 
     WiFi.softAP(_config->ap_ssid.c_str(), _config->ap_password.c_str(), _config->ap_channel, _config->ap_hidden_ssid);
-
+    WiFi.setSleep(false);
     Logger::log("AP IP: " + WiFi.softAPIP().toString());
     _isAP = true;
     startCaptivePortal();

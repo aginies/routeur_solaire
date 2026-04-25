@@ -39,6 +39,13 @@ void WebManager::loop() {
     if (_initialized) {
         _ws.cleanupClients();
         Logger::loop();
+
+        // Periodic broadcast (e.g., every 1s)
+        static uint32_t lastBroadcast = 0;
+        if (millis() - lastBroadcast >= 1000) {
+            lastBroadcast = millis();
+            _ws.textAll(getStatusJson());
+        }
     }
     if (_rebootRequested) {
         vTaskDelay(pdMS_TO_TICKS(1000));
@@ -61,6 +68,12 @@ String WebManager::templateProcessor(const String& var) {
 
     if (var == "EQUIPMENT_NAME") return _config->equipment_name;
     if (var == "VERSION") return FIRMWARE_VERSION;
+
+#ifdef MAX_STATS_DAYS
+    if (var == "MAX_STATS_DAYS") return String(MAX_STATS_DAYS);
+#else
+    if (var == "MAX_STATS_DAYS") return "30";
+#endif
 
     if (var == "STATS_LINK") {
 #ifdef DISABLE_STATS_PAGE
@@ -408,6 +421,27 @@ void WebManager::setupRoutes() {
         StatsManager::streamStatsJson(request);
     });
 
+    // Import/Export Stats
+    static File uploadFile;
+    _server.on("/import_stats", HTTP_POST, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
+        request->send(200, "text/plain", "Importation réussie. Redémarrage...");
+        _rebootRequested = true;
+    }, [authRequired](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+        if (!authRequired(request)) return;
+        if (!index) {
+            Logger::log("Importation des stats : " + filename);
+            uploadFile = LittleFS.open("/stats.json", "w");
+        }
+        if (uploadFile) {
+            if (len) uploadFile.write(data, len);
+            if (final) {
+                uploadFile.close();
+                Logger::log("Importation terminée.");
+            }
+        }
+    });
+
     // OTA Update
     _server.on("/update", HTTP_POST, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
@@ -477,6 +511,7 @@ String WebManager::getStatusJson() {
     doc["boost_active"] = (millis() / 1000) < SolarMonitor::boostEndTime;
     doc["safe_state"] = SolarMonitor::safeState;
     doc["emergency_mode"] = SolarMonitor::emergencyMode;
+    doc["emergency_reason"] = SolarMonitor::emergencyReason;
     if (SolarMonitor::currentSsrTemp > -100.0) {
         doc["ssr_temp"] = SolarMonitor::currentSsrTemp;
     } else {

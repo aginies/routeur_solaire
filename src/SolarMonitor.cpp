@@ -14,12 +14,14 @@ bool SolarMonitor::equipmentActive = false;
 bool SolarMonitor::forceModeActive = false;
 bool SolarMonitor::safeState = false;
 bool SolarMonitor::emergencyMode = false;
+String SolarMonitor::emergencyReason = "";
 float SolarMonitor::currentSsrTemp = -999.0;
 bool SolarMonitor::fanActive = false;
 int SolarMonitor::fanPercent = 0;
 uint32_t SolarMonitor::boostEndTime = 0;
 bool SolarMonitor::nightModeActive = false;
-PowerPoint SolarMonitor::powerHistory[MAX_HISTORY];
+int SolarMonitor::maxHistory = 60;
+PowerPoint* SolarMonitor::powerHistory = nullptr;
 int SolarMonitor::historyWriteIdx = 0;
 int SolarMonitor::historyCount = 0;
 
@@ -50,6 +52,36 @@ void SolarMonitor::init(const Config& config) {
     );
     _ssrPinCached = config.ssr_pin;
 
+    // Allocate History
+#ifdef BOARD_HAS_PSRAM
+    if (psramFound()) {
+        maxHistory = 1200;
+        powerHistory = (PowerPoint*)ps_malloc(maxHistory * sizeof(PowerPoint));
+        if (powerHistory) {
+            memset(powerHistory, 0, maxHistory * sizeof(PowerPoint));
+            Logger::log("Allocated " + String(maxHistory) + " history points in PSRAM");
+        } else {
+            maxHistory = 60;
+            Logger::log("PSRAM Allocation FAILED, falling back to SRAM", true);
+            powerHistory = (PowerPoint*)malloc(maxHistory * sizeof(PowerPoint)); 
+            if (powerHistory) memset(powerHistory, 0, maxHistory * sizeof(PowerPoint));
+        }
+    } else {
+        maxHistory = 60;
+        Logger::log("No PSRAM found on S3, using minimal SRAM history");
+        powerHistory = (PowerPoint*)malloc(maxHistory * sizeof(PowerPoint));
+        if (powerHistory) memset(powerHistory, 0, maxHistory * sizeof(PowerPoint));
+    }
+#else
+    // WROOM/Standard ESP32
+    maxHistory = 60;
+    powerHistory = (PowerPoint*)malloc(maxHistory * sizeof(PowerPoint));
+    if (powerHistory) {
+        memset(powerHistory, 0, maxHistory * sizeof(PowerPoint));
+        Logger::log("Allocated " + String(maxHistory) + " history points in SRAM");
+    }
+#endif
+
     Serial.println("--- Hardware Init ---");
     Serial.print("SSR Pin: "); Serial.println(config.ssr_pin);
     Serial.print("ZX Pin: "); Serial.println(config.zx_pin);
@@ -75,14 +107,17 @@ void SolarMonitor::init(const Config& config) {
         _oneWire = new OneWire(config.ds18b20_pin);
         _sensors = new DallasTemperature(_oneWire);
         _sensors->begin();
+        int count = _sensors->getDeviceCount();
         _sensors->setWaitForConversion(false); // Non-blocking!
-        Logger::log("DS18B20 initialized on pin " + String(config.ds18b20_pin));
+        _sensors->requestTemperatures(); // First request
+        Logger::log("DS18B20 initialized on pin " + String(config.ds18b20_pin) + ", found " + String(count) + " sensors");
     }
 }
 
 void SolarMonitor::startTasks() {
     xTaskCreate(monitorTask, "monitorTask", 4096, NULL, 1, NULL);
     xTaskCreate(historyTask, "historyTask", 2048, NULL, 1, NULL);
+    xTaskCreate(tempTask, "tempTask", 4096, NULL, 1, NULL);
 
     if (_config->control_mode == "burst") {
         xTaskCreate(burstControlTask, "burstTask", 2048, NULL, 5, NULL);
@@ -186,11 +221,6 @@ void SolarMonitor::cycleStealingTask(void* pvParameters) {
 void IRAM_ATTR SolarMonitor::handleZxInterrupt() {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     _zxCounter++;
-    
-    // Quick path for 100% duty to minimize latency
-    if (_currentDuty >= 0.99 && _ssrPinCached >= 0) {
-        digitalWrite(_ssrPinCached, HIGH);
-    }
 
     xEventGroupSetBitsFromISR(_zxEventGroup, 0x01, &xHigherPriorityTaskWoken);
     if (xHigherPriorityTaskWoken) {
@@ -269,12 +299,6 @@ void SolarMonitor::phaseControlTask(void* pvParameters) {
         while (localZxCount < _zxCounter) {
             localZxCount++;
             
-            // Log every 100 ZCs (~1s)
-            if (localZxCount % 100 == 0) {
-                Serial.print("ZC Count: "); Serial.print(_zxCounter);
-                Serial.print(" Duty: "); Serial.println(_currentDuty);
-            }
-
             float duty = _currentDuty;
             equipmentActive = (duty > 0.01);
             equipmentPower = duty * _config->equipment_max_power;
@@ -318,18 +342,18 @@ void SolarMonitor::phaseControlTask(void* pvParameters) {
 
 void SolarMonitor::historyTask(void* pvParameters) {
     while (true) {
-        PowerPoint p = {
-            (uint32_t)(millis() / 1000),
-            currentGridPower,
-            equipmentPower,
-            currentSsrTemp,
-            fanActive
-        };
+        if (powerHistory && _dataMutex && xSemaphoreTake(_dataMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+            PowerPoint p = {
+                (uint32_t)(millis() / 1000),
+                currentGridPower,
+                equipmentPower,
+                currentSsrTemp,
+                fanActive
+            };
 
-        if (_dataMutex && xSemaphoreTake(_dataMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
             powerHistory[historyWriteIdx] = p;
-            historyWriteIdx = (historyWriteIdx + 1) % MAX_HISTORY;
-            if (historyCount < MAX_HISTORY) historyCount++;
+            historyWriteIdx = (historyWriteIdx + 1) % maxHistory;
+            if (historyCount < maxHistory) historyCount++;
             xSemaphoreGive(_dataMutex);
         }
 
@@ -337,10 +361,60 @@ void SolarMonitor::historyTask(void* pvParameters) {
     }
 }
 
+void SolarMonitor::tempTask(void* pvParameters) {
+    esp_task_wdt_add(NULL);
+    uint32_t lastRead = millis() - 5000;
+    while (true) {
+        esp_task_wdt_reset();
+        uint32_t now = millis();
+        if (now - lastRead >= 5000) { // Every 5s
+            readTemperatures();
+            lastRead = now;
+
+            bool tempFault = _config->e_ssr_temp && (currentSsrTemp < -100.0);
+            bool tempOverheat = _config->e_ssr_temp && (currentSsrTemp >= _config->ssr_max_temp);
+
+            if (tempFault || tempOverheat) {
+                static uint32_t lastFaultLog = 0;
+                if (now - lastFaultLog > 60000 || !emergencyMode) {
+                    if (tempFault) {
+                        emergencyReason = "SSR Temp Sensor Fault!";
+                        Logger::log("SAFETY: " + emergencyReason, true);
+                    } else {
+                        emergencyReason = "External Overheat!";
+                        Logger::log("SAFETY: " + emergencyReason, true);
+                    }
+                    lastFaultLog = now;
+                }
+                
+                emergencyMode = true;
+                _currentDuty = 0.0;
+                digitalWrite(_config->ssr_pin, LOW);
+                digitalWrite(_config->relay_pin, HIGH);
+            } else if (emergencyMode) {
+                // Check internal temp too before restoring
+                if (temperatureRead() < _config->max_esp32_temp) {
+                    digitalWrite(_config->relay_pin, LOW); // Relay ON
+                    emergencyMode = false;
+                    emergencyReason = "";
+                    Logger::log("SAFETY: Temperatures normal, relay restored.");
+                }
+            }
+
+            if (_config->e_fan && _config->e_ssr_temp) {
+                float lowThreshold = _config->ssr_max_temp - _config->fan_temp_offset;
+                if (currentSsrTemp >= _config->ssr_max_temp) testFanSpeed(100);
+                else if (currentSsrTemp >= lowThreshold) testFanSpeed(50);
+                else testFanSpeed(0);
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
 void SolarMonitor::monitorTask(void* pvParameters) {
     esp_task_wdt_add(NULL); // Add this task to TWDT
     _lastGoodPoll = millis();
-    uint32_t lastTempRead = 0;
     uint32_t lastMqttReport = 0;
     uint32_t lastStatsUpdate = millis();
     uint32_t lastSolarDataLog = 0;
@@ -376,7 +450,8 @@ void SolarMonitor::monitorTask(void* pvParameters) {
         nightModeActive = isNight(currMin);
         int currentPollInterval = nightModeActive ? _config->night_poll_interval : _config->poll_interval;
 
-        // Dynamic CPU Frequency scaling
+        // Dynamic CPU Frequency scaling (Disabled: keeping constant speed for stability)
+        /*
         static int currentFreq = -1;
         int targetFreq = nightModeActive ? 80 : _config->cpu_freq;
         if (targetFreq != currentFreq) {
@@ -384,44 +459,17 @@ void SolarMonitor::monitorTask(void* pvParameters) {
             currentFreq = targetFreq;
             Logger::log("CPU Frequency set to " + String(targetFreq) + " MHz");
         }
+        */
 
         if (espTemp >= _config->max_esp32_temp) {
-            Logger::log("SAFETY: ESP32 Overheat!", true);
+            emergencyReason = "ESP32 Overheat!";
+            Logger::log("SAFETY: " + emergencyReason, true);
             emergencyMode = true;
             _currentDuty = 0.0;
             digitalWrite(_config->ssr_pin, LOW);
             digitalWrite(_config->relay_pin, HIGH); // Relay OFF
             vTaskDelay(pdMS_TO_TICKS(2000));
             continue;
-        }
-
-        // 2. Temperature Sensing
-        if (now - lastTempRead >= 30000) { // Every 30s
-            readTemperatures();
-            lastTempRead = now;
-
-            if (_config->e_ssr_temp && currentSsrTemp >= _config->ssr_max_temp) {
-                Logger::log("SAFETY: External Overheat!", true);
-                emergencyMode = true;
-                _currentDuty = 0.0;
-                digitalWrite(_config->ssr_pin, LOW);
-                digitalWrite(_config->relay_pin, HIGH);
-                vTaskDelay(pdMS_TO_TICKS(2000));
-                continue;
-            }
-
-            if (emergencyMode) {
-                digitalWrite(_config->relay_pin, LOW); // Relay ON
-                emergencyMode = false;
-                Logger::log("SAFETY: Conditions normal, relay restored.");
-            }
-
-            if (_config->e_fan && _config->e_ssr_temp) {
-                float lowThreshold = _config->ssr_max_temp - _config->fan_temp_offset;
-                if (currentSsrTemp >= _config->ssr_max_temp) testFanSpeed(100);
-                else if (currentSsrTemp >= lowThreshold) testFanSpeed(50);
-                else testFanSpeed(0);
-            }
         }
 
         // 3. Grid Power Retrieval
@@ -547,14 +595,20 @@ float SolarMonitor::getShellyPower() {
 
 void SolarMonitor::readTemperatures() {
     if (!_sensors) return;
-    _sensors->requestTemperatures();
 
     if (_config->e_ssr_temp) {
         float t = _sensors->getTempCByIndex(0);
-        if (t != 85.0 && t != -127.0 && t > -50.0 && t < 120.0) {
+        // Valid range for DS18B20 is -55 to +125. 
+        // 85.0 is the power-on reset value (ignore it if it persists).
+        // -127.0 is DEVICE_DISCONNECTED_C.
+        if (t > -55.0 && t < 125.0 && t != 85.0) {
             currentSsrTemp = t;
+        } else {
+            currentSsrTemp = -999.0; // Mark as invalid/stale
         }
     }
+    
+    _sensors->requestTemperatures(); // Request for next cycle
 }
 
 bool SolarMonitor::inForceWindow() {
@@ -623,9 +677,9 @@ String SolarMonitor::getHistoryJson() {
     JsonDocument doc;
     JsonArray arr = doc.to<JsonArray>();
     
-    if (_dataMutex && xSemaphoreTake(_dataMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+    if (powerHistory && _dataMutex && xSemaphoreTake(_dataMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
         for (int i = 0; i < historyCount; i++) {
-            int idx = (historyWriteIdx - historyCount + i + MAX_HISTORY) % MAX_HISTORY;
+            int idx = (historyWriteIdx - historyCount + i + maxHistory) % maxHistory;
             const auto& p = powerHistory[idx];
             JsonObject obj = arr.add<JsonObject>();
             obj["t"] = p.t;
@@ -646,11 +700,12 @@ void SolarMonitor::streamHistoryJson(AsyncWebServerRequest *request) {
     AsyncResponseStream *response = request->beginResponseStream("application/json");
     JsonDocument doc;
     JsonArray arr = doc.to<JsonArray>();
-    
-    if (_dataMutex && xSemaphoreTake(_dataMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+
+    if (powerHistory && _dataMutex && xSemaphoreTake(_dataMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
         for (int i = 0; i < historyCount; i++) {
-            int idx = (historyWriteIdx - historyCount + i + MAX_HISTORY) % MAX_HISTORY;
-            const auto& p = powerHistory[idx];
+            // Send oldest to newest
+            int idx = (historyWriteIdx - historyCount + i + maxHistory) % maxHistory;
+            PowerPoint p = powerHistory[idx];
             JsonObject obj = arr.add<JsonObject>();
             obj["t"] = p.t;
             obj["g"] = p.g;
