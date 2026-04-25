@@ -24,6 +24,7 @@ public:
 
     // State Access
     static float currentGridPower;
+    static float currentGridVoltage;
     static float equipmentPower;
     static bool equipmentActive;
     static bool forceModeActive;
@@ -31,6 +32,7 @@ public:
     static bool emergencyMode;
     static String emergencyReason;
     static float currentSsrTemp;
+    static float lastEspTemp;
     static bool fanActive;
     static int fanPercent;
     static uint32_t boostEndTime;
