@@ -45,6 +45,9 @@ public:
 #endif
     static std::map<String, DailyStats> _history;
     static uint32_t _lastSave;
+#ifndef NATIVE_TEST
+    static SemaphoreHandle_t _statsMutex;
+#endif
 };
 
 #endif

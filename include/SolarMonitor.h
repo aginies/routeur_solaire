@@ -29,14 +29,15 @@ public:
     static bool forceModeActive;
     static bool safeState;
     static bool emergencyMode;
+    static String emergencyReason;
     static float currentSsrTemp;
     static bool fanActive;
     static int fanPercent;
     static uint32_t boostEndTime;
     static bool nightModeActive;
     
-    static const int MAX_HISTORY = 60;
-    static PowerPoint powerHistory[MAX_HISTORY];
+    static int maxHistory;
+    static PowerPoint* powerHistory;
     static int historyWriteIdx;
     static int historyCount;
 
@@ -54,6 +55,7 @@ private:
     static void trameControlTask(void* pvParameters);
     static void phaseControlTask(void* pvParameters);
     static void historyTask(void* pvParameters);
+    static void tempTask(void* pvParameters);
 
     static void IRAM_ATTR handleZxInterrupt();
 
