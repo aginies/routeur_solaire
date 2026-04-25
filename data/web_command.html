@@ -594,7 +594,7 @@
                 });
                 const gridData = history.map(p => p.g);
                 const equipmentData  = history.map(p => p.e);
-                const ssrTempData = history.map(p => p.s);
+                const ssrTempData = history.map(p => p.s <= -100 ? null : p.s);
 
                 if (!powerChart) {
                     const ctx = document.getElementById('powerChart').getContext('2d');
@@ -640,8 +640,8 @@
                             },
                             scales: {
                                 x: { ticks: { color: '#999', maxRotation: 0, autoSkip: true, maxTicksLimit: 6 }, grid: { color: '#333' } },
-                                y: { type: 'linear', position: 'left', ticks: { color: '#999' }, grid: { color: '#333' } },
-                                y1: { type: 'linear', position: 'right', ticks: { color: '#3498db' }, grid: { drawOnChartArea: false } }
+                                y: { type: 'linear', display: true, position: 'left', ticks: { color: '#999' }, grid: { color: '#333' } },
+                                y1: { type: 'linear', display: true, position: 'right', ticks: { color: '#3498db' }, grid: { drawOnChartArea: false } }
                             }
                         }
                     });
