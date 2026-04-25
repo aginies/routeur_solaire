@@ -225,7 +225,7 @@ void WebManager::setupRoutes() {
         if (request->hasParam("speed")) {
             int speed = request->getParam("speed")->value().toInt();
             Serial.printf("Web: Hit /test_fan (speed: %d%%)\n", speed);
-            bool success = SolarMonitor::testFanSpeed(speed);
+            bool success = SolarMonitor::setFanSpeed(speed, true);
             request->send(200, "application/json", "{\"success\":" + String(success ? "true" : "false") + "}");
         } else {
             request->send(400, "application/json", "{\"success\":false}");

@@ -403,9 +403,9 @@ void SolarMonitor::tempTask(void* pvParameters) {
 
             if (_config->e_fan && _config->e_ssr_temp) {
                 float lowThreshold = _config->ssr_max_temp - _config->fan_temp_offset;
-                if (currentSsrTemp >= _config->ssr_max_temp) testFanSpeed(100);
-                else if (currentSsrTemp >= lowThreshold) testFanSpeed(50);
-                else testFanSpeed(0);
+                if (currentSsrTemp >= _config->ssr_max_temp) setFanSpeed(100);
+                else if (currentSsrTemp >= lowThreshold) setFanSpeed(50);
+                else setFanSpeed(0);
             }
         }
         vTaskDelay(pdMS_TO_TICKS(1000));
@@ -691,13 +691,18 @@ void SolarMonitor::cancelBoost() {
     Logger::log("Solar Boost Cancelled");
 }
 
-bool SolarMonitor::testFanSpeed(int percent) {
-    if (!_config->e_fan) {
-        Serial.println("Fan: TEST ignored (e_fan disabled)");
-        return false;
-    }
+bool SolarMonitor::setFanSpeed(int percent, bool isTest) {
+    if (!_config->e_fan) return false;
+    
+    if (percent == fanPercent && !isTest) return true; // No change, ignore unless it's a manual test request
+
     int duty = (percent * 4095) / 100;
-    Serial.printf("Fan: TEST speed: %d%% (Duty: %d/4095)\n", percent, duty);
+    if (isTest) {
+        Serial.printf("Fan: MANUAL TEST speed: %d%% (Duty: %d/4095)\n", percent, duty);
+    } else {
+        Serial.printf("Fan: Auto-adjust to %d%% (Temp: %.1fC)\n", percent, currentSsrTemp);
+    }
+    
     ledcWrite(4, duty); // Channel 4
     fanPercent = percent;
     fanActive = (percent > 0);
