@@ -1,5 +1,5 @@
 {
-    "name": "Solaire-WROOM",
+    "name": "Solaire-Guibo",
     "cpu_freq": 240,
     "internal_led_pin": 2,
     "max_esp32_temp": 65.0,
@@ -18,25 +18,26 @@
     "ap_channel": 6,
     "ap_ip": "192.168.66.1",
 
-    "ssr_pin": 12,
-    "relay_pin": 13,
-    "ds18b20_pin": 14,
+    "ssr_pin": 17,
+    "relay_pin": 15,
+    "ds18b20_pin": 16,
     "fan_pin": 5,
-    "zx_pin": 15,
+    "zx_pin": 19,
 
     "shelly_em_ip": "10.0.10.60",
     "e_shelly_mqtt": true,
     "shelly_mqtt_topic": "shellies/homeassistant/emeter/0/power",
     "fake_shelly": false,
+
     "poll_interval": 1,
 
     "equipment_name": "Ballon",
     "equipment_max_power": 2300.0,
     "export_setpoint": 0.0,
 
-    "delta": 50.0,
-    "deltaneg": 0.0,
-    "compensation": 100.0,
+    "delta": 100.0,
+    "deltaneg": -75.0,
+    "compensation": 50.0,
 
     "burst_period": 0.5,
     "min_power_threshold": 10.0,
@@ -44,7 +45,7 @@
     "boost_minutes": 60,
 
     "force_equipment": false,
-    "e_force_window": false,
+    "e_force_window": true,
     "force_start": "22:05",
     "force_end": "05:55",
 
@@ -65,8 +66,8 @@
     "jsy_tx": 17,
     "jsy_rx": 16,
 
-    "control_mode": "phase",
-    "half_period_us": 10000,
+    "control_mode": "trame",
+    "half_period_us": 9900,
     "zx_busypoll_us": 1000,
     "zx_timeout_ms": 500,
     "debug_phase": false,

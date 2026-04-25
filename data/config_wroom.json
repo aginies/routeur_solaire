@@ -33,11 +33,11 @@
 
     "equipment_name": "Ballon",
     "equipment_max_power": 2300.0,
-    "export_setpoint": 300.0,
+    "export_setpoint": 0.0,
 
-    "delta": 50.0,
-    "deltaneg": 0.0,
-    "compensation": 100.0,
+    "delta": 100.0,
+    "deltaneg": -75,
+    "compensation": 50.0,
 
     "burst_period": 0.5,
     "min_power_threshold": 10.0,
@@ -45,7 +45,7 @@
     "boost_minutes": 60,
 
     "force_equipment": false,
-    "e_force_window": false,
+    "e_force_window": true,
     "force_start": "22:05",
     "force_end": "05:55",
 
@@ -66,8 +66,8 @@
     "jsy_tx": 17,
     "jsy_rx": 16,
 
-    "control_mode": "phase",
-    "half_period_us": 10000,
+    "control_mode": "trame",
+    "half_period_us": 9900,
     "zx_busypoll_us": 1000,
     "zx_timeout_ms": 500,
     "debug_phase": false,
