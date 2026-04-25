@@ -57,7 +57,7 @@ void SolarMonitor::init(const Config& config) {
     // Allocate History
 #ifdef BOARD_HAS_PSRAM
     if (psramFound()) {
-        maxHistory = 1200;
+        maxHistory = 600; // 50 minutes at 5s interval
         powerHistory = (PowerPoint*)ps_malloc(maxHistory * sizeof(PowerPoint));
         if (powerHistory) {
             memset(powerHistory, 0, maxHistory * sizeof(PowerPoint));
