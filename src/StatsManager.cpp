@@ -34,10 +34,18 @@ void StatsManager::init() {
 
     String lastDay = prefs.getString("last_day", "");
     String today = getTodayKey();
-    if (lastDay != "" && lastDay != today && today != "1970-01-01") {
+    
+    time_t now_t;
+    time(&now_t);
+    struct tm ti;
+    localtime_r(&now_t, &ti);
+    bool isTimeValid = (ti.tm_year > 120); // Year since 1900, 120 = 2020
+
+    if (isTimeValid && lastDay != "" && lastDay != today) {
         totalImportToday = 0;
         totalRedirectToday = 0;
         totalExportToday = 0;
+        Logger::log("New day detected: " + today + ". Resetting daily stats.");
     }
 
     if (!LittleFS.exists("/stats.json")) {
@@ -112,20 +120,15 @@ void StatsManager::init() {
 }
 void StatsManager::update(float gridPower, float equipmentPower, uint32_t intervalMs) {
     if (gridPower < -90000.0) return; // Skip invalid readings
-    String key = getTodayKey();
-    if (key == "1970-01-01") return; // NTP not synced yet
-
-    float intervalHours = intervalMs / 3600000.0;
-    
-#ifndef NATIVE_TEST
-    if (_statsMutex) xSemaphoreTake(_statsMutex, portMAX_DELAY);
-#endif
-    DailyStats& ds = _history[key];
     
     time_t now_t;
     time(&now_t);
     struct tm ti;
     localtime_r(&now_t, &ti);
+    if (ti.tm_year < 120) return; // NTP not synced yet
+
+    String key = getTodayKey();
+    float intervalHours = intervalMs / 3600000.0;
     int hour = ti.tm_hour;
 
     float energyImport = 0;
@@ -137,6 +140,11 @@ void StatsManager::update(float gridPower, float equipmentPower, uint32_t interv
         solarRedirPower = (equipmentPower > gridPower) ? (equipmentPower - gridPower) : 0;
     }
     float energyRedirect = solarRedirPower * intervalHours;
+
+#ifndef NATIVE_TEST
+    if (_statsMutex) xSemaphoreTake(_statsMutex, portMAX_DELAY);
+#endif
+    DailyStats& ds = _history[key];
 
     if (gridPower > 0) {
         energyImport = gridPower * intervalHours;

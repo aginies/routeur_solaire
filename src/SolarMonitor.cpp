@@ -445,7 +445,10 @@ void SolarMonitor::monitorTask(void* pvParameters) {
         }
 
         // 1. Update State & Safety
-        lastEspTemp = temperatureRead();
+        if (_dataMutex && xSemaphoreTake(_dataMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+            lastEspTemp = temperatureRead();
+            xSemaphoreGive(_dataMutex);
+        }
         float espTemp = lastEspTemp;
         
         time_t t_now;
@@ -504,7 +507,10 @@ void SolarMonitor::monitorTask(void* pvParameters) {
         }
 
         if (hasFreshData && !isnan(gridPower)) {
-            currentGridPower = gridPower;
+            if (_dataMutex && xSemaphoreTake(_dataMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+                currentGridPower = gridPower;
+                xSemaphoreGive(_dataMutex);
+            }
             _lastGoodPoll = now;
             if (safeState) {
                 safeState = false;
@@ -631,9 +637,8 @@ float SolarMonitor::getShellyPower() {
     float power = -99999.0;
 
     if (httpCode == HTTP_CODE_OK) {
-        String payload = http.getString();
         JsonDocument doc;
-        DeserializationError error = deserializeJson(doc, payload);
+        DeserializationError error = deserializeJson(doc, http.getStream());
         if (!error) {
             power = doc["emeters"][0]["power"];
             float voltage = doc["emeters"][0]["voltage"];
