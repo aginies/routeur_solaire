@@ -92,7 +92,7 @@ struct Config {
     int jsy_rx = 16;
 
     // SSR Mode
-    String control_mode = "burst";
+    String control_mode = "trame";
     int half_period_us = 9900;
     int zx_busypoll_us = 1000;
     int zx_timeout_ms = 500;
