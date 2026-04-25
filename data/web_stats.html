@@ -6,23 +6,77 @@
     <title>Solaire - Statistiques</title>
     <script src="/chart.min.js" onerror="handleChartJsError()"></script>
     <style>
+        :root {
+            --bg-color: #1a1a2e;
+            --text-color: #eee;
+            --card-bg: #16213e;
+            --card-border: #252d4a;
+            --primary-color: #f0c040;
+            --secondary-text: #aaa;
+            --btn-bg: #0f3460;
+            --btn-hover: #1a5276;
+            --stat-bg: #1a1a2e;
+            --border-color: #333;
+            --shadow-color: rgba(0,0,0,0.5);
+            --stat-shadow: rgba(0,0,0,0.3);
+            --tab-color: #888;
+            --tab-active-text: #1a1a2e;
+            --chart-grid: rgba(255,255,255,0.05);
+            --chart-tick: #999;
+        }
+
+        body.light-mode {
+            --bg-color: #f5f6fa;
+            --text-color: #2c3e50;
+            --card-bg: #ffffff;
+            --card-border: #dcdde1;
+            --primary-color: #e67e22;
+            --secondary-text: #7f8c8d;
+            --btn-bg: #3498db;
+            --btn-hover: #2980b9;
+            --stat-bg: #ffffff;
+            --border-color: #dcdde1;
+            --shadow-color: rgba(0,0,0,0.1);
+            --stat-shadow: rgba(0,0,0,0.1);
+            --tab-color: #7f8c8d;
+            --tab-active-text: #ffffff;
+            --chart-grid: rgba(0,0,0,0.05);
+            --chart-tick: #7f8c8d;
+        }
+
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: Arial, sans-serif;
-            background-color: #1a1a2e;
-            color: #eee;
+            background-color: var(--bg-color);
+            color: var(--text-color);
             padding: 20px;
+            transition: background-color 0.3s, color 0.3s;
         }
-        .header { text-align: center; margin-bottom: 24px; }
-        h1 { color: #f0c040; font-size: 1.6em; }
-        .container { max-width: 900px; margin: 0 auto; }
+        .header { text-align: center; margin-bottom: 24px; position: relative; }
+        h1 { color: var(--primary-color); font-size: 1.6em; transition: color 0.3s; }
+        .container { max-width: 900px; margin: 0 auto; position: relative; }
+        
+        .theme-toggle {
+            position: absolute;
+            top: 0;
+            right: 0;
+            background: none;
+            border: none;
+            color: var(--text-color);
+            font-size: 1.5em;
+            cursor: pointer;
+            outline: none;
+            transition: color 0.3s;
+        }
+
         .chart-card {
-            background: #16213e;
+            background: var(--card-bg);
             border-radius: 16px;
             padding: 24px;
             margin-bottom: 24px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            border: 1px solid #252d4a;
+            box-shadow: 0 10px 30px var(--shadow-color);
+            border: 1px solid var(--card-border);
+            transition: all 0.3s;
         }
         .pie-container {
             display: flex;
@@ -37,8 +91,8 @@
             margin-top: 24px;
         }
         .footer a, .footer button {
-            background: #0f3460;
-            color: #eee;
+            background: var(--btn-bg);
+            color: #fff;
             padding: 10px 18px;
             border-radius: 8px;
             text-decoration: none;
@@ -47,7 +101,7 @@
             border: none;
             cursor: pointer;
         }
-        .footer a:hover, .footer button:hover { background: #1a5276; }
+        .footer a:hover, .footer button:hover { background: var(--btn-hover); }
         .summary {
             display: flex;
             gap: 16px;
@@ -56,19 +110,20 @@
         }
         .stat-box {
             flex: 1 1 200px;
-            background: #1a1a2e;
+            background: var(--stat-bg);
             padding: 20px;
             border-radius: 12px;
             text-align: center;
-            border: 1px solid #333;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 15px var(--stat-shadow);
+            transition: all 0.3s;
         }
-        .stat-box .label { font-size: 0.8em; color: #aaa; text-transform: uppercase; margin-bottom: 8px; }
-        .stat-box .value { font-size: 1.6em; font-weight: bold; color: #f0c040; }
+        .stat-box .label { font-size: 0.8em; color: var(--secondary-text); text-transform: uppercase; margin-bottom: 8px; transition: color 0.3s; }
+        .stat-box .value { font-size: 1.6em; font-weight: bold; color: var(--primary-color); transition: color 0.3s; }
         .tab-btn {
-            background: #1a1a2e;
-            color: #888;
-            border: 1px solid #333;
+            background: var(--stat-bg);
+            color: var(--tab-color);
+            border: 1px solid var(--border-color);
             padding: 10px 24px;
             border-radius: 30px;
             cursor: pointer;
@@ -76,23 +131,24 @@
             font-weight: bold;
             transition: all 0.3s ease;
         }
-        .tab-btn:hover { border-color: #f0c040; color: #f0c040; }
+        .tab-btn:hover { border-color: var(--primary-color); color: var(--primary-color); }
         .tab-btn.active {
-            background: #f0c040;
-            color: #1a1a2e;
-            border-color: #f0c040;
-            box-shadow: 0 4px 15px rgba(240,192,64,0.3);
+            background: var(--primary-color);
+            color: var(--tab-active-text);
+            border-color: var(--primary-color);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         }
         #statDate {
             padding: 10px 16px;
             border-radius: 12px;
-            border: 1px solid #333;
-            background: #16213e;
-            color: white;
+            border: 1px solid var(--border-color);
+            background: var(--card-bg);
+            color: var(--text-color);
             font-family: inherit;
             outline: none;
             cursor: pointer;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            transition: all 0.3s;
         }
         .nav-btn {
             background: #16213e;
@@ -120,13 +176,18 @@
             margin-bottom: 20px;
         }
         .cdn-error-banner strong { display: block; margin-bottom: 8px; }
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>Historique Énergétique</h1>
-            <p style="color:#888; font-size: 0.9em;">Consommation et Redirection Solaire</p>
+            <p id="subHeader" style="color:#888; font-size: 0.9em;">Consommation et Redirection Solaire</p>
         </div>
 
         <div id="cdnErrorBanner" class="cdn-error-banner" style="display:none;">
@@ -141,10 +202,23 @@
             <button class="tab-btn"        onclick="setView('year')"  id="btnYear">Année</button>
         </div>
 
+        <script>
+            // Hide "Année" if device has limited history (e.g. WROOM with 14 days)
+            const maxStatsDays = parseInt("%MAX_STATS_DAYS%");
+            if (!isNaN(maxStatsDays) && maxStatsDays <= 31) {
+                document.getElementById('btnYear').style.display = 'none';
+                document.getElementById('subHeader').innerHTML += ` <br><span style="color:var(--primary-color); font-weight:bold;">(Limité aux ${maxStatsDays} derniers jours)</span>`;
+            }
+        </script>
+
         <div id="dateSelector" style="display:flex; justify-content:center; align-items:center; gap:12px; margin-bottom:24px;">
             <button class="nav-btn" onclick="changeDate(-1)">&#10094;</button>
             <input type="date" id="statDate" onchange="refreshView()">
             <button class="nav-btn" onclick="changeDate(1)">&#10095;</button>
+        </div>
+
+        <div id="loadingBanner" style="display:none; background:#0f3460; color:#fff; text-align:center; padding:15px; border-radius:12px; margin-bottom:20px; font-weight:bold; animation: pulse 1.5s infinite;">
+            ⏳ Chargement des données en cours...
         </div>
 
         <div class="summary">
@@ -185,6 +259,9 @@
 
         <div class="footer">
             <button onclick="forceRefresh()">&#8635; Actualiser</button>
+            <button onclick="exportData()">📥 Exporter</button>
+            <button onclick="document.getElementById('importFile').click()">📤 Importer</button>
+            <input type="file" id="importFile" style="display:none" onchange="importData(this)" accept=".json">
             <a href="/">Retour au Dashboard</a>
         </div>
     </div>
@@ -275,11 +352,56 @@
         }
 
         async function loadRawData() {
+            const loader = document.getElementById('loadingBanner');
+            if (loader) loader.style.display = 'block';
             try {
                 const r = await fetch('/get_stats');
                 statsData = await r.json();
             } catch (e) {
                 console.error('Error loading stats:', e);
+            } finally {
+                if (loader) loader.style.display = 'none';
+            }
+        }
+
+        function exportData() {
+            if (!statsData || Object.keys(statsData).length === 0) {
+                alert("Aucune donnée à exporter");
+                return;
+            }
+            const blob = new Blob([JSON.stringify(statsData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `solar_stats_${localDateStr(new Date())}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        async function importData(input) {
+            if (!input.files || input.files.length === 0) return;
+            
+            if (!confirm("Voulez-vous vraiment importer ces données ? Cela remplacera l'historique actuel et redémarrera l'appareil.")) {
+                input.value = '';
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('stats', input.files[0]);
+
+            try {
+                const response = await fetch('/import_stats', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.text();
+                alert(result);
+                window.location.href = '/';
+            } catch (e) {
+                console.error('Import error:', e);
+                alert("Erreur lors de l'importation");
             }
         }
 

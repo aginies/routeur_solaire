@@ -450,7 +450,8 @@
                 const ss = document.getElementById('safeStateBox');
                 if (ss) {
                     if (d.emergency_mode) {
-                        ss.textContent = 'SOLAR SAFETY: Emergency shutdown';
+                        const reason = d.emergency_reason ? d.emergency_reason : 'Emergency shutdown';
+                        ss.textContent = 'SOLAR SAFETY: ' + reason;
                         ss.style.display = 'block';
                     } else if (d.safe_state) {
                         ss.textContent = 'SAFE STATE: Shelly EM offline';
