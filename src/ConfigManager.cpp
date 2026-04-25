@@ -1,27 +1,51 @@
 #include "ConfigManager.h"
+#include <Preferences.h>
 
 const char* ConfigManager::CONFIG_FILE = "/config.json";
 
 Config ConfigManager::load() {
     Config config;
-    if (!LittleFS.exists(CONFIG_FILE)) {
+    JsonDocument doc;
+    bool loadedFromFile = false;
+
+    // 1. Try loading from LittleFS
+    if (LittleFS.exists(CONFIG_FILE)) {
+        File file = LittleFS.open(CONFIG_FILE, "r");
+        if (file) {
+            DeserializationError error = deserializeJson(doc, file);
+            file.close();
+            if (!error) {
+                loadedFromFile = true;
+                Serial.println("ConfigManager: Loaded from LittleFS");
+            }
+        }
+    }
+
+    // 2. Try loading from Preferences (NVS) if file load failed or to merge
+    Preferences prefs;
+    prefs.begin("solar_config", true); // Read-only
+    if (prefs.isKey("json")) {
+        String nvsJson = prefs.getString("json");
+        JsonDocument nvsDoc;
+        DeserializationError error = deserializeJson(nvsDoc, nvsJson);
+        if (!error) {
+            Serial.println("ConfigManager: Found NVS backup, merging...");
+            // Merge NVS into current doc (NVS values take precedence for user settings)
+            for (JsonPair p : nvsDoc.as<JsonObject>()) {
+                doc[p.key()] = p.value();
+            }
+            loadedFromFile = true; // Consider it loaded if NVS exists
+        }
+    }
+    prefs.end();
+
+    if (!loadedFromFile) {
+        Serial.println("ConfigManager: No config found, using defaults");
         save(config);
         return config;
     }
 
-    File file = LittleFS.open(CONFIG_FILE, "r");
-    if (!file) {
-        return config;
-    }
-
-    JsonDocument doc;
-    DeserializationError error = deserializeJson(doc, file);
-    file.close();
-
-    if (error) {
-        return config;
-    }
-
+    // --- Apply merged values to config object ---
     // System
     if (doc.containsKey("name")) config.name = doc["name"].as<String>();
     if (doc.containsKey("timezone")) config.timezone = doc["timezone"].as<String>();
@@ -126,13 +150,8 @@ Config ConfigManager::load() {
 }
 
 bool ConfigManager::save(const Config& config) {
-    Serial.println("ConfigManager: Opening /config.json for writing...");
-    File file = LittleFS.open(CONFIG_FILE, "w");
-    if (!file) {
-        Serial.println("ConfigManager: ERROR opening file!");
-        return false;
-    }
-
+    Serial.println("ConfigManager: Saving config to LittleFS and NVS...");
+    
     JsonDocument doc;
     doc["name"] = config.name;
     doc["timezone"] = config.timezone;
@@ -205,11 +224,33 @@ bool ConfigManager::save(const Config& config) {
     doc["web_user"] = config.web_user;
     doc["web_password"] = config.web_password;
 
-    serializeJson(doc, file);
-    file.close();
+    // 1. Save to LittleFS
+    File file = LittleFS.open(CONFIG_FILE, "w");
+    if (file) {
+        serializeJson(doc, file);
+        file.close();
+        Serial.println("ConfigManager: Saved to LittleFS");
+    } else {
+        Serial.println("ConfigManager: ERROR opening LittleFS file for writing!");
+    }
+
+    // 2. Save to NVS (Preferences) - Full JSON string
+    Preferences prefs;
+    prefs.begin("solar_config", false);
+    String output;
+    serializeJson(doc, output);
+    prefs.putString("json", output);
+    prefs.end();
+    Serial.println("ConfigManager: Saved to NVS");
+
     return true;
 }
 
 void ConfigManager::reset() {
     LittleFS.remove(CONFIG_FILE);
+    Preferences prefs;
+    prefs.begin("solar_config", false);
+    prefs.clear();
+    prefs.end();
 }
+
