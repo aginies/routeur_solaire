@@ -13,6 +13,7 @@ public:
                               float esp32Temp, bool fanActive, float ssrTemp, int fanPercent);
     static bool isConnected();
     static float latestMqttGridPower;
+    static float latestMqttGridVoltage;
     static bool hasLatestMqttGridPower;
 
 private:
