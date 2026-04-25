@@ -18,14 +18,19 @@ int32_t IncrementalController::update(int32_t currentDutyMilli, int32_t gridPowe
 
     if (dimmer > 0 && gridPower_mw >= _delta) {
         // Importing too much -> reduce load
-        // Calculation: change = abs(gridPower - deltaTarget) * compensation / maxPower
-        // We multiply by 10 to stay in the 0-1000 scale (since compensation=100 is 1.0)
         int32_t change = (int32_t)((int64_t)abs(gridPower_mw - deltaTarget) * _compensation * 10 / _maxPower);
+        
         dimmer -= change;
-        dimmer += 10; // dampening bias: 1.0% = 10 units
     } else if (gridPower_mw <= _deltaneg) {
         // Exporting surplus -> increase load
         int32_t change = (int32_t)((int64_t)abs(deltaTarget - gridPower_mw) * _compensation * 10 / _maxPower);
+        
+        // SLOW START: Cap the maximum increase to prevent rapid oscillations
+        // 200 units = 20.0% increase maximum per evaluation.
+        if (change > 200) {
+            change = 200;
+        }
+        
         dimmer += change;
     }
 

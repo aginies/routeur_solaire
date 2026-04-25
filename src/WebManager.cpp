@@ -505,6 +505,7 @@ uint8_t temprature_sens_read();
 String WebManager::getStatusJson() {
     JsonDocument doc; // V7 uses dynamic sizing by default if not specified or large enough
     doc["grid_power"] = SolarMonitor::currentGridPower;
+    doc["grid_voltage"] = SolarMonitor::currentGridVoltage;
     doc["equipment_power"] = SolarMonitor::equipmentPower;
     doc["equipment_active"] = SolarMonitor::equipmentActive;
     doc["force_mode"] = SolarMonitor::forceModeActive;
@@ -532,13 +533,7 @@ String WebManager::getStatusJson() {
     doc["uptime"] = millis() / 1000;
     doc["rssi"] = WiFi.RSSI();
     
-    // ESP32 internal temperature reading (core dependent)
-    float temp_c = 0.0;
-#if defined(ESP32)
-    // Try built-in temperatureRead() if available
-    temp_c = temperatureRead();
-#endif
-    doc["esp_temp"] = temp_c;
+    doc["esp_temp"] = SolarMonitor::lastEspTemp;
 
     doc["grid_source"] = _config->e_shelly_mqtt ? "MQTT" : "HTTP";
     doc["shelly_link"] = !SolarMonitor::safeState;

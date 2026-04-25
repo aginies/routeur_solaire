@@ -9,6 +9,7 @@ bool MqttManager::_discoverySent = false;
 String MqttManager::_nodeId = "";
 String MqttManager::_lwtTopic = "";
 float MqttManager::latestMqttGridPower = 0.0;
+float MqttManager::latestMqttGridVoltage = 230.0;
 bool MqttManager::hasLatestMqttGridPower = false;
 uint32_t MqttManager::_lastReconnectAttempt = 0;
 
@@ -63,7 +64,9 @@ void MqttManager::onMqttConnect(bool sessionPresent) {
 
     if (_config->e_shelly_mqtt) {
         _mqttClient.subscribe(_config->shelly_mqtt_topic.c_str(), 0);
-        Logger::log("Subscribed to Shelly topic: " + _config->shelly_mqtt_topic);
+        String voltageTopic = _config->shelly_mqtt_topic.substring(0, _config->shelly_mqtt_topic.lastIndexOf('/')) + "/voltage";
+        _mqttClient.subscribe(voltageTopic.c_str(), 0);
+        Logger::log("Subscribed to Shelly topics: " + _config->shelly_mqtt_topic + " & " + voltageTopic);
     }
 
     if (!_discoverySent) {
@@ -86,6 +89,18 @@ void MqttManager::onMqttMessage(const espMqttClientTypes::MessageProperties& pro
         buffer[len] = '\0';
         latestMqttGridPower = atof(buffer);
         hasLatestMqttGridPower = true;
+    } else {
+        String voltageTopic = _config->shelly_mqtt_topic.substring(0, _config->shelly_mqtt_topic.lastIndexOf('/')) + "/voltage";
+        if (t == voltageTopic) {
+            if (len > 32) len = 32;
+            char buffer[33];
+            memcpy(buffer, payload, len);
+            buffer[len] = '\0';
+            float v = atof(buffer);
+            if (v > 100.0 && v < 300.0) {
+                latestMqttGridVoltage = v;
+            }
+        }
     }
 }
 

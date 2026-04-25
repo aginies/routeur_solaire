@@ -9,6 +9,7 @@
 
 // Initialize static members
 float SolarMonitor::currentGridPower = 0.0;
+float SolarMonitor::currentGridVoltage = 230.0;
 float SolarMonitor::equipmentPower = 0.0;
 bool SolarMonitor::equipmentActive = false;
 bool SolarMonitor::forceModeActive = false;
@@ -16,6 +17,7 @@ bool SolarMonitor::safeState = false;
 bool SolarMonitor::emergencyMode = false;
 String SolarMonitor::emergencyReason = "";
 float SolarMonitor::currentSsrTemp = -999.0;
+float SolarMonitor::lastEspTemp = 0.0;
 bool SolarMonitor::fanActive = false;
 int SolarMonitor::fanPercent = 0;
 uint32_t SolarMonitor::boostEndTime = 0;
@@ -125,11 +127,11 @@ void SolarMonitor::startTasks() {
         xTaskCreate(cycleStealingTask, "cycleTask", 4096, NULL, 10, NULL); // Higher priority for ZX
     } else if (_config->control_mode == "trame") {
         pinMode(_config->zx_pin, INPUT_PULLUP);
-        attachInterrupt(digitalPinToInterrupt(_config->zx_pin), handleZxInterrupt, CHANGE);
+        attachInterrupt(digitalPinToInterrupt(_config->zx_pin), handleZxInterrupt, RISING);
         xTaskCreate(trameControlTask, "trameTask", 4096, NULL, 10, NULL);
     } else if (_config->control_mode == "phase") {
         pinMode(_config->zx_pin, INPUT_PULLUP);
-        attachInterrupt(digitalPinToInterrupt(_config->zx_pin), handleZxInterrupt, CHANGE);
+        attachInterrupt(digitalPinToInterrupt(_config->zx_pin), handleZxInterrupt, RISING);
         xTaskCreate(phaseControlTask, "phaseTask", 4096, NULL, 10, NULL);
     }
 }
@@ -139,7 +141,8 @@ void SolarMonitor::burstControlTask(void* pvParameters) {
         float duty = _currentDuty;
         float periodMs = _config->burst_period * 1000.0;
         
-        equipmentPower = duty * _config->equipment_max_power;
+        float actualMaxPower = _config->equipment_max_power * (currentGridVoltage / 230.0f) * (currentGridVoltage / 230.0f);
+        equipmentPower = duty * actualMaxPower;
 
         if (duty <= 0.0) {
             digitalWrite(_config->ssr_pin, LOW);
@@ -200,7 +203,8 @@ void SolarMonitor::cycleStealingTask(void* pvParameters) {
                 }
                 
                 // Update equipment power display
-                equipmentPower = _currentDuty * _config->equipment_max_power;
+                float actualMaxPower = _config->equipment_max_power * (currentGridVoltage / 230.0f) * (currentGridVoltage / 230.0f);
+                equipmentPower = _currentDuty * actualMaxPower;
             }
         }
         
@@ -230,8 +234,7 @@ void IRAM_ATTR SolarMonitor::handleZxInterrupt() {
 
 void SolarMonitor::trameControlTask(void* pvParameters) {
     uint32_t localZxCount = 0;
-    int accumulator = 0;
-    const int resolution = 100; // 100 half-cycles per second at 50Hz
+    float accumulator = 0.0f;
     
     Logger::log("Trame (Distributed) Mode Started on pin " + String(_config->zx_pin));
 
@@ -243,22 +246,17 @@ void SolarMonitor::trameControlTask(void* pvParameters) {
         while (localZxCount < _zxCounter) {
             localZxCount++;
             
-            // Bresenham-like distribution
-            // _currentDuty is 0.0 to 1.0. 
-            // We want to turn ON if (accumulator + duty*resolution) >= resolution
-            int dutyInt = (int)(_currentDuty * resolution);
-            accumulator += dutyInt;
+            float duty = _currentDuty;
+            accumulator += duty;
 
-            if (accumulator >= resolution) {
+            if (accumulator >= 1.0f) {
                 // Trigger Random SSR at 0V
                 digitalWrite(_config->ssr_pin, HIGH);
                 // Pulse duration for Random SSR trigger (usually ~100us is enough, 
-                // but for Random SSR we can keep it HIGH for a bit or the whole half-cycle)
-                // Keeping it HIGH for 1ms to ensure it latches
+                // keeping it HIGH for 1ms to ensure it perfectly latches without bleeding into next cycle)
                 delayMicroseconds(1000); 
                 digitalWrite(_config->ssr_pin, LOW);
-                
-                accumulator -= resolution;
+                accumulator -= 1.0f;
                 equipmentActive = true;
             } else {
                 digitalWrite(_config->ssr_pin, LOW);
@@ -267,7 +265,8 @@ void SolarMonitor::trameControlTask(void* pvParameters) {
             
             // Periodically update equipment power for display
             if (localZxCount % 10 == 0) {
-                equipmentPower = _currentDuty * _config->equipment_max_power;
+                float actualMaxPower = _config->equipment_max_power * (currentGridVoltage / 230.0f) * (currentGridVoltage / 230.0f);
+                equipmentPower = duty * actualMaxPower;
             }
         }
 
@@ -300,8 +299,9 @@ void SolarMonitor::phaseControlTask(void* pvParameters) {
             localZxCount++;
             
             float duty = _currentDuty;
+            float actualMaxPower = _config->equipment_max_power * (currentGridVoltage / 230.0f) * (currentGridVoltage / 230.0f);
             equipmentActive = (duty > 0.01);
-            equipmentPower = duty * _config->equipment_max_power;
+            equipmentPower = duty * actualMaxPower;
 
             if (duty >= 0.99) {
                 // Full power: Turn on immediately
@@ -393,7 +393,7 @@ void SolarMonitor::tempTask(void* pvParameters) {
                 digitalWrite(_config->relay_pin, HIGH);
             } else if (emergencyMode) {
                 // Check internal temp too before restoring
-                if (temperatureRead() < _config->max_esp32_temp) {
+                if (lastEspTemp < _config->max_esp32_temp) {
                     digitalWrite(_config->relay_pin, LOW); // Relay ON
                     emergencyMode = false;
                     emergencyReason = "";
@@ -440,7 +440,8 @@ void SolarMonitor::monitorTask(void* pvParameters) {
         }
 
         // 1. Update State & Safety
-        float espTemp = temperatureRead();
+        lastEspTemp = temperatureRead();
+        float espTemp = lastEspTemp;
         
         time_t t_now;
         time(&t_now);
@@ -473,15 +474,31 @@ void SolarMonitor::monitorTask(void* pvParameters) {
         }
 
         // 3. Grid Power Retrieval
+        bool hasFreshData = false;
         float gridPower = -99999.0;
-        if (_config->e_shelly_mqtt && MqttManager::hasLatestMqttGridPower) {
-            gridPower = MqttManager::latestMqttGridPower;
-            MqttManager::hasLatestMqttGridPower = false;
+        
+        if (_config->e_shelly_mqtt) {
+            if (MqttManager::hasLatestMqttGridPower) {
+                gridPower = MqttManager::latestMqttGridPower;
+                if (MqttManager::latestMqttGridVoltage > 100.0) {
+                    currentGridVoltage = MqttManager::latestMqttGridVoltage;
+                }
+                MqttManager::hasLatestMqttGridPower = false;
+                hasFreshData = true;
+            }
         } else {
-            gridPower = getShellyPower();
+            // Only fetch via HTTP based on the poll_interval so we don't DDoS the Shelly
+            static uint32_t lastHttpPoll = 0;
+            if (now - lastHttpPoll >= (currentPollInterval * 1000)) {
+                gridPower = getShellyPower();
+                lastHttpPoll = now;
+                if (gridPower != -99999.0) {
+                    hasFreshData = true;
+                }
+            }
         }
 
-        if (gridPower != -99999.0 && !isnan(gridPower)) {
+        if (hasFreshData && !isnan(gridPower)) {
             currentGridPower = gridPower;
             _lastGoodPoll = now;
             if (safeState) {
@@ -511,21 +528,33 @@ void SolarMonitor::monitorTask(void* pvParameters) {
 
             if (forceModeActive) {
                 _currentDuty = 1.0;
-            } else {
-                float effectiveGrid = currentGridPower - _config->export_setpoint;
-                int32_t currentDutyMilli = (int32_t)(_currentDuty * 1000.0f);
-                int32_t gridPowerMw = (int32_t)(effectiveGrid * 1000.0f);
+            } else if (hasFreshData) {
+                // SENSOR LAG PROTECTION: 
+                // Shelly EM averages power over ~1 second. If we react to every single 1s update,
+                // we are always looking at "stale" data from before our last adjustment.
+                // We only run the control math every 2nd fresh measurement.
+                static int freshDataCounter = 0;
+                freshDataCounter++;
                 
-                int32_t newDutyMilli = _ctrl->update(currentDutyMilli, gridPowerMw);
-                _currentDuty = (float)newDutyMilli / 1000.0f;
+                if (freshDataCounter >= 2) {
+                    freshDataCounter = 0;
+                    
+                    float effectiveGrid = currentGridPower - _config->export_setpoint;
+                    int32_t currentDutyMilli = (int32_t)(_currentDuty * 1000.0f);
+                    int32_t gridPowerMw = (int32_t)(effectiveGrid * 1000.0f);
+                    
+                    int32_t newDutyMilli = _ctrl->update(currentDutyMilli, gridPowerMw);
+                    _currentDuty = (float)newDutyMilli / 1000.0f;
 
-                float maxDuty = _config->max_duty_percent / 100.0f;
-                if (_currentDuty > maxDuty) _currentDuty = maxDuty;
-                Serial.printf("Ctrl: Grid=%.1fW, Setpoint=%.0fW, Duty=%.1f%%\n", currentGridPower, _config->export_setpoint, _currentDuty * 100.0);
+                    float maxDuty = _config->max_duty_percent / 100.0f;
+                    if (_currentDuty > maxDuty) _currentDuty = maxDuty;
+                    Serial.printf("Ctrl: Grid=%.1fW, Setpoint=%.0fW, Duty=%.1f%%\n", currentGridPower, _config->export_setpoint, _currentDuty * 100.0);
+                }
             }
         }
 
-        equipmentPower = _currentDuty * _config->equipment_max_power;
+        float actualMaxPower = _config->equipment_max_power * (currentGridVoltage / 230.0f) * (currentGridVoltage / 230.0f);
+        equipmentPower = _currentDuty * actualMaxPower;
 
         // 5. Stats & MQTT
         StatsManager::update(currentGridPower, equipmentPower, now - lastStatsUpdate);
@@ -539,7 +568,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
                 equipmentActive,
                 forceModeActive,
                 _currentDuty * 100.0,
-                temperatureRead(),
+                lastEspTemp,
                 fanActive,
                 currentSsrTemp,
                 fanPercent
@@ -547,11 +576,9 @@ void SolarMonitor::monitorTask(void* pvParameters) {
         }
 
         // Watchdog-friendly sleep
-        int sleepSeconds = currentPollInterval;
-        for (int i = 0; i < sleepSeconds; i++) {
-            vTaskDelay(pdMS_TO_TICKS(1000));
-            esp_task_wdt_reset();
-        }
+        // Loop fast to catch new MQTT data quickly, instead of waiting a full second
+        vTaskDelay(pdMS_TO_TICKS(100)); 
+        esp_task_wdt_reset();
     }
 }
 
@@ -582,6 +609,10 @@ float SolarMonitor::getShellyPower() {
         DeserializationError error = deserializeJson(doc, payload);
         if (!error) {
             power = doc["emeters"][0]["power"];
+            float voltage = doc["emeters"][0]["voltage"];
+            if (voltage > 100.0 && voltage < 300.0) {
+                currentGridVoltage = voltage;
+            }
         }
     } else {
         if (millis() - _lastGoodPoll > 10000) {
