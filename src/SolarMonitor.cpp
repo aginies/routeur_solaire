@@ -117,8 +117,8 @@ void SolarMonitor::init(const Config& config) {
 }
 
 void SolarMonitor::startTasks() {
-    xTaskCreate(monitorTask, "monitorTask", 4096, NULL, 3, NULL); // Priority 3
-    xTaskCreate(historyTask, "historyTask", 2048, NULL, 1, NULL);
+    xTaskCreate(monitorTask, "monitorTask", 8192, NULL, 3, NULL); // Increased stack
+    xTaskCreate(historyTask, "historyTask", 4096, NULL, 1, NULL); // Increased stack
     xTaskCreate(tempTask, "tempTask", 4096, NULL, 1, NULL);
 
     if (_config->control_mode == "burst") {
@@ -425,7 +425,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
     uint32_t lastSolarDataLog = 0;
 
     while (true) {
-        esp_task_wdt_reset(); // Feed TWDT
+        esp_task_wdt_reset(); // Feed TWDT at start of loop
         uint32_t now = millis();
         
         // 0. Periodic Data Logging (System & Solar Data)
@@ -499,6 +499,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
             static uint32_t lastHttpPoll = 0;
             if (now - lastHttpPoll >= (currentPollInterval * 1000)) {
                 gridPower = getShellyPower();
+                esp_task_wdt_reset(); // Feed after slow HTTP call
                 lastHttpPoll = now;
                 if (gridPower != -99999.0) {
                     hasFreshData = true;
@@ -611,7 +612,6 @@ void SolarMonitor::monitorTask(void* pvParameters) {
         // Watchdog-friendly sleep
         // Loop fast to catch new MQTT data quickly, instead of waiting a full second
         vTaskDelay(pdMS_TO_TICKS(100)); 
-        esp_task_wdt_reset();
     }
 }
 
