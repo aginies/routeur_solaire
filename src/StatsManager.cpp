@@ -3,6 +3,8 @@
 #include <LittleFS.h>
 #include <ArduinoJson.h>
 #include "Logger.h"
+#include <esp_task_wdt.h>
+#include <Preferences.h>
 #endif
 #include <time.h>
 #include <cmath>
@@ -19,6 +21,7 @@ uint32_t StatsManager::_lastSave = 0;
 float StatsManager::totalImportToday = 0;
 float StatsManager::totalRedirectToday = 0;
 float StatsManager::totalExportToday = 0;
+bool StatsManager::_saveRequested = false;
 #ifndef NATIVE_TEST
 SemaphoreHandle_t StatsManager::_statsMutex = nullptr;
 #endif
@@ -39,93 +42,74 @@ void StatsManager::init() {
     time(&now_t);
     struct tm ti;
     localtime_r(&now_t, &ti);
-    bool isTimeValid = (ti.tm_year > 120); // Year since 1900, 120 = 2020
+    bool isTimeValid = (ti.tm_year > 120);
 
     if (isTimeValid && lastDay != "" && lastDay != today) {
         totalImportToday = 0;
         totalRedirectToday = 0;
         totalExportToday = 0;
-        Logger::log("New day detected: " + today + ". Resetting daily stats.");
+        Logger::info("New day detected: " + today + ". Resetting daily stats.");
     }
 
     if (!LittleFS.exists("/stats.json")) {
         File file = LittleFS.open("/stats.json", "w");
-        if (file) {
-            file.print("{}");
-            file.close();
-        }
+        if (file) { file.print("{}"); file.close(); }
         return;
     }
 
     File file = LittleFS.open("/stats.json", "r");
     if (!file) return;
 
-    // Use a filter to only keep the last MAX_STATS_DAYS
-    // This prevents OOM on WROOM if a large history file is imported
     #ifndef MAX_STATS_DAYS
     #define MAX_STATS_DAYS 30
     #endif
 
-    // Pre-scan to find how many days we have and which ones to keep
-    // For simplicity and memory safety, we'll use a dynamic document but clear it if it fails
-    // Alternatively, a stream parser could be used, but since we are reading it all:
-    // Actually, on WROOM, even a large document can fail. Let's just catch the error and clear.
-    // If it fails, the user loses history but the device doesn't boot-loop.
-    
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, file);
     file.close();
 
     if (error) {
-        Logger::log("Failed to load stats.json: " + String(error.c_str()), true);
+        Logger::error("Failed to load stats.json: " + String(error.c_str()));
         if (error == DeserializationError::NoMemory) {
              LittleFS.remove("/stats.json");
-             Logger::log("stats.json was too large and caused OOM. File deleted.", true);
+             Logger::error("stats.json too large. File deleted.", true);
         }
         return;
     }
 
     JsonObject obj = doc.as<JsonObject>();
-    
-    // Count entries and only keep the newest MAX_STATS_DAYS
     int count = 0;
     int total = obj.size();
     
     for (JsonPair p : obj) {
         count++;
-        // Skip older entries if we exceed MAX_STATS_DAYS
-        if (total - count >= MAX_STATS_DAYS) {
-            continue;
+        if (total - count >= MAX_STATS_DAYS) continue;
+            
+        DailyStats ds;
+        ds.import = p.value()["import"];
+        ds.redirect = p.value()["redirect"];
+        ds.export_wh = p.value()["export"];
+        ds.active_time = p.value()["active_time"];
+        
+        JsonArray h_imp = p.value()["h_import"];
+        JsonArray h_red = p.value()["h_redirect"];
+        JsonArray h_exp = p.value()["h_export"];
+        
+        for (int i = 0; i < 24; i++) {
+            ds.h_import[i] = h_imp[i] | 0.0f;
+            ds.h_redirect[i] = h_red[i] | 0.0f;
+            ds.h_export[i] = h_exp[i] | 0.0f;
         }
-            
-            DailyStats ds;
-            ds.import = p.value()["import"];
-            ds.redirect = p.value()["redirect"];
-            ds.export_wh = p.value()["export"];
-            ds.active_time = p.value()["active_time"];
-            
-            JsonArray h_imp = p.value()["h_import"];
-            JsonArray h_red = p.value()["h_redirect"];
-            JsonArray h_exp = p.value()["h_export"];
-            
-            for (int i = 0; i < 24; i++) {
-                ds.h_import[i] = h_imp[i] | 0.0f;
-                ds.h_redirect[i] = h_red[i] | 0.0f;
-                ds.h_export[i] = h_exp[i] | 0.0f;
-            }
-
-            _history[p.key().c_str()] = ds;
-        }
+        _history[p.key().c_str()] = ds;
+    }
 #endif
 }
+
 void StatsManager::update(float gridPower, float equipmentPower, uint32_t intervalMs) {
-    if (gridPower < -90000.0) return; // Skip invalid readings
+    if (gridPower < -90000.0) return;
     
-    time_t now_t;
-    time(&now_t);
-    struct tm ti;
-    localtime_r(&now_t, &ti);
-    if (ti.tm_year < 120) return; // NTP not synced yet
+    time_t now_t; time(&now_t); struct tm ti; localtime_r(&now_t, &ti);
+    if (ti.tm_year < 120) return;
 
     String key = getTodayKey();
     float intervalHours = intervalMs / 3600000.0;
@@ -133,48 +117,38 @@ void StatsManager::update(float gridPower, float equipmentPower, uint32_t interv
 
     float energyImport = 0;
     float energyExport = 0;
-    
-    // Only count as redirected what is NOT coming from the grid
-    float solarRedirPower = equipmentPower;
-    if (gridPower > 0) {
-        solarRedirPower = (equipmentPower > gridPower) ? (equipmentPower - gridPower) : 0;
-    }
+    float solarRedirPower = (gridPower > 0) ? ((equipmentPower > gridPower) ? (equipmentPower - gridPower) : 0) : equipmentPower;
     float energyRedirect = solarRedirPower * intervalHours;
 
 #ifndef NATIVE_TEST
-    if (_statsMutex) xSemaphoreTake(_statsMutex, portMAX_DELAY);
+    if (_statsMutex && xSemaphoreTake(_statsMutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
 #endif
-    DailyStats& ds = _history[key];
+        DailyStats& ds = _history[key];
+        if (gridPower > 0) {
+            energyImport = gridPower * intervalHours;
+            ds.import += energyImport;
+        } else {
+            energyExport = std::abs(gridPower) * intervalHours;
+            ds.export_wh += energyExport;
+        }
+        ds.redirect += energyRedirect;
+        if (equipmentPower > 10) ds.active_time += (intervalMs / 1000);
 
-    if (gridPower > 0) {
-        energyImport = gridPower * intervalHours;
-        ds.import += energyImport;
-    } else {
-        energyExport = std::abs(gridPower) * intervalHours;
-        ds.export_wh += energyExport;
-    }
-    
-    ds.redirect += energyRedirect;
-    if (equipmentPower > 10) {
-        ds.active_time += (intervalMs / 1000);
-    }
+        if (hour >= 0 && hour < 24) {
+            ds.h_import[hour] += energyImport;
+            ds.h_export[hour] += energyExport;
+            ds.h_redirect[hour] += energyRedirect;
+        }
 
-    // Hourly tracking
-    if (hour >= 0 && hour < 24) {
-        ds.h_import[hour] += energyImport;
-        ds.h_export[hour] += energyExport;
-        ds.h_redirect[hour] += energyRedirect;
-    }
-
-    totalImportToday = ds.import;
-    totalRedirectToday = ds.redirect;
-    totalExportToday = ds.export_wh;
+        totalImportToday = ds.import;
+        totalRedirectToday = ds.redirect;
+        totalExportToday = ds.export_wh;
 #ifndef NATIVE_TEST
-    if (_statsMutex) xSemaphoreGive(_statsMutex);
+        xSemaphoreGive(_statsMutex);
+    }
 #endif
 
 #ifndef NATIVE_TEST
-    // Save to NVS every 1 minute for resilience, LittleFS every 5 minutes
     static uint32_t lastNvsSave = 0;
     if (millis() - lastNvsSave > 60000) {
         prefs.putFloat("import", totalImportToday);
@@ -184,9 +158,27 @@ void StatsManager::update(float gridPower, float equipmentPower, uint32_t interv
         lastNvsSave = millis();
     }
 
-    if (millis() - _lastSave > 300000) { // Save every 5 minutes
-        save();
+    if (millis() - _lastSave > 300000) { 
+        _saveRequested = true;
         _lastSave = millis();
+    }
+#endif
+}
+
+void StatsManager::startTask() {
+#ifndef NATIVE_TEST
+    xTaskCreate(statsTask, "statsTask", 4096, NULL, 2, NULL); // Priority 2
+#endif
+}
+
+void StatsManager::statsTask(void* pvParameters) {
+#ifndef NATIVE_TEST
+    while (true) {
+        if (_saveRequested) {
+            save();
+            _saveRequested = false;
+        }
+        vTaskDelay(pdMS_TO_TICKS(10000));
     }
 #endif
 }
@@ -194,18 +186,18 @@ void StatsManager::update(float gridPower, float equipmentPower, uint32_t interv
 void StatsManager::save() {
 #ifndef NATIVE_TEST
     JsonDocument doc;
+    esp_task_wdt_add(NULL);
 
     #ifndef MAX_STATS_DAYS
     #define MAX_STATS_DAYS 30
     #endif
 
-    // Limit in-memory history to save RAM
-    // Copy history under mutex then release it before slow LittleFS I/O
-    if (_statsMutex == nullptr || xSemaphoreTake(_statsMutex, pdMS_TO_TICKS(1000)) != pdTRUE) return;
-
-    while (_history.size() > MAX_STATS_DAYS) {
-        _history.erase(_history.begin());
+    if (_statsMutex == nullptr || xSemaphoreTake(_statsMutex, pdMS_TO_TICKS(2000)) != pdTRUE) {
+        esp_task_wdt_delete(NULL);
+        return;
     }
+    
+    while (_history.size() > MAX_STATS_DAYS) _history.erase(_history.begin());
 
     for (auto const& [date, ds] : _history) {
         JsonObject obj = doc[date].to<JsonObject>();
@@ -213,7 +205,7 @@ void StatsManager::save() {
         obj["redirect"] = round(ds.redirect * 10) / 10.0;
         obj["export"] = round(ds.export_wh * 10) / 10.0;
         obj["active_time"] = ds.active_time;
-
+        
         JsonArray h_imp = obj["h_import"].to<JsonArray>();
         JsonArray h_red = obj["h_redirect"].to<JsonArray>();
         JsonArray h_exp = obj["h_export"].to<JsonArray>();
@@ -224,13 +216,11 @@ void StatsManager::save() {
         }
     }
     xSemaphoreGive(_statsMutex);
+    esp_task_wdt_reset();
 
-    // SLOW I/O: Outside the mutex!
     File file = LittleFS.open("/stats.json", "w");
-    if (file) {
-        serializeJson(doc, file);
-        file.close();
-    }
+    if (file) { serializeJson(doc, file); file.close(); }
+    esp_task_wdt_delete(NULL);
 #endif
 }
 
@@ -240,48 +230,34 @@ void StatsManager::streamStatsJson(AsyncWebServerRequest *request) {
 
     response->print("{");
     bool first = true;
-
-    if (_statsMutex && xSemaphoreTake(_statsMutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+    if (_statsMutex && xSemaphoreTake(_statsMutex, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        int iCount = 0;
         for (auto const& [key, ds] : _history) {
-            if (!first) {
-                response->print(",");
-            }
+            if (!first) response->print(",");
             first = false;
-
+            if (iCount++ % 20 == 0) esp_task_wdt_reset();
             response->printf("\"%s\":{", key.c_str());
             response->printf("\"import\":%.2f,", ds.import);
             response->printf("\"redirect\":%.2f,", ds.redirect);
             response->printf("\"export\":%.2f,", ds.export_wh);
             response->printf("\"active_time\":%u,", ds.active_time);
-
             response->print("\"h_import\":[");
-            for (int i = 0; i < 24; i++) {
-                response->printf("%.2f%s", ds.h_import[i], (i == 23) ? "" : ",");
-            }
+            for (int i = 0; i < 24; i++) response->printf("%.2f%s", ds.h_import[i], (i == 23) ? "" : ",");
             response->print("],\"h_redirect\":[");
-            for (int i = 0; i < 24; i++) {
-                response->printf("%.2f%s", ds.h_redirect[i], (i == 23) ? "" : ",");
-            }
+            for (int i = 0; i < 24; i++) response->printf("%.2f%s", ds.h_redirect[i], (i == 23) ? "" : ",");
             response->print("],\"h_export\":[");
-            for (int i = 0; i < 24; i++) {
-                response->printf("%.2f%s", ds.h_export[i], (i == 23) ? "" : ",");
-            }
+            for (int i = 0; i < 24; i++) response->printf("%.2f%s", ds.h_export[i], (i == 23) ? "" : ",");
             response->print("]}");
         }
         xSemaphoreGive(_statsMutex);
     }
-
     response->print("}");
     request->send(response);
 }
 #endif
 
 String StatsManager::getTodayKey() {
-    time_t now;
-    time(&now);
-    struct tm timeinfo;
-    localtime_r(&now, &timeinfo);
-    char buffer[11];
-    strftime(buffer, sizeof(buffer), "%Y-%m-%d", &timeinfo);
+    time_t now; time(&now); struct tm ti; localtime_r(&now, &ti);
+    char buffer[11]; strftime(buffer, sizeof(buffer), "%Y-%m-%d", &ti);
     return String(buffer);
 }

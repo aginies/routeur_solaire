@@ -317,9 +317,12 @@
     
     <details class="collapsible-box" id="logDetails">
         <summary>Journaux (Logs)</summary>
-        <div class="tab-container">
-            <button id="tabSys" class="tab-btn active" onclick="setLogMode('sys')">Système</button>
-            <button id="tabData" class="tab-btn" onclick="setLogMode('data')">Données (1m)</button>
+        <div class="tab-container" style="display:flex; justify-content: space-between; align-items: center;">
+            <div>
+                <button id="tabSys" class="tab-btn active" onclick="setLogMode('sys')">Système</button>
+                <button id="tabData" class="tab-btn" onclick="setLogMode('data')">Données (1m)</button>
+            </div>
+            <a href="/download_logs" style="color:var(--primary-color); font-size:0.8em; text-decoration:none;">📥 Télécharger log.txt</a>
         </div>
         <div class="log-box" id="logBox">Chargement...</div>
     </details>
@@ -444,7 +447,6 @@
                 const nt = document.getElementById('nightTime');
                 if (nt && d.rtc_time) nt.textContent = d.rtc_time;
                 const cc = document.getElementById('chartCard');
-                if (cc && nightMode) cc.style.display = 'none';
 
                 // Safe State
                 const ss = document.getElementById('safeStateBox');
@@ -660,7 +662,7 @@
         updateChart();
         updateDateTime();
         setInterval(updateLog, 15000); // Slower logs in web UI
-        setInterval(updateChart, 30000); // Slower chart in web UI
+        setInterval(() => { if(!nightMode) updateChart(); }, 30000); // Slower chart in web UI
         setInterval(updateDateTime, 5000);
     </script>
 </body>

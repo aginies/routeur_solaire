@@ -36,6 +36,31 @@ namespace Utils {
     inline void reboot() {
         ESP.restart();
     }
+
+    inline String getResetReason() {
+        esp_reset_reason_t reason = esp_reset_reason();
+        switch (reason) {
+            case ESP_RST_POWERON: return "POWER_ON";
+            case ESP_RST_EXT:     return "EXTERNAL_PIN";
+            case ESP_RST_SW:      return "SOFTWARE_REBOOT";
+            case ESP_RST_PANIC:   return "EXCEPTION_PANIC";
+            case ESP_RST_INT_WDT: return "INTERRUPT_WDT";
+            case ESP_RST_TASK_WDT:return "TASK_WDT";
+            case ESP_RST_WDT:     return "OTHER_WDT";
+            case ESP_RST_DEEPSLEEP: return "EXIT_DEEP_SLEEP";
+            case ESP_RST_BROWNOUT: return "BROWNOUT_RESET";
+            case ESP_RST_SDIO:    return "SDIO_RESET";
+            default:              return "UNKNOWN";
+        }
+    }
+
+    inline int getCurrentMinutes() {
+        time_t now;
+        time(&now);
+        struct tm ti;
+        localtime_r(&now, &ti);
+        return ti.tm_hour * 60 + ti.tm_min;
+    }
 }
 
 #endif

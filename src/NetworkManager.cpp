@@ -5,9 +5,13 @@ const Config* NetworkManager::_config = nullptr;
 DNSServer NetworkManager::_dnsServer;
 bool NetworkManager::_isAP = false;
 uint32_t NetworkManager::_lastCheck = 0;
+bool NetworkManager::_cachedConnected = false;
+int NetworkManager::_cachedRSSI = -100;
 
 void NetworkManager::init(const Config& config) {
     _config = &config;
+    _cachedConnected = false;
+    _cachedRSSI = -100;
     WiFi.disconnect(true);
     WiFi.mode(WIFI_OFF);
     delay(100);
@@ -20,7 +24,7 @@ void NetworkManager::init(const Config& config) {
 }
 
 void NetworkManager::setupSTA() {
-    Logger::log("Connecting to WiFi: " + _config->wifi_ssid);
+    Logger::info("Connecting to WiFi: " + _config->wifi_ssid);
     WiFi.mode(WIFI_STA);
 
     if (_config->wifi_static_ip.length() > 0) {
@@ -31,7 +35,7 @@ void NetworkManager::setupSTA() {
 
             dns.fromString(_config->wifi_dns.length() > 0 ? _config->wifi_dns : _config->wifi_gateway);
             WiFi.config(ip, gateway, subnet, dns);
-            Logger::log("Using Static IP: " + _config->wifi_static_ip);
+            Logger::info("Using Static IP: " + _config->wifi_static_ip);
         }
     }
 
@@ -47,20 +51,20 @@ void NetworkManager::setupSTA() {
     if (WiFi.status() == WL_CONNECTED) {
         WiFi.setSleep(false); // Disable power save for stability
         WiFi.setTxPower(WIFI_POWER_19_5dBm);
-        Logger::log("Connected! IP: " + WiFi.localIP().toString());
+        Logger::info("Connected! IP: " + WiFi.localIP().toString());
         _isAP = false;
         
         // Sync NTP with configured Timezone
         configTzTime(_config->timezone.c_str(), "pool.ntp.org", "time.google.com");
-        Logger::log("NTP Sync started (" + _config->timezone + ")");
+        Logger::info("NTP Sync started (" + _config->timezone + ")");
     } else {
-        Logger::log("Connection failed. Starting Access Point...");
+        Logger::warn("Connection failed. Starting Access Point...");
         setupAP();
     }
 }
 
 void NetworkManager::setupAP() {
-    Logger::log("Starting Access Point: " + _config->ap_ssid);
+    Logger::info("Starting Access Point: " + _config->ap_ssid);
     WiFi.mode(WIFI_AP);
 
     IPAddress apIP;
@@ -69,32 +73,41 @@ void NetworkManager::setupAP() {
 
     WiFi.softAP(_config->ap_ssid.c_str(), _config->ap_password.c_str(), _config->ap_channel, _config->ap_hidden_ssid);
     WiFi.setSleep(false);
-    Logger::log("AP IP: " + WiFi.softAPIP().toString());
+    Logger::info("AP IP: " + WiFi.softAPIP().toString());
     _isAP = true;
     startCaptivePortal();
 }
 
 void NetworkManager::startCaptivePortal() {
     _dnsServer.start(53, "*", WiFi.softAPIP());
-    Logger::log("Captive Portal DNS started");
+    Logger::info("Captive Portal DNS started");
 }
 
 void NetworkManager::loop() {
     if (_isAP) {
         _dnsServer.processNextRequest();
     } else {
-        if (millis() - _lastCheck > 30000) {
-            _lastCheck = millis();
-            if (WiFi.status() != WL_CONNECTED) {
-                Logger::log("WiFi connection lost. Reconnecting...");
+        uint32_t now = millis();
+        if (now - _lastCheck > 1000) { // Update cache every 1s
+            _lastCheck = now;
+            _cachedConnected = (WiFi.status() == WL_CONNECTED);
+            if (_cachedConnected) {
+                _cachedRSSI = WiFi.RSSI();
+            } else {
+                Logger::warn("WiFi connection lost. Reconnecting...");
                 WiFi.reconnect();
+                _cachedRSSI = -100;
             }
         }
     }
 }
 
 bool NetworkManager::isConnected() {
-    return _isAP || (WiFi.status() == WL_CONNECTED);
+    return _isAP || _cachedConnected;
+}
+
+int NetworkManager::getRSSI() {
+    return _cachedRSSI;
 }
 
 String NetworkManager::getIP() {

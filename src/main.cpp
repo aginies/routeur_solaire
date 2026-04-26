@@ -19,7 +19,7 @@ void setup() {
     // Initialize Watchdog
     esp_task_wdt_init(60, true); // 60s timeout for stability
     esp_task_wdt_add(NULL);      // Add current (main) task
-    vTaskPrioritySet(NULL, 2);   // Increase priority slightly above typical background tasks
+    vTaskPrioritySet(NULL, 1);   // Back to Priority 1 (Standard for loopTask)
 
     if (!LittleFS.begin(true)) {
         Serial.println("LittleFS Mount Failed");
@@ -36,36 +36,37 @@ void setup() {
             fsVersion.trim();
             vFile.close();
             if (fsVersion != FIRMWARE_VERSION) {
-                Logger::log("WARNING: Version mismatch! FW:" + String(FIRMWARE_VERSION) + " FS:" + fsVersion, true);
+                Logger::warn("Version mismatch! FW:" + String(FIRMWARE_VERSION) + " FS:" + fsVersion);
             } else {
-                Logger::log("Version check OK: " + String(FIRMWARE_VERSION));
+                Logger::info("Version check OK: " + String(FIRMWARE_VERSION));
             }
         }
     } else {
-        Logger::log("WARNING: /VERSION file missing in LittleFS!", true);
+        Logger::warn("/VERSION file missing in LittleFS!");
     }
 
     Utils::setCpuFrequency(config.cpu_freq);
 
     Logger::init();
-    Logger::log("System Started: " + config.name);
+    Logger::info("System Started: " + config.name);
+    Logger::info("Last Reset Reason: " + Utils::getResetReason());
 
     StatsManager::init();
     LedManager::init(config);
     LedManager::startTask();
 
     NetworkManager::init(config);
-    Logger::log("WiFi IP: " + NetworkManager::getIP());
-    Logger::log("MQTT broker: " + config.mqtt_ip + ":" + String(config.mqtt_port));
+    Logger::info("WiFi IP: " + NetworkManager::getIP());
+    Logger::info("MQTT broker: " + config.mqtt_ip + ":" + String(config.mqtt_port));
     MqttManager::init(config);
     WebManager::init(config);
 
     SolarMonitor::init(config);
     SolarMonitor::startTasks();
 
-    Logger::log("Hardware Tasks Started");
-    Logger::log(Utils::getDiskInfo());
-    Logger::log("Free Heap: " + String(Utils::getFreeHeap() / 1024) + " KB");
+    Logger::info("Hardware Tasks Started");
+    Logger::info(Utils::getDiskInfo());
+    Logger::info("Free Heap: " + String(Utils::getFreeHeap() / 1024) + " KB");
 }
 
 void loop() {
@@ -74,4 +75,5 @@ void loop() {
     WebManager::loop();
     MqttManager::loop();
     vTaskDelay(pdMS_TO_TICKS(100));
+    esp_task_wdt_reset(); // Safety reset at end of loop
 }

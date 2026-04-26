@@ -188,6 +188,7 @@
         <div class="header">
             <h1>Historique Énergétique</h1>
             <p id="subHeader" style="color:#888; font-size: 0.9em;">Consommation et Redirection Solaire</p>
+            <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()">☀️</button>
         </div>
 
         <div id="cdnErrorBanner" class="cdn-error-banner" style="display:none;">
@@ -511,6 +512,13 @@
                 return;
             }
 
+            // Theme-aware colors
+            const isLight = document.body.classList.contains('light-mode');
+            const textColor = isLight ? '#2c3e50' : '#eee';
+            const gridColor = isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)';
+            const tickColor = isLight ? '#7f8c8d' : '#999';
+            const secondaryColor = isLight ? '#7f8c8d' : '#aaa';
+
             // Bar chart
             if (barChart) barChart.destroy();
             const ctxBar = barCanvas.getContext('2d');
@@ -536,10 +544,10 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
-                        y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#999' } },
-                        x: { grid: { display: false }, ticks: { color: '#999' } }
+                        y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: tickColor } },
+                        x: { grid: { display: false }, ticks: { color: tickColor } }
                     },
-                    plugins: { legend: { labels: { color: '#eee', font: { weight: 'bold' } } } }
+                    plugins: { legend: { labels: { color: textColor, font: { weight: 'bold' } } } }
                 }
             });
 
@@ -566,7 +574,7 @@
                     rotation: -90,
                     cutout: '75%%',
                     plugins: {
-                        legend: { position: 'bottom', labels: { color: '#eee', padding: 10 } },
+                        legend: { position: 'bottom', labels: { color: textColor, padding: 10 } },
                         tooltip: { callbacks: { label: item => ` ${item.label}: ${item.raw.toFixed(2)} kWh` } }
                     }
                 },
@@ -581,12 +589,27 @@
                         ctx.textBaseline = 'middle';
                         ctx.fillText(capturedRate.toFixed(1) + '%%', width / 2 + left, bottom - 10);
                         ctx.font = '0.8em Arial';
-                        ctx.fillStyle = '#aaa';
+                        ctx.fillStyle = secondaryColor;
                         ctx.fillText('CAPTURE', width / 2 + left, bottom - 45);
                         ctx.restore();
                     }
                 }]
             });
+        }
+
+        function toggleTheme() {
+            const body = document.body;
+            const btn = document.getElementById('themeToggle');
+            const isLight = body.classList.toggle('light-mode');
+            btn.textContent = isLight ? '🌙' : '☀️';
+            localStorage.setItem('theme', isLight ? 'light' : 'dark');
+            renderCharts(); // Re-render to apply theme colors
+        }
+
+        // Initialize theme
+        if (localStorage.getItem('theme') === 'light') {
+            document.body.classList.add('light-mode');
+            document.getElementById('themeToggle').textContent = '🌙';
         }
 
         refreshView();

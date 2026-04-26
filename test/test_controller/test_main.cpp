@@ -35,10 +35,36 @@ void test_duty_boundaries(void) {
     TEST_ASSERT_EQUAL_INT32(1000, duty100);
 }
 
+void test_dead_zone(void) {
+    // Delta=100W (100000mW), Deltaneg=-50W (-50000mW)
+    IncrementalController ctrl(100000, -50000, 100, 2000000);
+    int32_t initialDuty = 500;
+    
+    // Within deadzone (20W) -> No change
+    int32_t newDuty = ctrl.update(initialDuty, 20000);
+    TEST_ASSERT_EQUAL_INT32(initialDuty, newDuty);
+    
+    // Within deadzone (-10W) -> No change
+    newDuty = ctrl.update(initialDuty, -10000);
+    TEST_ASSERT_EQUAL_INT32(initialDuty, newDuty);
+}
+
+void test_slow_start_cap(void) {
+    // Max step is 200 units (20%)
+    IncrementalController ctrl(100000, -50000, 500, 1000000); // High compensation (500) to trigger large step
+    int32_t initialDuty = 0;
+    
+    // Massive surplus (-2000W) should trigger max step of 200
+    int32_t newDuty = ctrl.update(initialDuty, -2000000);
+    TEST_ASSERT_EQUAL_INT32(200, newDuty);
+}
+
 int main(int argc, char **argv) {
     UNITY_BEGIN();
     RUN_TEST(test_duty_decreases_on_import);
     RUN_TEST(test_duty_increases_on_export);
     RUN_TEST(test_duty_boundaries);
+    RUN_TEST(test_dead_zone);
+    RUN_TEST(test_slow_start_cap);
     return UNITY_END();
 }

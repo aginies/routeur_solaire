@@ -1,5 +1,6 @@
 #include "Logger.h"
 #include <time.h>
+#include <esp_task_wdt.h>
 
 const char* Logger::_logFile = "/log.txt";
 const char* Logger::_dataFile = "/solar_data.txt";
@@ -21,15 +22,21 @@ void Logger::init(const char* filename, size_t maxBytes) {
         File file = LittleFS.open(_logFile, "w");
         if (file) { file.println("--- System Log Started ---"); file.close(); }
     }
-    if (!LittleFS.exists(_dataFile)) {
-        File file = LittleFS.open(_dataFile, "w");
-        if (file) { file.println("--- Solar Data Log Started ---"); file.close(); }
+}
+
+String Logger::levelToString(LogLevel level) {
+    switch (level) {
+        case LOG_DEBUG: return "DEBUG";
+        case LOG_INFO:  return "INFO";
+        case LOG_WARN:  return "WARN";
+        case LOG_ERROR: return "ERROR";
+        default:        return "INFO";
     }
 }
 
-void Logger::log(const String& message, bool critical) {
+void Logger::log(const String& message, LogLevel level, bool critical) {
     if (_mutex == nullptr || xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
-        Serial.println(message);
+        Serial.printf("[%s] %s\n", levelToString(level).c_str(), message.c_str());
         return;
     }
 
@@ -40,9 +47,15 @@ void Logger::log(const String& message, bool critical) {
     char timestamp[25];
     strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", &timeinfo);
     
-    String logEntry = String(timestamp) + ": " + message;
+    String logEntry = String(timestamp) + " [" + levelToString(level) + "] " + message;
+    
+    // Always print to Serial
     Serial.println(logEntry);
-    _logBuffer.push_back(logEntry);
+    
+    // Only persist INFO, WARN, ERROR to flash
+    if (level != LOG_DEBUG) {
+        _logBuffer.push_back(logEntry);
+    }
     
     bool shouldFlush = (_logBuffer.size() >= 50);
     xSemaphoreGive(_mutex);
@@ -51,6 +64,11 @@ void Logger::log(const String& message, bool critical) {
         flushAll();
     }
 }
+
+void Logger::debug(const String& message) { log(message, LOG_DEBUG); }
+void Logger::info(const String& message)  { log(message, LOG_INFO); }
+void Logger::warn(const String& message)  { log(message, LOG_WARN); }
+void Logger::error(const String& message, bool critical) { log(message, LOG_ERROR, critical); }
 
 void Logger::logData(const String& message) {
     if (_mutex == nullptr || xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) != pdTRUE) return;
@@ -87,6 +105,9 @@ void Logger::flushFile(const char* filename, std::vector<String>& buffer) {
     if (file) {
         for (const auto& entry : buffer) {
             file.println(entry);
+            // Periodically feed the watchdog if we are flushing a huge buffer
+            static int count = 0;
+            if (count++ % 10 == 0) esp_task_wdt_reset();
         }
         file.close();
         buffer.clear();
@@ -114,15 +135,13 @@ void Logger::rotate(const char* filename) {
 String Logger::getLogs() {
     String logs = "";
     if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-        // From file
         File file = LittleFS.open(_logFile, "r");
         if (file) {
             size_t size = file.size();
-            if (size > 4096) file.seek(size - 4096);
+            if (size > 8192) file.seek(size - 8192);
             logs = file.readString();
             file.close();
         }
-        // From buffer
         for (const auto& entry : _logBuffer) {
             logs += entry + "\n";
         }

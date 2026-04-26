@@ -1,8 +1,13 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#ifndef NATIVE_TEST
 #include <Arduino.h>
 #include <IPAddress.h>
+#else
+#include <string>
+typedef std::string String;
+#endif
 
 #define FIRMWARE_VERSION "0.2.0"
 
@@ -55,6 +60,7 @@ struct Config {
     float delta = 50.0;          // upper threshold (W) — above this, importing too much
     float deltaneg = 0.0;        // lower threshold (W) — below this, exporting surplus
     float compensation = 100.0;  // proportional gain factor
+    float dynamic_threshold_w = 200.0; // dynamic lag threshold
 
     // Control
     float max_duty_percent = 100.0;  // cap max power redirected (0-100%)

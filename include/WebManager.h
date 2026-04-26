@@ -15,6 +15,7 @@ private:
     static void setupRoutes();
     static void setupWebSockets();
     static String getStatusJson();
+    static String getHistoryJson();
     static String templateProcessor(const String& var);
 
     static AsyncWebServer _server;

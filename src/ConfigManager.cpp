@@ -1,4 +1,5 @@
 #include "ConfigManager.h"
+#include "Logger.h"
 #include <Preferences.h>
 
 const char* ConfigManager::CONFIG_FILE = "/config.json";
@@ -16,7 +17,7 @@ Config ConfigManager::load() {
             file.close();
             if (!error) {
                 loadedFromFile = true;
-                Serial.println("ConfigManager: Loaded from LittleFS");
+                Logger::info("ConfigManager: Loaded from LittleFS");
             }
         }
     }
@@ -29,7 +30,7 @@ Config ConfigManager::load() {
         JsonDocument nvsDoc;
         DeserializationError error = deserializeJson(nvsDoc, nvsJson);
         if (!error) {
-            Serial.println("ConfigManager: Found NVS backup, merging...");
+            Logger::info("ConfigManager: Found NVS backup, merging...");
             // Merge NVS into current doc (NVS values take precedence for user settings)
             for (JsonPair p : nvsDoc.as<JsonObject>()) {
                 doc[p.key()] = p.value();
@@ -40,7 +41,7 @@ Config ConfigManager::load() {
     prefs.end();
 
     if (!loadedFromFile) {
-        Serial.println("ConfigManager: No config found, using defaults");
+        Logger::info("ConfigManager: No config found, using defaults");
         save(config);
         return config;
     }
@@ -92,6 +93,7 @@ Config ConfigManager::load() {
     if (doc.containsKey("delta")) config.delta = doc["delta"];
     if (doc.containsKey("deltaneg")) config.deltaneg = doc["deltaneg"];
     if (doc.containsKey("compensation")) config.compensation = doc["compensation"];
+    if (doc.containsKey("dynamic_threshold_w")) config.dynamic_threshold_w = doc["dynamic_threshold_w"];
 
     // Control
     if (doc.containsKey("max_duty_percent")) config.max_duty_percent = doc["max_duty_percent"];
@@ -150,7 +152,7 @@ Config ConfigManager::load() {
 }
 
 bool ConfigManager::save(const Config& config) {
-    Serial.println("ConfigManager: Saving config to LittleFS and NVS...");
+    Logger::info("ConfigManager: Saving config to LittleFS and NVS...");
     
     JsonDocument doc;
     doc["name"] = config.name;
@@ -186,6 +188,7 @@ bool ConfigManager::save(const Config& config) {
     doc["delta"] = config.delta;
     doc["deltaneg"] = config.deltaneg;
     doc["compensation"] = config.compensation;
+    doc["dynamic_threshold_w"] = config.dynamic_threshold_w;
     doc["max_duty_percent"] = config.max_duty_percent;
     doc["burst_period"] = config.burst_period;
     doc["min_power_threshold"] = config.min_power_threshold;
@@ -229,9 +232,9 @@ bool ConfigManager::save(const Config& config) {
     if (file) {
         serializeJson(doc, file);
         file.close();
-        Serial.println("ConfigManager: Saved to LittleFS");
+        Logger::info("ConfigManager: Saved to LittleFS");
     } else {
-        Serial.println("ConfigManager: ERROR opening LittleFS file for writing!");
+        Logger::error("ConfigManager: ERROR opening LittleFS file for writing!");
     }
 
     // 2. Save to NVS (Preferences) - Full JSON string
@@ -241,7 +244,7 @@ bool ConfigManager::save(const Config& config) {
     serializeJson(doc, output);
     prefs.putString("json", output);
     prefs.end();
-    Serial.println("ConfigManager: Saved to NVS");
+    Logger::info("ConfigManager: Saved to NVS");
 
     return true;
 }

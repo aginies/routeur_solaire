@@ -27,6 +27,7 @@ struct DailyStats {
 class StatsManager {
 public:
     static void init();
+    static void startTask();
     static void update(float gridPower, float equipmentPower, uint32_t intervalMs);
     static void save();
 #ifndef NATIVE_TEST
@@ -37,9 +38,12 @@ public:
     static float totalRedirectToday;
     static float totalExportToday;
 
-private:
+    private:
     static String getTodayKey();
-#ifdef NATIVE_TEST
+    static void statsTask(void* pvParameters);
+    static bool _saveRequested;
+
+    #ifdef NATIVE_TEST
 public:
 #endif
     static std::map<String, DailyStats> _history;

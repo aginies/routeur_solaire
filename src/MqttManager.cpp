@@ -1,5 +1,6 @@
 #include "MqttManager.h"
 #include "Logger.h"
+#include "GridSensorService.h"
 #include <WiFi.h>
 #include <ArduinoJson.h>
 
@@ -12,13 +13,9 @@ float MqttManager::latestMqttGridPower = 0.0;
 float MqttManager::latestMqttGridVoltage = 230.0;
 bool MqttManager::hasLatestMqttGridPower = false;
 uint32_t MqttManager::_lastReconnectAttempt = 0;
-SemaphoreHandle_t MqttManager::_mqttMutex = nullptr;
 
 void MqttManager::init(const Config& config) {
     _config = &config;
-    if (_mqttMutex == nullptr) {
-        _mqttMutex = xSemaphoreCreateMutex();
-    }
     if (!config.e_mqtt && !config.e_shelly_mqtt) return;
 
     _nodeId = config.mqtt_name;
@@ -46,10 +43,7 @@ void MqttManager::init(const Config& config) {
 void MqttManager::loop() {
     if (!_config || (!_config->e_mqtt && !_config->e_shelly_mqtt)) return;
 
-    if (_mqttMutex && xSemaphoreTake(_mqttMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-        _mqttClient.loop();
-        xSemaphoreGive(_mqttMutex);
-    }
+    _mqttClient.loop();
 
     if (!_mqttClient.connected() && WiFi.isConnected()) {
         uint32_t now = millis();
@@ -61,22 +55,18 @@ void MqttManager::loop() {
 }
 
 void MqttManager::connectToMqtt() {
-    if (_mqttMutex && xSemaphoreTake(_mqttMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-        Logger::log("Connecting to MQTT...");
-        _mqttClient.connect();
-        xSemaphoreGive(_mqttMutex);
-    }
+    _mqttClient.connect();
 }
 
 void MqttManager::onMqttConnect(bool sessionPresent) {
-    Logger::log("Connected to MQTT broker");
+    Logger::info("Connected to MQTT broker");
     _mqttClient.publish((_config->mqtt_name + "/status").c_str(), 0, true, "online");
 
     if (_config->e_shelly_mqtt) {
         _mqttClient.subscribe(_config->shelly_mqtt_topic.c_str(), 0);
         String voltageTopic = _config->shelly_mqtt_topic.substring(0, _config->shelly_mqtt_topic.lastIndexOf('/')) + "/voltage";
         _mqttClient.subscribe(voltageTopic.c_str(), 0);
-        Logger::log("Subscribed to Shelly topics: " + _config->shelly_mqtt_topic + " & " + voltageTopic);
+        Logger::info("Subscribed to Shelly topics: " + _config->shelly_mqtt_topic + " & " + voltageTopic);
     }
 
     if (!_discoverySent) {
@@ -85,7 +75,7 @@ void MqttManager::onMqttConnect(bool sessionPresent) {
 }
 
 void MqttManager::onMqttDisconnect(espMqttClientTypes::DisconnectReason reason) {
-    Logger::log("Disconnected from MQTT: " + String(espMqttClientTypes::disconnectReasonToString(reason)));
+    Logger::warn("Disconnected from MQTT: " + String(espMqttClientTypes::disconnectReasonToString(reason)));
 }
 
 void MqttManager::onMqttMessage(const espMqttClientTypes::MessageProperties& properties,
@@ -154,48 +144,42 @@ void MqttManager::sendDiscovery() {
     }
 
     _discoverySent = true;
-    Logger::log("HA Discovery sent");
+    Logger::info("HA Discovery sent");
 }
 
 void MqttManager::publishStatus(float gridPower, float equipmentPower, bool equipmentActive,
                               bool forceMode, float equipmentPercent,
                               float esp32Temp, bool fanActive, float ssrTemp, int fanPercent) {
-    if (!_mqttClient.connected() || !_mqttMutex) return;
+    if (!_mqttClient.connected()) return;
 
-    if (xSemaphoreTake(_mqttMutex, pdMS_TO_TICKS(500)) == pdTRUE) {
-        String base = _config->mqtt_name;
-        _mqttClient.publish((base + "/power").c_str(), 0, _config->mqtt_retain, String(gridPower).c_str());
-        _mqttClient.publish((base + "/equipment_power").c_str(), 0, _config->mqtt_retain, String(equipmentPower).c_str());
-        _mqttClient.publish((base + "/equipment_percent").c_str(), 0, _config->mqtt_retain, String(equipmentPercent, 1).c_str());
-        _mqttClient.publish((base + "/esp32_temp").c_str(), 0, _config->mqtt_retain, String(esp32Temp, 1).c_str());
-        _mqttClient.publish((base + "/fan_active").c_str(), 0, _config->mqtt_retain, fanActive ? "ON" : "OFF");
-        _mqttClient.publish((base + "/fan_percent").c_str(), 0, _config->mqtt_retain, String(fanPercent).c_str());
+    String base = _config->mqtt_name;
+    _mqttClient.publish((base + "/power").c_str(), 0, _config->mqtt_retain, String(gridPower).c_str());
+    _mqttClient.publish((base + "/equipment_power").c_str(), 0, _config->mqtt_retain, String(equipmentPower).c_str());
+    _mqttClient.publish((base + "/equipment_percent").c_str(), 0, _config->mqtt_retain, String(equipmentPercent, 1).c_str());
+    _mqttClient.publish((base + "/esp32_temp").c_str(), 0, _config->mqtt_retain, String(esp32Temp, 1).c_str());
+    _mqttClient.publish((base + "/fan_active").c_str(), 0, _config->mqtt_retain, fanActive ? "ON" : "OFF");
+    _mqttClient.publish((base + "/fan_percent").c_str(), 0, _config->mqtt_retain, String(fanPercent).c_str());
 
-        if (ssrTemp > -100.0) {
-            _mqttClient.publish((base + "/ssr_temp").c_str(), 0, _config->mqtt_retain, String(ssrTemp, 1).c_str());
-        }
-
-        // JSON Status
-        JsonDocument doc;
-        doc["grid_power"] = gridPower;
-        doc["equipment_power"] = equipmentPower;
-        doc["equipment_active"] = equipmentActive;
-        doc["force_mode"] = forceMode;
-        doc["equipment_percent"] = round(equipmentPercent * 10) / 10.0;
-        doc["ssr_temp"] = ssrTemp;
-        doc["esp32_temp"] = esp32Temp;
-        doc["fan_active"] = fanActive;
-        doc["fan_percent"] = fanPercent;
-
-        String payload;
-        serializeJson(doc, payload);
-        _mqttClient.publish((base + "/status_json").c_str(), 0, _config->mqtt_retain, payload.c_str());
-        
-        xSemaphoreGive(_mqttMutex);
+    if (ssrTemp > -100.0) {
+        _mqttClient.publish((base + "/ssr_temp").c_str(), 0, _config->mqtt_retain, String(ssrTemp, 1).c_str());
     }
 
-    // Add periodic log entry for visibility in UI
-    Logger::log("MQTT: Data published");
+    // JSON Status
+    JsonDocument doc;
+    doc["grid_power"] = gridPower;
+    doc["equipment_power"] = equipmentPower;
+    doc["equipment_active"] = equipmentActive;
+    doc["force_mode"] = forceMode;
+    doc["equipment_percent"] = round(equipmentPercent * 10) / 10.0;
+    doc["ssr_temp"] = ssrTemp;
+    doc["esp32_temp"] = esp32Temp;
+    doc["fan_active"] = fanActive;
+    doc["fan_percent"] = fanPercent;
+
+    String payload;
+    serializeJson(doc, payload);
+    _mqttClient.publish((base + "/status_json").c_str(), 0, _config->mqtt_retain, payload.c_str());
+    Logger::debug("MQTT: Data published");
 }
 
 bool MqttManager::isConnected() {
