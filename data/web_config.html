@@ -246,18 +246,8 @@
 
             <!-- 2. PARTIE RÉGULATION -->
             <details>
-                <summary>Régulation & Modes</summary>
+                <summary>Régulation</summary>
                 <div class="section-content">
-                    <h3>Équipement 2 (PAC / Piscine)</h3>
-                    <div class="form-group">
-                        <label for="E_EQUIP2">Activer l'équipement 2:</label>
-                        <select id="E_EQUIP2" name="E_EQUIP2">
-                            <option value="True"  %EQUIP2_ENABLED_YES%>Oui (Activer la gestion du second équipement)</option>
-                            <option value="False" %EQUIP2_ENABLED_NO%>Non (Désactiver complètement)</option>
-                        </select>
-                        %EQUIP2_LINK%
-                    </div>
-                    <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
                     <h3>Paramètres Diverteur (Eq 1)</h3>
                     <div class="form-group">
                         <label for="EQUIPMENT_NAME">Nom de l'équipement:</label>
@@ -292,9 +282,48 @@
                         <input type="number" step="1" id="DYNAMIC_THRESHOLD_W" name="DYNAMIC_THRESHOLD_W" value="%DYNAMIC_THRESHOLD_W%">
                         <p style="font-size: 0.8em; color: #888; margin-top: 4px;">En dessous de ce seuil, le système attend 2 messages pour stabiliser.</p>
                     </div>
+
                     <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
 
-                    <h3>Mode Forcé & Nuit</h3>
+                    <h3>Équipement 2 (PAC / Shelly 1PM)</h3>
+                    <div class="form-group">
+                        <label for="E_EQUIP2">Activer l'équipement 2:</label>
+                        <select id="E_EQUIP2" name="E_EQUIP2">
+                            <option value="True"  %EQUIP2_ENABLED_YES%>Oui (Activer la gestion du second équipement)</option>
+                            <option value="False" %EQUIP2_ENABLED_NO%>Non (Désactiver complètement)</option>
+                        </select>
+                        %EQUIP2_LINK%
+                    </div>
+                    <div class="form-group">
+                        <label for="EQUIP2_NAME">Nom de l'équipement 2:</label>
+                        <input type="text" id="EQUIP2_NAME" name="EQUIP2_NAME" value="%EQUIP2_NAME%">
+                    </div>
+                    <div class="form-group">
+                        <label for="EQUIP2_IP">IP du Shelly 1PM (Eq 2):</label>
+                        <input type="text" id="EQUIP2_IP" name="EQUIP2_IP" value="%EQUIP2_IP%">
+                    </div>
+                    <div class="form-group">
+                        <label for="EQUIP2_POWER">Puissance nominale Eq 2 (W):</label>
+                        <input type="number" id="EQUIP2_POWER" name="EQUIP2_POWER" value="%EQUIP2_POWER%">
+                    </div>
+                    <div class="form-group">
+                        <label for="EQUIP2_PRIO">Priorité Eq 2:</label>
+                        <select id="EQUIP2_PRIO" name="EQUIP2_PRIO">
+                            <option value="1" %EQUIP2_PRIO_1%>Ballon d'abord (Eq 1)</option>
+                            <option value="2" %EQUIP2_PRIO_2%>PAC d'abord (Eq 2)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="EQUIP2_MIN_TIME">Temps min de marche Eq 2 (min):</label>
+                        <input type="number" id="EQUIP2_MIN_TIME" name="EQUIP2_MIN_TIME" value="%EQUIP2_MIN_TIME%">
+                    </div>
+                </div>
+            </details>
+
+            <!-- 3. MODE FORCÉ & NUIT -->
+            <details>
+                <summary>Mode Forcé & Nuit</summary>
+                <div class="section-content">
                     <div class="form-group">
                         <label for="FORCE_EQUIPMENT">Activer le mode forcé manuel:</label>
                         <select id="FORCE_EQUIPMENT" name="FORCE_EQUIPMENT">
@@ -334,7 +363,7 @@
                 </div>
             </details>
 
-            <!-- 3. PARTIE HARDWARE -->
+            <!-- 4. PARTIE HARDWARE -->
             <details>
                 <summary>Hardware & Pins</summary>
                 <div class="section-content">

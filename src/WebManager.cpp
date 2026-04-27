@@ -353,6 +353,11 @@ void WebManager::setupRoutes() {
         newCfg.wifi_dns = getParam("WIFI_DNS");
         newCfg.e_wifi = (getParam("E_WIFI") == "True");
         newCfg.e_equip2 = (getParam("E_EQUIP2") == "True");
+        newCfg.equip2_name = getParam("EQUIP2_NAME");
+        newCfg.equip2_shelly_ip = getParam("EQUIP2_IP");
+        newCfg.equip2_max_power = getParam("EQUIP2_POWER").toFloat();
+        newCfg.equip2_priority = getParam("EQUIP2_PRIO").toInt();
+        newCfg.equip2_min_on_time = getParam("EQUIP2_MIN_TIME").toInt();
         
         newCfg.shelly_em_ip = getParam("SHELLY_EM_IP");
         newCfg.e_shelly_mqtt = (getParam("E_SHELLY_MQTT") == "True");
