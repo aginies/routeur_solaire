@@ -5,13 +5,15 @@
 #include <ESPAsyncWebServer.h>
 #include "SolarMonitor.h" // For PowerPoint struct
 
-#ifndef DISABLE_STATS
+#ifndef DISABLE_HISTORY
 class HistoryBuffer {
 public:
     static void init(const Config& config);
     static void startTask();
     static void streamHistoryJson(AsyncWebServerRequest *request);
     static String getHistoryJson();
+    static void save();
+    static void load();
 
     static int maxHistory;
     static PowerPoint* powerHistory;
@@ -29,6 +31,8 @@ public:
     static void startTask() {}
     static void streamHistoryJson(AsyncWebServerRequest *request) { request->send(200, "application/json", "[]"); }
     static String getHistoryJson() { return "[]"; }
+    static void save() {}
+    static void load() {}
 };
 #endif
 

@@ -1,21 +1,14 @@
 #ifndef LOGGER_H
 #define LOGGER_H
 
-#ifndef NATIVE_TEST
-#include <Arduino.h>
-#else
-#include <string>
-typedef std::string String;
-#endif
+#include "Config.h"
 #ifndef NATIVE_TEST
 #include <LittleFS.h>
-#endif
-#include <vector>
-#ifndef NATIVE_TEST
 #include <freertos/semphr.h>
 #else
 typedef void* SemaphoreHandle_t;
 #endif
+#include <vector>
 
 enum LogLevel {
     LOG_DEBUG,
@@ -23,6 +16,10 @@ enum LogLevel {
     LOG_WARN,
     LOG_ERROR
 };
+
+#ifndef NATIVE_TEST
+class AsyncWebServerRequest;
+#endif
 
 class Logger {
 public:
@@ -33,11 +30,19 @@ public:
     static void warn(const String& message);
     static void error(const String& message, bool critical = false);
     
+#ifndef DISABLE_DATA_LOG
     static void logData(const String& message);
+#else
+    static void logData(const String& message) {}
+#endif
     static void loop();
     static void flushAll();
     static String getLogs();
     static String getDataLogs();
+#ifndef NATIVE_TEST
+    static void streamLogs(AsyncWebServerRequest *request);
+    static void streamDataLogs(AsyncWebServerRequest *request);
+#endif
 
 private:
     static String levelToString(LogLevel level);
