@@ -8,10 +8,19 @@
 #else
 #include <string>
 typedef std::string String;
-class OneWire {};
+class OneWire {
+public:
+    OneWire(int pin) {}
+};
 class DallasTemperature {
 public:
     DallasTemperature(OneWire* ow) {}
+    void begin() {}
+    void setWaitForConversion(bool b) {}
+    void requestTemperatures() {}
+    int getDeviceCount() { return 1; }
+    static float mockTemp;
+    float getTempCByIndex(int index) { return mockTemp; }
 };
 #endif
 #include "Config.h"
@@ -24,6 +33,7 @@ public:
     
     static float currentSsrTemp;
     static float lastEspTemp;
+    static int ssrFaultCount;
 
 private:
     static void tempTask(void* pvParameters);

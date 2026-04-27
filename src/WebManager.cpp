@@ -75,6 +75,7 @@ String WebManager::templateProcessor(const String& var) {
     if (var == "NAME") return _config->name;
     if (var == "EQUIPMENT_NAME") return _config->equipment_name;
     if (var == "VERSION") return FIRMWARE_VERSION;
+    if (var == "BUILD_TIME") return String(__DATE__) + " " + String(__TIME__);
 
 #ifdef MAX_STATS_DAYS
     if (var == "MAX_STATS_DAYS") return String(MAX_STATS_DAYS);
@@ -433,6 +434,8 @@ String WebManager::getStatusJson() {
     time_t now; time(&now); struct tm ti; localtime_r(&now, &ti);
     char buf[6]; strftime(buf, sizeof(buf), "%H:%M", &ti);
     doc["rtc_time"] = String(buf);
+    char buf2[11]; strftime(buf2, sizeof(buf2), "%d/%m/%Y", &ti);
+    doc["rtc_date"] = String(buf2);
 
     String output;
     serializeJson(doc, output);

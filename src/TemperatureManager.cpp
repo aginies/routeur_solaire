@@ -2,7 +2,9 @@
 #include "Logger.h"
 #include "SafetyManager.h"
 #include "ActuatorManager.h"
+#ifndef NATIVE_TEST
 #include <esp_task_wdt.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -14,9 +16,18 @@ uint8_t temprature_sens_read();
 
 float TemperatureManager::currentSsrTemp = -999.0;
 float TemperatureManager::lastEspTemp = 0.0;
+int TemperatureManager::ssrFaultCount = 0;
 const Config* TemperatureManager::_config = nullptr;
 OneWire* TemperatureManager::_oneWire = nullptr;
 DallasTemperature* TemperatureManager::_sensors = nullptr;
+
+#ifdef NATIVE_TEST
+float DallasTemperature::mockTemp = 25.0f;
+#endif
+
+#ifdef NATIVE_TEST
+#define String(v) std::to_string(v)
+#endif
 
 void TemperatureManager::init(const Config& config) {
     _config = &config;
@@ -32,7 +43,9 @@ void TemperatureManager::init(const Config& config) {
 }
 
 void TemperatureManager::startTask() {
+#ifndef NATIVE_TEST
     xTaskCreate(tempTask, "tempTask", 4096, NULL, 1, NULL);
+#endif
 }
 
 void TemperatureManager::readTemperatures() {
@@ -40,21 +53,34 @@ void TemperatureManager::readTemperatures() {
 
     if (_config->e_ssr_temp) {
         float t = _sensors->getTempCByIndex(0);
+        // Valid range for DS18B20 is -55 to +125. 
+        // 85.0 is the power-on reset value (ignore it if it persists).
+        // -127.0 is DEVICE_DISCONNECTED_C.
         if (t > -55.0 && t < 125.0 && t != 85.0) {
             currentSsrTemp = t;
+            ssrFaultCount = 0; // Reset counter on success
         } else {
-            currentSsrTemp = -999.0;
+            ssrFaultCount++;
+            // Only mark as hard fault after 3 consecutive failures (approx 15 seconds)
+            if (ssrFaultCount >= 3) {
+                currentSsrTemp = -999.0;
+            }
+            Logger::debug("DS18B20 reading failed (count: " + String(ssrFaultCount) + ")");
         }
     }
     _sensors->requestTemperatures();
 }
 
 void TemperatureManager::tempTask(void* pvParameters) {
+#ifndef NATIVE_TEST
     esp_task_wdt_add(NULL);
+#endif
     uint32_t lastRead = millis() - 5000;
     
     while (true) {
+#ifndef NATIVE_TEST
         esp_task_wdt_reset();
+#endif
         uint32_t now = millis();
         
         if (now - lastRead >= 5000) {
@@ -69,6 +95,8 @@ void TemperatureManager::tempTask(void* pvParameters) {
                 else ActuatorManager::setFanSpeed(0);
             }
         }
+#ifndef NATIVE_TEST
         vTaskDelay(pdMS_TO_TICKS(1000));
+#endif
     }
 }

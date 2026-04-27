@@ -17,8 +17,14 @@ SystemState SafetyManager::evaluateState(float espTemp, float ssrTemp, uint32_t 
 
     // 0. Priority 0: EMERGENCY FAULT (Overheats & Sensor Fault)
     bool espOverheat = (espTemp >= _config->max_esp32_temp);
-    bool ssrOverheat = (_config->e_ssr_temp && ssrTemp >= _config->ssr_max_temp);
     bool ssrFault = (_config->e_ssr_temp && ssrTemp < -100.0f);
+    
+    // Hysteresis logic: if already in fault, use lower threshold to recover
+    float ssrLimit = _config->ssr_max_temp;
+    if (currentState == SystemState::STATE_EMERGENCY_FAULT) {
+        ssrLimit -= 5.0f; // 5°C hysteresis
+    }
+    bool ssrOverheat = (_config->e_ssr_temp && ssrTemp >= ssrLimit);
 
     if (espOverheat || ssrOverheat || ssrFault) {
         if (espOverheat) emergencyReason = "ESP32 Overheat!";
