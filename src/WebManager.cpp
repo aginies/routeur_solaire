@@ -192,6 +192,10 @@ void WebManager::setupRoutes() {
         }
     });
 
+    _server.on("/get_log_action", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(200, "text/plain", Logger::getLogs());
+    });
+
     _server.on("/get_solar_data", HTTP_GET, [](AsyncWebServerRequest *request) {
         request->send(200, "text/plain", Logger::getDataLogs());
     });
