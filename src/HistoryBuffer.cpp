@@ -1,9 +1,11 @@
 #include "HistoryBuffer.h"
 
-#ifndef DISABLE_STATS
+#ifndef DISABLE_HISTORY
 #include "GridSensorService.h"
 #include "ActuatorManager.h"
 #include "TemperatureManager.h"
+#include "Logger.h"
+#include <LittleFS.h>
 #include <ArduinoJson.h>
 
 int HistoryBuffer::maxHistory = 120;
@@ -13,7 +15,10 @@ int HistoryBuffer::historyCount = 0;
 SemaphoreHandle_t HistoryBuffer::_dataMutex = nullptr;
 
 void HistoryBuffer::init(const Config& config) {
-    if (powerHistory) free(powerHistory);
+    if (powerHistory) {
+        free(powerHistory);
+        powerHistory = nullptr;
+    }
     
 #ifdef BOARD_HAS_PSRAM
     maxHistory = 1440; // 2 hours at 5s interval
@@ -31,6 +36,50 @@ void HistoryBuffer::init(const Config& config) {
     historyWriteIdx = 0;
     historyCount = 0;
     if (!_dataMutex) _dataMutex = xSemaphoreCreateMutex();
+
+    load(); // Restore history if it exists
+}
+
+void HistoryBuffer::save() {
+    if (!powerHistory || !_dataMutex) return;
+    if (xSemaphoreTake(_dataMutex, pdMS_TO_TICKS(1000)) != pdTRUE) return;
+
+    File file = LittleFS.open("/history.bin", "w");
+    if (file) {
+        file.write((uint8_t*)&maxHistory, sizeof(int));
+        file.write((uint8_t*)&historyWriteIdx, sizeof(int));
+        file.write((uint8_t*)&historyCount, sizeof(int));
+        file.write((uint8_t*)powerHistory, sizeof(PowerPoint) * maxHistory);
+        file.close();
+        Logger::info("HistoryBuffer: State saved (" + String(sizeof(PowerPoint) * maxHistory) + " bytes)");
+    }
+    xSemaphoreGive(_dataMutex);
+}
+
+void HistoryBuffer::load() {
+    if (!powerHistory || !_dataMutex || !LittleFS.exists("/history.bin")) return;
+    if (xSemaphoreTake(_dataMutex, pdMS_TO_TICKS(1000)) != pdTRUE) return;
+
+    File file = LittleFS.open("/history.bin", "r");
+    if (file) {
+        int savedMax, savedIdx, savedCount;
+        if (file.read((uint8_t*)&savedMax, sizeof(int)) == sizeof(int) &&
+            file.read((uint8_t*)&savedIdx, sizeof(int)) == sizeof(int) &&
+            file.read((uint8_t*)&savedCount, sizeof(int)) == sizeof(int)) {
+            
+            if (savedMax == maxHistory && savedCount >= 0 && savedCount <= maxHistory) {
+                file.read((uint8_t*)powerHistory, sizeof(PowerPoint) * maxHistory);
+                historyWriteIdx = savedIdx;
+                historyCount = savedCount;
+                Logger::info("HistoryBuffer: Restored " + String(historyCount) + " points");
+            } else {
+                Logger::warn("HistoryBuffer: Saved state incompatible, ignoring");
+            }
+        }
+        file.close();
+        LittleFS.remove("/history.bin");
+    }
+    xSemaphoreGive(_dataMutex);
 }
 
 void HistoryBuffer::startTask() {

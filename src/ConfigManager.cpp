@@ -18,27 +18,26 @@ Config ConfigManager::load() {
             if (!error) {
                 loadedFromFile = true;
                 Logger::info("ConfigManager: Loaded from LittleFS");
+            } else {
+                Logger::error("ConfigManager: LittleFS JSON error: " + String(error.c_str()));
             }
         }
     }
 
-    // 2. Try loading from Preferences (NVS) if file load failed or to merge
-    Preferences prefs;
-    prefs.begin("solar_config", true); // Read-only
-    if (prefs.isKey("json")) {
-        String nvsJson = prefs.getString("json");
-        JsonDocument nvsDoc;
-        DeserializationError error = deserializeJson(nvsDoc, nvsJson);
-        if (!error) {
-            Logger::info("ConfigManager: Found NVS backup, merging...");
-            // Merge NVS into current doc (NVS values take precedence for user settings)
-            for (JsonPair p : nvsDoc.as<JsonObject>()) {
-                doc[p.key()] = p.value();
+    // 2. Fallback to Preferences (NVS) ONLY if LittleFS failed
+    if (!loadedFromFile) {
+        Preferences prefs;
+        prefs.begin("solar_config", true); // Read-only
+        if (prefs.isKey("json")) {
+            String nvsJson = prefs.getString("json");
+            DeserializationError error = deserializeJson(doc, nvsJson);
+            if (!error) {
+                Logger::info("ConfigManager: Recovered from NVS backup");
+                loadedFromFile = true;
             }
-            loadedFromFile = true; // Consider it loaded if NVS exists
         }
+        prefs.end();
     }
-    prefs.end();
 
     if (!loadedFromFile) {
         Logger::info("ConfigManager: No config found, using defaults");

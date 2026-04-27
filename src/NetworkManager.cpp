@@ -12,9 +12,11 @@ void NetworkManager::init(const Config& config) {
     _config = &config;
     _cachedConnected = false;
     _cachedRSSI = -100;
-    WiFi.disconnect(true);
-    WiFi.mode(WIFI_OFF);
-    delay(100);
+    
+    // We avoid aggressive disconnect/off here to see if it helps WROOM stability
+    // WiFi.disconnect(true);
+    // WiFi.mode(WIFI_OFF);
+    // delay(100);
 
     if (config.e_wifi) {
         setupSTA();
@@ -24,7 +26,7 @@ void NetworkManager::init(const Config& config) {
 }
 
 void NetworkManager::setupSTA() {
-    Logger::info("Connecting to WiFi: " + _config->wifi_ssid);
+    Logger::info("Connecting to WiFi SSID: [" + _config->wifi_ssid + "]");
     WiFi.mode(WIFI_STA);
 
     if (_config->wifi_static_ip.length() > 0) {
@@ -42,11 +44,12 @@ void NetworkManager::setupSTA() {
     WiFi.begin(_config->wifi_ssid.c_str(), _config->wifi_password.c_str());
 
     int attempts = 0;
-    while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+    while (WiFi.status() != WL_CONNECTED && attempts < 30) { // Increased to 15s
         delay(500);
         attempts++;
-        if (attempts % 4 == 0) Serial.print(".");
+        if (attempts % 2 == 0) Serial.print(".");
     }
+    Serial.println();
 
     if (WiFi.status() == WL_CONNECTED) {
         WiFi.setSleep(false); // Disable power save for stability
@@ -58,7 +61,7 @@ void NetworkManager::setupSTA() {
         configTzTime(_config->timezone.c_str(), "pool.ntp.org", "time.google.com");
         Logger::info("NTP Sync started (" + _config->timezone + ")");
     } else {
-        Logger::warn("Connection failed. Starting Access Point...");
+        Logger::warn("Connection failed (Status: " + String(WiFi.status()) + "). Starting Access Point...");
         setupAP();
     }
 }

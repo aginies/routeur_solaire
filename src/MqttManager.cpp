@@ -83,19 +83,19 @@ void MqttManager::onMqttMessage(const espMqttClientTypes::MessageProperties& pro
                                  size_t len, size_t index, size_t total) {
     String t = String(topic);
     if (t == _config->shelly_mqtt_topic) {
-        if (len > 32) len = 32;
-        char buffer[33];
-        memcpy(buffer, payload, len);
-        buffer[len] = '\0';
+        size_t cplen = (len > 31) ? 31 : len;
+        char buffer[32];
+        memcpy(buffer, payload, cplen);
+        buffer[cplen] = '\0';
         latestMqttGridPower = atof(buffer);
         hasLatestMqttGridPower = true;
     } else {
         String voltageTopic = _config->shelly_mqtt_topic.substring(0, _config->shelly_mqtt_topic.lastIndexOf('/')) + "/voltage";
         if (t == voltageTopic) {
-            if (len > 32) len = 32;
-            char buffer[33];
-            memcpy(buffer, payload, len);
-            buffer[len] = '\0';
+            size_t cplen = (len > 31) ? 31 : len;
+            char buffer[32];
+            memcpy(buffer, payload, cplen);
+            buffer[cplen] = '\0';
             float v = atof(buffer);
             if (v > 100.0 && v < 300.0) {
                 latestMqttGridVoltage = v;

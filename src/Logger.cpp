@@ -1,12 +1,17 @@
 #include "Logger.h"
 #include <time.h>
+#ifndef NATIVE_TEST
 #include <esp_task_wdt.h>
+#include <ESPAsyncWebServer.h>
+#endif
 
 const char* Logger::_logFile = "/log.txt";
 const char* Logger::_dataFile = "/solar_data.txt";
 size_t Logger::_maxBytes = 20480;
 std::vector<String> Logger::_logBuffer;
+#ifndef DISABLE_DATA_LOG
 std::vector<String> Logger::_dataBuffer;
+#endif
 SemaphoreHandle_t Logger::_mutex = nullptr;
 uint32_t Logger::_lastFlush = 0;
 
@@ -70,6 +75,7 @@ void Logger::info(const String& message)  { log(message, LOG_INFO); }
 void Logger::warn(const String& message)  { log(message, LOG_WARN); }
 void Logger::error(const String& message, bool critical) { log(message, LOG_ERROR, critical); }
 
+#ifndef DISABLE_DATA_LOG
 void Logger::logData(const String& message) {
     if (_mutex == nullptr || xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) != pdTRUE) return;
     _dataBuffer.push_back(message);
@@ -77,6 +83,7 @@ void Logger::logData(const String& message) {
     xSemaphoreGive(_mutex);
     if (shouldFlush) flushAll();
 }
+#endif
 
 void Logger::loop() {
     if (millis() - _lastFlush >= 900000) { // 15 minutes
@@ -89,7 +96,9 @@ void Logger::flushAll() {
     if (_mutex == nullptr || xSemaphoreTake(_mutex, pdMS_TO_TICKS(1000)) != pdTRUE) return;
     
     flushFile(_logFile, _logBuffer);
+#ifndef DISABLE_DATA_LOG
     flushFile(_dataFile, _dataBuffer);
+#endif
     
     xSemaphoreGive(_mutex);
 }
@@ -105,21 +114,23 @@ void Logger::flushFile(const char* filename, std::vector<String>& buffer) {
     if (file) {
         for (const auto& entry : buffer) {
             file.println(entry);
-            // Periodically feed the watchdog if we are flushing a huge buffer
-            static int count = 0;
-            if (count++ % 10 == 0) esp_task_wdt_reset();
         }
         file.close();
-        buffer.clear();
     }
+    // Always clear buffer to prevent OOM if file write fails
+    buffer.clear();
+    esp_task_wdt_reset();
 }
 
 void Logger::rotate(const char* filename) {
     if (!LittleFS.exists(filename)) return;
 
+    size_t size = 0;
     File file = LittleFS.open(filename, "r");
-    size_t size = file.size();
-    file.close();
+    if (file) {
+        size = file.size();
+        file.close();
+    }
 
     if (size < _maxBytes) return;
 
@@ -130,40 +141,61 @@ void Logger::rotate(const char* filename) {
     if (LittleFS.exists(rotated2)) LittleFS.remove(rotated2);
     if (LittleFS.exists(rotated1)) LittleFS.rename(rotated1, rotated2);
     LittleFS.rename(base, rotated1);
+    Logger::info("Logger: Log file rotated (" + String(size) + " bytes)");
 }
 
-String Logger::getLogs() {
-    String logs = "";
-    if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+#ifndef NATIVE_TEST
+void Logger::streamLogs(AsyncWebServerRequest *request) {
+    AsyncResponseStream *response = request->beginResponseStream("text/plain");
+    if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(500)) == pdTRUE) {
         File file = LittleFS.open(_logFile, "r");
         if (file) {
             size_t size = file.size();
             if (size > 8192) file.seek(size - 8192);
-            logs = file.readString();
+            
+            uint8_t buf[512];
+            while (file.available()) {
+                size_t len = file.read(buf, sizeof(buf));
+                response->write(buf, len);
+            }
             file.close();
         }
         for (const auto& entry : _logBuffer) {
-            logs += entry + "\n";
+            response->print(entry);
+            response->print("\n");
         }
         xSemaphoreGive(_mutex);
     }
-    return logs;
+    request->send(response);
 }
 
-String Logger::getDataLogs() {
-    String logs = "";
-    if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+#ifndef DISABLE_DATA_LOG
+void Logger::streamDataLogs(AsyncWebServerRequest *request) {
+    AsyncResponseStream *response = request->beginResponseStream("text/plain");
+    if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(500)) == pdTRUE) {
         File file = LittleFS.open(_dataFile, "r");
         if (file) {
             size_t size = file.size();
             if (size > 4096) file.seek(size - 4096);
-            logs = file.readString();
+            
+            uint8_t buf[512];
+            while (file.available()) {
+                size_t len = file.read(buf, sizeof(buf));
+                response->write(buf, len);
+            }
             file.close();
         }
         for (const auto& entry : _dataBuffer) {
-            logs += entry + "\n";
+            response->print(entry);
+            response->print("\n");
         }
         xSemaphoreGive(_mutex);
     }
-    return logs;
+    request->send(response);
 }
+#else
+void Logger::streamDataLogs(AsyncWebServerRequest *request) {
+    request->send(200, "text/plain", "Data logging disabled");
+}
+#endif
+#endif

@@ -27,6 +27,14 @@ void WebManager::init(const Config& config) {
 
 void WebManager::loop() {
     if (_rebootRequested) {
+        Logger::info("Reboot requested. Saving data...");
+        Logger::flushAll(); // Save recent logs
+        
+#ifndef DISABLE_STATS
+        StatsManager::save();   // Save daily stats
+        HistoryBuffer::save(); // Save chart history
+#endif
+
         delay(1000);
         Utils::reboot();
     }
@@ -147,6 +155,18 @@ String WebManager::templateProcessor(const String& var) {
     if (var == "STATS_DISABLED_STYLE") return "";
 #endif
 
+#ifdef DISABLE_HISTORY
+    if (var == "HISTORY_DISABLED_STYLE") return "display:none;";
+#else
+    if (var == "HISTORY_DISABLED_STYLE") return "";
+#endif
+
+#ifdef DISABLE_DATA_LOG
+    if (var == "DATA_LOG_DISABLED_STYLE") return "display:none;";
+#else
+    if (var == "DATA_LOG_DISABLED_STYLE") return "";
+#endif
+
     return String();
 }
 
@@ -193,11 +213,11 @@ void WebManager::setupRoutes() {
     });
 
     _server.on("/get_log_action", HTTP_GET, [](AsyncWebServerRequest *request) {
-        request->send(200, "text/plain", Logger::getLogs());
+        Logger::streamLogs(request);
     });
 
     _server.on("/get_solar_data", HTTP_GET, [](AsyncWebServerRequest *request) {
-        request->send(200, "text/plain", Logger::getDataLogs());
+        Logger::streamDataLogs(request);
     });
 
     _server.serveStatic("/chart.min.js", LittleFS, "/chart.min.js");
@@ -254,10 +274,10 @@ void WebManager::setupRoutes() {
         newCfg.wifi_subnet = getParam("WIFI_SUBNET");
         newCfg.wifi_gateway = getParam("WIFI_GATEWAY");
         newCfg.wifi_dns = getParam("WIFI_DNS");
-        newCfg.e_wifi = (getParam("EXTERNAL_WIFI") == "True");
+        newCfg.e_wifi = (getParam("E_WIFI") == "True");
         
         newCfg.shelly_em_ip = getParam("SHELLY_EM_IP");
-        newCfg.e_shelly_mqtt = (getParam("SHELLY_MQTT") == "True");
+        newCfg.e_shelly_mqtt = (getParam("E_SHELLY_MQTT") == "True");
         newCfg.shelly_mqtt_topic = getParam("SHELLY_MQTT_TOPIC");
         newCfg.poll_interval = getParam("POLL_INTERVAL").toInt();
         
@@ -266,7 +286,7 @@ void WebManager::setupRoutes() {
         newCfg.mqtt_user = getParam("MQTT_USER");
         newCfg.mqtt_password = getParam("MQTT_PASSWORD");
         newCfg.mqtt_name = getParam("MQTT_NAME");
-        newCfg.e_mqtt = (getParam("MQTT") == "True");
+        newCfg.e_mqtt = (getParam("E_MQTT") == "True");
 
         newCfg.equipment_max_power = getParam("EQUIPMENT_MAX_POWER").toFloat();
         newCfg.max_duty_percent = getParam("MAX_DUTY_PERCENT").toFloat();
@@ -282,12 +302,12 @@ void WebManager::setupRoutes() {
         newCfg.internal_led_pin = getParam("I_LED_PIN").toInt();
         newCfg.fan_pin = getParam("FAN_PIN").toInt();
         newCfg.fan_temp_offset = getParam("FAN_TEMP_OFFSET").toInt();
-        newCfg.e_fan = (getParam("FAN") == "True");
-        newCfg.e_ssr_temp = (getParam("SSR_TEMP") == "True");
+        newCfg.e_fan = (getParam("E_FAN") == "True");
+        newCfg.e_ssr_temp = (getParam("E_SSR_TEMP") == "True");
         newCfg.ssr_max_temp = getParam("SSR_MAX_TEMP").toFloat();
 
         newCfg.force_equipment = (getParam("FORCE_EQUIPMENT") == "True");
-        newCfg.e_force_window = (getParam("FORCE_WINDOW") == "True");
+        newCfg.e_force_window = (getParam("E_FORCE_WINDOW") == "True");
         newCfg.force_start = getParam("FORCE_START");
         newCfg.force_end = getParam("FORCE_END");
         
@@ -295,7 +315,7 @@ void WebManager::setupRoutes() {
         newCfg.night_end = getParam("NIGHT_END");
         newCfg.night_poll_interval = getParam("NIGHT_POLL_INTERVAL").toInt();
 
-        newCfg.e_jsy = (getParam("JSY") == "True");
+        newCfg.e_jsy = (getParam("E_JSY") == "True");
         newCfg.jsy_uart_id = getParam("JSY_UART_ID").toInt();
         newCfg.jsy_tx = getParam("JSY_TX").toInt();
         newCfg.jsy_rx = getParam("JSY_RX").toInt();
@@ -402,9 +422,9 @@ String WebManager::getStatusJson() {
     doc["night_mode"] = SolarMonitor::isNight(Utils::getCurrentMinutes());
 
     time_t now; time(&now); struct tm ti; localtime_r(&now, &ti);
-    char buf[6]; strftime(buf, sizeof(buf), "%H:%M", &ti);
+    char buf[12]; strftime(buf, sizeof(buf), "%H:%M", &ti);
     doc["rtc_time"] = String(buf);
-    char buf2[11]; strftime(buf2, sizeof(buf2), "%d/%m/%Y", &ti);
+    char buf2[24]; strftime(buf2, sizeof(buf2), "%d/%m/%Y", &ti);
     doc["rtc_date"] = String(buf2);
 
     String output;
