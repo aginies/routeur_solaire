@@ -598,8 +598,9 @@
 
                 const labels = history.map(p => {
                     const date = new Date(p.t * 1000);
-                    return date.getHours().toString().padStart(2, '0') + ':' + 
-                           date.getMinutes().toString().padStart(2, '0');
+                    const h = date.getHours().toString().padStart(2, '0');
+                    const m = date.getMinutes().toString().padStart(2, '0');
+                    return h + ':' + m;
                 });
                 const gridData = history.map(p => p.g);
                 const equipmentData  = history.map(p => p.e);

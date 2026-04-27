@@ -15,20 +15,19 @@ void SafetyManager::init(const Config& config) {
 SystemState SafetyManager::evaluateState(float espTemp, float ssrTemp, uint32_t lastGoodPoll, bool boostActive, bool forcedWindow, bool nightActive) {
     if (!_config) return SystemState::STATE_EMERGENCY_FAULT;
 
-    // 0. Priority 0: EMERGENCY FAULT (Overheats & Sensor Fault)
-    bool espOverheat = (espTemp >= _config->max_esp32_temp);
-    bool ssrFault = (_config->e_ssr_temp && ssrTemp < -100.0f);
-    
-    // Hysteresis logic: if already in fault, use lower threshold to recover
-    float ssrLimit = _config->ssr_max_temp;
-    if (currentState == SystemState::STATE_EMERGENCY_FAULT) {
-        ssrLimit -= 5.0f; // 5°C hysteresis
-    }
-    bool ssrOverheat = (_config->e_ssr_temp && ssrTemp >= ssrLimit);
+    // Hysteresis calculation: recovery only happens when temp is 5C below max
+    float espHysteresis = _config->max_esp32_temp - 5.0f;
+    float ssrHysteresis = _config->ssr_max_temp - 5.0f;
 
-    if (espOverheat || ssrOverheat || ssrFault) {
-        if (espOverheat) emergencyReason = "ESP32 Overheat!";
-        else if (ssrOverheat) emergencyReason = "External Overheat!";
+    // 0. Priority 0: EMERGENCY FAULT (Overheats & Sensor Fault)
+    // If ALREADY in fault, check hysteresis for recovery
+    bool isEspHot = (currentState == SystemState::STATE_EMERGENCY_FAULT && emergencyReason == "ESP32 Overheat!") ? (espTemp >= espHysteresis) : (espTemp >= _config->max_esp32_temp);
+    bool isSsrHot = (_config->e_ssr_temp && ((currentState == SystemState::STATE_EMERGENCY_FAULT && emergencyReason == "External Overheat!") ? (ssrTemp >= ssrHysteresis) : (ssrTemp >= _config->ssr_max_temp)));
+    bool ssrFault = (_config->e_ssr_temp && ssrTemp < -100.0f);
+
+    if (isEspHot || isSsrHot || ssrFault) {
+        if (isEspHot) emergencyReason = "ESP32 Overheat!";
+        else if (isSsrHot) emergencyReason = "External Overheat!";
         else emergencyReason = "SSR Temp Sensor Fault!";
         return SystemState::STATE_EMERGENCY_FAULT;
     }

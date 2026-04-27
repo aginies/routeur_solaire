@@ -1,46 +1,36 @@
 #include "HistoryBuffer.h"
+
+#ifndef DISABLE_STATS
 #include "GridSensorService.h"
 #include "ActuatorManager.h"
 #include "TemperatureManager.h"
-#include "Logger.h"
 #include <ArduinoJson.h>
 
-int HistoryBuffer::maxHistory = 60;
+int HistoryBuffer::maxHistory = 120;
 PowerPoint* HistoryBuffer::powerHistory = nullptr;
 int HistoryBuffer::historyWriteIdx = 0;
 int HistoryBuffer::historyCount = 0;
 SemaphoreHandle_t HistoryBuffer::_dataMutex = nullptr;
 
 void HistoryBuffer::init(const Config& config) {
-    _dataMutex = xSemaphoreCreateMutex();
+    if (powerHistory) free(powerHistory);
     
 #ifdef BOARD_HAS_PSRAM
-    if (psramFound()) {
-        maxHistory = 1200;
-        powerHistory = (PowerPoint*)ps_malloc(maxHistory * sizeof(PowerPoint));
-        if (powerHistory) {
-            memset(powerHistory, 0, maxHistory * sizeof(PowerPoint));
-            Logger::info("Allocated " + String(maxHistory) + " history points in PSRAM");
-        } else {
-            maxHistory = 60;
-            Logger::warn("PSRAM Allocation FAILED, falling back to SRAM");
-            powerHistory = (PowerPoint*)malloc(maxHistory * sizeof(PowerPoint));
-            if (powerHistory) memset(powerHistory, 0, maxHistory * sizeof(PowerPoint));
-        }
-    } else {
-        maxHistory = 60;
-        Logger::info("No PSRAM found on S3, using minimal SRAM history");
-        powerHistory = (PowerPoint*)malloc(maxHistory * sizeof(PowerPoint));
-        if (powerHistory) memset(powerHistory, 0, maxHistory * sizeof(PowerPoint));
-    }
+    maxHistory = 1440; // 2 hours at 5s interval
+    powerHistory = (PowerPoint*)ps_malloc(sizeof(PowerPoint) * maxHistory);
 #else
-    maxHistory = 60;
-    powerHistory = (PowerPoint*)malloc(maxHistory * sizeof(PowerPoint));
-    if (powerHistory) {
-        memset(powerHistory, 0, maxHistory * sizeof(PowerPoint));
-        Logger::info("Allocated " + String(maxHistory) + " history points in SRAM");
-    }
+    maxHistory = 120; // 10 minutes
+    powerHistory = (PowerPoint*)malloc(sizeof(PowerPoint) * maxHistory);
 #endif
+
+    if (!powerHistory) {
+        maxHistory = 60;
+        powerHistory = (PowerPoint*)malloc(sizeof(PowerPoint) * maxHistory);
+    }
+    
+    historyWriteIdx = 0;
+    historyCount = 0;
+    if (!_dataMutex) _dataMutex = xSemaphoreCreateMutex();
 }
 
 void HistoryBuffer::startTask() {
@@ -49,9 +39,11 @@ void HistoryBuffer::startTask() {
 
 void HistoryBuffer::historyTask(void* pvParameters) {
     while (true) {
-        if (powerHistory && _dataMutex && xSemaphoreTake(_dataMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        time_t now = time(nullptr);
+        // Only record if time is synchronized (usually > year 2020)
+        if (now > 1600000000 && powerHistory && _dataMutex && xSemaphoreTake(_dataMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
             PowerPoint p = {
-                (uint32_t)(millis() / 1000),
+                (uint32_t)now,
                 GridSensorService::currentGridPower,
                 ActuatorManager::equipmentPower,
                 TemperatureManager::currentSsrTemp,
@@ -111,3 +103,4 @@ void HistoryBuffer::streamHistoryJson(AsyncWebServerRequest *request) {
     serializeJson(doc, *response);
     request->send(response);
 }
+#endif

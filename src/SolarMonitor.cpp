@@ -146,7 +146,9 @@ void SolarMonitor::monitorTask(void* pvParameters) {
         }
 
         // 5. Stats & MQTT
+#ifndef DISABLE_STATS
         StatsManager::update(GridSensorService::currentGridPower, ActuatorManager::equipmentPower, now - lastStatsUpdate);
+#endif
         lastStatsUpdate = now;
 
         if (_config->e_mqtt && (now - lastMqttReport >= (_config->mqtt_report_interval * 1000))) {

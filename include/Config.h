@@ -6,10 +6,38 @@
 #include <IPAddress.h>
 #else
 #include <string>
-typedef std::string String;
+#include <iostream>
+class String : public std::string {
+public:
+    String() : std::string("") {}
+    String(const char* s) : std::string(s) {}
+    String(const std::string& s) : std::string(s) {}
+    String(int v) : std::string(std::to_string(v)) {}
+    String(float v, int p = 2) : std::string(std::to_string(v)) {} // Simple float stub
+    String operator+(const String& other) const { return String(std::string(*this) + other); }
+    String operator+(const char* other) const { return String(std::string(*this) + std::string(other)); }
+    void trim() {}
+    int toInt() const { return std::stoi(*this); }
+    float toFloat() const { return std::stof(*this); }
+    int indexOf(char c) const { return find(c); }
+    int indexOf(String s) const { return find(s); }
+    String substring(int start, int end = -1) const { 
+        if (end == -1) return String(substr(start));
+        return String(substr(start, end - start));
+    }
+    void replace(String a, String b) {
+        size_t pos = 0;
+        while ((pos = find(a, pos)) != std::string::npos) {
+            std::string::replace(pos, a.length(), b);
+            pos += b.length();
+        }
+    }
+    void toLowerCase() { for(auto &c : *this) c = tolower(c); }
+    const char* c_str() const { return std::string::c_str(); }
+};
 #endif
 
-#define FIRMWARE_VERSION "0.2.0"
+#define FIRMWARE_VERSION "0.3.0"
 
 struct Config {
     // System

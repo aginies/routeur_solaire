@@ -1,4 +1,6 @@
 #include "StatsManager.h"
+
+#ifndef DISABLE_STATS
 #ifndef NATIVE_TEST
 #include <LittleFS.h>
 #include <ArduinoJson.h>
@@ -261,3 +263,4 @@ String StatsManager::getTodayKey() {
     char buffer[11]; strftime(buffer, sizeof(buffer), "%Y-%m-%d", &ti);
     return String(buffer);
 }
+#endif

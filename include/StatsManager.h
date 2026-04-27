@@ -10,6 +10,9 @@
 #include <ESPAsyncWebServer.h>
 #endif
 #include <map>
+
+#ifndef DISABLE_STATS
+
 #ifndef NATIVE_TEST
 #include <Preferences.h>
 #endif
@@ -52,5 +55,19 @@ public:
     static SemaphoreHandle_t _statsMutex;
 #endif
 };
+
+#else
+// Minimal stubs for when stats are disabled
+class StatsManager {
+public:
+    static void init() {}
+    static void startTask() {}
+    static void update(float, float, uint32_t) {}
+    static void save() {}
+    static constexpr float totalImportToday = 0;
+    static constexpr float totalRedirectToday = 0;
+    static constexpr float totalExportToday = 0;
+};
+#endif
 
 #endif

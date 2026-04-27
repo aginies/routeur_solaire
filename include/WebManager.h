@@ -7,22 +7,18 @@
 
 class WebManager {
 public:
-    static void init(Config& config);
+    static void init(const Config& config);
     static void loop();
-    static void broadcastLog(const String& log);
-
-private:
-    static void setupRoutes();
-    static void setupWebSockets();
     static String getStatusJson();
     static String getHistoryJson();
     static String templateProcessor(const String& var);
 
+private:
+    static void setupRoutes();
+
     static AsyncWebServer _server;
-    static AsyncWebSocket _ws;
-    static Config* _config;
-    static bool _initialized;
-    static volatile bool _rebootRequested;
+    static const Config* _config;
+    static bool _rebootRequested;
 };
 
 #endif

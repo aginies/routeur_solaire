@@ -51,7 +51,9 @@ void setup() {
     Logger::info("System Started: " + config.name);
     Logger::info("Last Reset Reason: " + Utils::getResetReason());
 
+#ifndef DISABLE_STATS
     StatsManager::init();
+#endif
     LedManager::init(config);
     LedManager::startTask();
 

@@ -1,70 +1,34 @@
 #include "WebManager.h"
-#include "SolarMonitor.h"
-#include "GridSensorService.h"
-#include "NetworkManager.h"
-#include "TemperatureManager.h"
-#include "SafetyManager.h"
-#include "ActuatorManager.h"
-#include "HistoryBuffer.h"
-#include "StatsManager.h"
-#include "MqttManager.h"
 #include "ConfigManager.h"
 #include "Logger.h"
+#include "NetworkManager.h"
+#include "MqttManager.h"
+#include "GridSensorService.h"
+#include "StatsManager.h"
+#include "ActuatorManager.h"
+#include "TemperatureManager.h"
+#include "SafetyManager.h"
+#include "HistoryBuffer.h"
 #include "Utils.h"
-#include <WiFi.h>
 #include <LittleFS.h>
 #include <Update.h>
+#include <ArduinoJson.h>
 
 AsyncWebServer WebManager::_server(80);
-AsyncWebSocket WebManager::_ws("/ws");
-Config* WebManager::_config = nullptr;
-bool WebManager::_initialized = false;
-volatile bool WebManager::_rebootRequested = false;
+const Config* WebManager::_config = nullptr;
+bool WebManager::_rebootRequested = false;
 
-void WebManager::init(Config& config) {
+void WebManager::init(const Config& config) {
     _config = &config;
-    setupWebSockets();
     setupRoutes();
     _server.begin();
-    _initialized = true;
     Logger::info("Web Server started");
 }
 
-void WebManager::setupWebSockets() {
-    _ws.onEvent([](AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
-        if (type == WS_EVT_CONNECT) {
-            Logger::info("WS Client connected");
-        } else if (type == WS_EVT_DISCONNECT) {
-            Logger::info("WS Client disconnected");
-        }
-    });
-    _server.addHandler(&_ws);
-}
-
 void WebManager::loop() {
-    if (_initialized) {
-        _ws.cleanupClients();
-        Logger::loop();
-
-        // Periodic broadcast (e.g., every 1s)
-        static uint32_t lastBroadcast = 0;
-        if (millis() - lastBroadcast >= 1000) {
-            lastBroadcast = millis();
-            if (_ws.count() > 0) {
-                _ws.textAll(getStatusJson());
-            }
-        }
-    }
     if (_rebootRequested) {
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        delay(1000);
         Utils::reboot();
-    }
-}
-
-void WebManager::broadcastLog(const String& log) {
-    if (_initialized) {
-        _ws.cleanupClients();
-        _ws.textAll(log);
     }
 }
 
@@ -85,7 +49,7 @@ String WebManager::templateProcessor(const String& var) {
 #endif
 
     if (var == "STATS_LINK") {
-#ifdef DISABLE_STATS_PAGE
+#ifdef DISABLE_STATS
         return "";
 #else
         return "<a href=\"/stats\" style=\"background:#f0c040; color:#1a1a2e; font-weight:bold;\">Statistiques</a>";
@@ -177,6 +141,12 @@ String WebManager::templateProcessor(const String& var) {
     if (var == "FAKE_SHELLY_YES") return _config->fake_shelly ? "selected" : "";
     if (var == "FAKE_SHELLY_NO") return !_config->fake_shelly ? "selected" : "";
 
+#ifdef DISABLE_STATS
+    if (var == "STATS_DISABLED_STYLE") return "display:none;";
+#else
+    if (var == "STATS_DISABLED_STYLE") return "";
+#endif
+
     return String();
 }
 
@@ -200,56 +170,26 @@ void WebManager::setupRoutes() {
         request->send(LittleFS, "/web_command.html", "text/html", false, templateProcessor);
     });
 
-    _server.on("/status", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
+    _server.on("/download_logs", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
-        request->send(200, "application/json", getStatusJson());
-    });
-
-    _server.on("/history", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
-        if (!authRequired(request)) return;
-        HistoryBuffer::streamHistoryJson(request);
-    });
-
-    _server.on("/boost", HTTP_POST, [authRequired](AsyncWebServerRequest *request) {
-        if (!authRequired(request)) return;
-        int minutes = -1;
-        if (request->hasParam("min")) minutes = request->getParam("min")->value().toInt();
-        ActuatorManager::startBoost(minutes);
-        request->redirect("/");
-    });
-
-    _server.on("/cancel_boost", HTTP_POST, [authRequired](AsyncWebServerRequest *request) {
-        if (!authRequired(request)) return;
-        ActuatorManager::cancelBoost();
-        request->redirect("/");
-    });
-
-    _server.on("/test_fan", HTTP_POST, [authRequired](AsyncWebServerRequest *request) {
-        if (!authRequired(request)) return;
-        if (request->hasParam("speed")) {
-            int speed = request->getParam("speed")->value().toInt();
-            bool success = ActuatorManager::setFanSpeed(speed, true);
-            request->send(200, "application/json", "{\"success\":" + String(success ? "true" : "false") + "}");
+        if (LittleFS.exists("/log.txt")) {
+            AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/log.txt", "text/plain");
+            response->addHeader("Content-Disposition", "attachment; filename=solar_log.txt");
+            request->send(response);
         } else {
-            request->send(400, "application/json", "{\"success\":false}");
+            request->send(404, "text/plain", "Log file not found");
         }
     });
 
-    _server.on("/RESET_device", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
+    _server.on("/download_data", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
-        request->send(200, "text/html", "<html><h1>Resetting...</h1></html>");
-        _rebootRequested = true;
-    });
-
-    _server.on("/get_log_action", HTTP_GET, [](AsyncWebServerRequest *request) {
-        request->send(200, "text/plain", Logger::getLogs());
-    });
-
-    _server.on("/download_logs", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
-        if (!authRequired(request)) return;
-        AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/log.txt", "text/plain", true);
-        response->addHeader("Content-Disposition", "attachment; filename=solar_log.txt");
-        request->send(response);
+        if (LittleFS.exists("/solar_data.txt")) {
+            AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/solar_data.txt", "text/plain");
+            response->addHeader("Content-Disposition", "attachment; filename=solar_data.txt");
+            request->send(response);
+        } else {
+            request->send(404, "text/plain", "Data file not found");
+        }
     });
 
     _server.on("/get_solar_data", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -258,7 +198,7 @@ void WebManager::setupRoutes() {
 
     _server.serveStatic("/chart.min.js", LittleFS, "/chart.min.js");
 
-#ifndef DISABLE_STATS_PAGE
+#ifndef DISABLE_STATS
     _server.serveStatic("/web_stats.html", LittleFS, "/web_stats.html");
     _server.on("/stats", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
@@ -267,92 +207,6 @@ void WebManager::setupRoutes() {
     _server.on("/get_stats", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
         StatsManager::streamStatsJson(request);
-    });
-#endif
-
-    _server.on("/web_config", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
-        if (!authRequired(request)) return;
-        request->send(LittleFS, "/web_config.html", "text/html", false, templateProcessor);
-    });
-
-    _server.on("/save_config", HTTP_POST, [authRequired](AsyncWebServerRequest *request) {
-        if (!authRequired(request)) return;
-        // Config saving logic remains identical... 
-        // (Truncated for brevity in this tool call, but implement fully in ActuatorManager update config)
-        // Actually I will keep the original implementation logic here.
-        
-        auto getParam = [&](const char* name) -> String {
-            return request->hasParam(name, true) ? request->getParam(name, true)->value() : String();
-        };
-        auto getBool = [&](const char* name) -> bool {
-            String v = getParam(name); v.toLowerCase();
-            return (v == "yes" || v == "1" || v == "true");
-        };
-        auto getInt = [&](const char* name, int def) -> int {
-            String v = getParam(name); return v.length() > 0 ? v.toInt() : def;
-        };
-        auto getFloat = [&](const char* name, float def) -> float {
-            String v = getParam(name); return v.length() > 0 ? v.toFloat() : def;
-        };
-
-        _config->name = getParam("NAME").length() > 0 ? getParam("NAME") : _config->name;
-        _config->timezone = getParam("TIMEZONE").length() > 0 ? getParam("TIMEZONE") : _config->timezone;
-        _config->cpu_freq = getInt("CPU_FREQ", _config->cpu_freq);
-        _config->e_wifi = getBool("E_WIFI");
-        _config->wifi_ssid = getParam("WIFI_SSID").length() > 0 ? getParam("WIFI_SSID") : _config->wifi_ssid;
-        _config->wifi_password = getParam("WIFI_PASSWORD").length() > 0 ? getParam("WIFI_PASSWORD") : _config->wifi_password;
-        _config->wifi_static_ip = getParam("WIFI_STATIC_IP");
-        _config->wifi_subnet = getParam("WIFI_SUBNET");
-        _config->wifi_gateway = getParam("WIFI_GATEWAY");
-        _config->wifi_dns = getParam("WIFI_DNS");
-        _config->shelly_em_ip = getParam("SHELLY_EM_IP").length() > 0 ? getParam("SHELLY_EM_IP") : _config->shelly_em_ip;
-        _config->e_shelly_mqtt = getBool("E_SHELLY_MQTT");
-        _config->shelly_mqtt_topic = getParam("SHELLY_MQTT_TOPIC").length() > 0 ? getParam("SHELLY_MQTT_TOPIC") : _config->shelly_mqtt_topic;
-        _config->poll_interval = getInt("POLL_INTERVAL", _config->poll_interval);
-        _config->fake_shelly = getBool("FAKE_SHELLY");
-        _config->e_mqtt = getBool("E_MQTT");
-        _config->mqtt_ip = getParam("MQTT_IP").length() > 0 ? getParam("MQTT_IP") : _config->mqtt_ip;
-        _config->mqtt_port = getInt("MQTT_PORT", _config->mqtt_port);
-        _config->mqtt_user = getParam("MQTT_USER");
-        _config->mqtt_password = getParam("MQTT_PASSWORD");
-        _config->mqtt_name = getParam("MQTT_NAME").length() > 0 ? getParam("MQTT_NAME") : _config->mqtt_name;
-        _config->equipment_name = getParam("EQUIPMENT_NAME").length() > 0 ? getParam("EQUIPMENT_NAME") : _config->equipment_name;
-        _config->equipment_max_power = getFloat("EQUIPMENT_MAX_POWER", _config->equipment_max_power);
-        _config->max_duty_percent = getFloat("MAX_DUTY_PERCENT", _config->max_duty_percent);
-        _config->export_setpoint = getFloat("EXPORT_SETPOINT", _config->export_setpoint);
-        _config->delta = getFloat("DELTA", _config->delta);
-        _config->deltaneg = getFloat("DELTANEG", _config->deltaneg);
-        _config->compensation = getFloat("COMPENSATION", _config->compensation);
-        _config->dynamic_threshold_w = getFloat("DYNAMIC_THRESHOLD_W", _config->dynamic_threshold_w);
-        _config->ds18b20_pin = getInt("DS18B20_PIN", _config->ds18b20_pin);
-        _config->e_ssr_temp = getBool("E_SSR_TEMP");
-        _config->ssr_max_temp = getFloat("SSR_MAX_TEMP", _config->ssr_max_temp);
-        _config->force_equipment = getBool("FORCE_EQUIPMENT");
-        _config->e_force_window = getBool("E_FORCE_WINDOW");
-        _config->force_start = getParam("FORCE_START");
-        _config->force_end = getParam("FORCE_END");
-        _config->night_start = getParam("NIGHT_START");
-        _config->night_end = getParam("NIGHT_END");
-        _config->night_poll_interval = getInt("NIGHT_POLL_INTERVAL", _config->night_poll_interval);
-        _config->e_jsy = getBool("E_JSY");
-        _config->jsy_uart_id = getInt("JSY_UART_ID", _config->jsy_uart_id);
-        _config->jsy_tx = getInt("JSY_TX", _config->jsy_tx);
-        _config->jsy_rx = getInt("JSY_RX", _config->jsy_rx);
-        _config->zx_pin = getInt("ZX_PIN", _config->zx_pin);
-        _config->control_mode = getParam("CONTROL_MODE").length() > 0 ? getParam("CONTROL_MODE") : _config->control_mode;
-        _config->e_fan = getBool("E_FAN");
-        _config->fan_pin = getInt("FAN_PIN", _config->fan_pin);
-        _config->fan_temp_offset = getInt("FAN_TEMP_OFFSET", _config->fan_temp_offset);
-        _config->internal_led_pin = getInt("I_LED_PIN", _config->internal_led_pin);
-        _config->ssr_pin = getInt("SSR_PIN", _config->ssr_pin);
-        _config->relay_pin = getInt("RELAY_PIN", _config->relay_pin);
-
-        if (ConfigManager::save(*_config)) {
-            request->send(200, "text/html", "<html><body><h1>Configuration saved</h1><p>Device will reboot...</p></body></html>");
-            _rebootRequested = true;
-        } else {
-            request->send(500, "text/plain", "Error saving config");
-        }
     });
 
     static File uploadFile;
@@ -371,55 +225,166 @@ void WebManager::setupRoutes() {
             if (final) uploadFile.close();
         }
     });
+#endif
 
-    _server.on("/update", HTTP_POST, [authRequired](AsyncWebServerRequest *request) {
+    _server.on("/web_config", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
+        request->send(LittleFS, "/web_config.html", "text/html", false, templateProcessor);
+    });
+
+    _server.on("/save_config", HTTP_POST, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
+        
+        auto getParam = [&](const char* name) -> String {
+            return request->hasParam(name, true) ? request->getParam(name, true)->value() : String();
+        };
+
+        Config newCfg = *_config;
+        newCfg.name = getParam("NAME");
+        newCfg.equipment_name = getParam("EQUIPMENT_NAME");
+        newCfg.timezone = getParam("TIMEZONE");
+        newCfg.cpu_freq = getParam("CPU_FREQ").toInt();
+        newCfg.wifi_ssid = getParam("WIFI_SSID");
+        newCfg.wifi_password = getParam("WIFI_PASSWORD");
+        newCfg.wifi_static_ip = getParam("WIFI_STATIC_IP");
+        newCfg.wifi_subnet = getParam("WIFI_SUBNET");
+        newCfg.wifi_gateway = getParam("WIFI_GATEWAY");
+        newCfg.wifi_dns = getParam("WIFI_DNS");
+        newCfg.e_wifi = (getParam("EXTERNAL_WIFI") == "True");
+        
+        newCfg.shelly_em_ip = getParam("SHELLY_EM_IP");
+        newCfg.e_shelly_mqtt = (getParam("SHELLY_MQTT") == "True");
+        newCfg.shelly_mqtt_topic = getParam("SHELLY_MQTT_TOPIC");
+        newCfg.poll_interval = getParam("POLL_INTERVAL").toInt();
+        
+        newCfg.mqtt_ip = getParam("MQTT_IP");
+        newCfg.mqtt_port = getParam("MQTT_PORT").toInt();
+        newCfg.mqtt_user = getParam("MQTT_USER");
+        newCfg.mqtt_password = getParam("MQTT_PASSWORD");
+        newCfg.mqtt_name = getParam("MQTT_NAME");
+        newCfg.e_mqtt = (getParam("MQTT") == "True");
+
+        newCfg.equipment_max_power = getParam("EQUIPMENT_MAX_POWER").toFloat();
+        newCfg.max_duty_percent = getParam("MAX_DUTY_PERCENT").toFloat();
+        newCfg.export_setpoint = getParam("EXPORT_SETPOINT").toFloat();
+        newCfg.delta = getParam("DELTA").toFloat();
+        newCfg.deltaneg = getParam("DELTANEG").toFloat();
+        newCfg.compensation = getParam("COMPENSATION").toFloat();
+        newCfg.dynamic_threshold_w = getParam("DYNAMIC_THRESHOLD_W").toFloat();
+
+        newCfg.ds18b20_pin = getParam("DS18B20_PIN").toInt();
+        newCfg.ssr_pin = getParam("SSR_PIN").toInt();
+        newCfg.relay_pin = getParam("RELAY_PIN").toInt();
+        newCfg.internal_led_pin = getParam("I_LED_PIN").toInt();
+        newCfg.fan_pin = getParam("FAN_PIN").toInt();
+        newCfg.fan_temp_offset = getParam("FAN_TEMP_OFFSET").toInt();
+        newCfg.e_fan = (getParam("FAN") == "True");
+        newCfg.e_ssr_temp = (getParam("SSR_TEMP") == "True");
+        newCfg.ssr_max_temp = getParam("SSR_MAX_TEMP").toFloat();
+
+        newCfg.force_equipment = (getParam("FORCE_EQUIPMENT") == "True");
+        newCfg.e_force_window = (getParam("FORCE_WINDOW") == "True");
+        newCfg.force_start = getParam("FORCE_START");
+        newCfg.force_end = getParam("FORCE_END");
+        
+        newCfg.night_start = getParam("NIGHT_START");
+        newCfg.night_end = getParam("NIGHT_END");
+        newCfg.night_poll_interval = getParam("NIGHT_POLL_INTERVAL").toInt();
+
+        newCfg.e_jsy = (getParam("JSY") == "True");
+        newCfg.jsy_uart_id = getParam("JSY_UART_ID").toInt();
+        newCfg.jsy_tx = getParam("JSY_TX").toInt();
+        newCfg.jsy_rx = getParam("JSY_RX").toInt();
+        newCfg.zx_pin = getParam("ZX_PIN").toInt();
+        newCfg.control_mode = getParam("CONTROL_MODE");
+
+        newCfg.fake_shelly = (getParam("FAKE_SHELLY") == "True");
+        newCfg.web_user = getParam("WEB_USER");
+        newCfg.web_password = getParam("WEB_PASSWORD");
+
+        if (ConfigManager::save(newCfg)) {
+            request->send(200, "text/plain", "Configuration sauvegardée. Redémarrage...");
+            _rebootRequested = true;
+        } else {
+            request->send(500, "text/plain", "Erreur lors de la sauvegarde");
+        }
+    });
+
+    _server.on("/update", HTTP_POST, [](AsyncWebServerRequest *request) {
         bool shouldReboot = !Update.hasError();
         AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", shouldReboot ? "OK" : "FAIL");
         response->addHeader("Connection", "close");
         request->send(response);
         if (shouldReboot) _rebootRequested = true;
-    }, [authRequired](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
-        if (!authRequired(request)) return;
+    }, [](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
         if (!index) {
             int command = (filename.indexOf("spiffs") > -1 || filename.indexOf("littlefs") > -1) ? U_SPIFFS : U_FLASH;
             Update.begin(UPDATE_SIZE_UNKNOWN, command);
         }
-        if (!Update.hasError()) Update.write(data, len);
+        if (len) Update.write(data, len);
         if (final) Update.end(true);
     });
 
-    _server.onNotFound([](AsyncWebServerRequest *request) {
-        if (WiFi.getMode() == WIFI_AP) request->redirect("http://" + WiFi.softAPIP().toString() + "/");
-        else request->send(404, "text/plain", "Not found");
+    _server.on("/RESET_device", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
+        request->send(200, "text/plain", "Redémarrage en cours...");
+        _rebootRequested = true;
+    });
+
+    _server.on("/test_fan", HTTP_POST, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
+        int speed = request->hasParam("speed") ? request->getParam("speed")->value().toInt() : 0;
+        ActuatorManager::setFanSpeed(speed, true);
+        request->send(200, "application/json", "{\"success\":true}");
+    });
+
+    _server.on("/boost", HTTP_POST, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
+        ActuatorManager::boostEndTime = millis() + (_config->boost_minutes * 60 * 1000);
+        Logger::info("Manual boost started for " + String(_config->boost_minutes) + " min");
+        request->redirect("/");
+    });
+
+    _server.on("/cancel_boost", HTTP_POST, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
+        ActuatorManager::boostEndTime = 0;
+        Logger::info("Manual boost cancelled");
+        request->redirect("/");
+    });
+
+    _server.on("/status", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(200, "application/json", getStatusJson());
+    });
+
+    _server.on("/history", HTTP_GET, [](AsyncWebServerRequest *request) {
+        HistoryBuffer::streamHistoryJson(request);
     });
 }
 
 String WebManager::getStatusJson() {
     JsonDocument doc;
     doc["grid_power"] = GridSensorService::currentGridPower;
-    doc["grid_voltage"] = GridSensorService::currentGridVoltage;
     doc["equipment_power"] = ActuatorManager::equipmentPower;
-    doc["equipment_active"] = ActuatorManager::equipmentActive;
-    doc["force_mode"] = (SafetyManager::currentState == SystemState::STATE_BOOST);
-    doc["boost_active"] = (millis() / 1000) < ActuatorManager::boostEndTime;
-    
-    // Map State Machine to UI legacy flags
-    doc["safe_state"] = (SafetyManager::currentState == SystemState::STATE_SAFE_TIMEOUT);
+    doc["boost_active"] = (SafetyManager::currentState == SystemState::STATE_BOOST);
+    doc["force_mode"] = _config->force_equipment;
     doc["emergency_mode"] = (SafetyManager::currentState == SystemState::STATE_EMERGENCY_FAULT);
     doc["emergency_reason"] = SafetyManager::emergencyReason;
     doc["ssr_temp"] = (TemperatureManager::currentSsrTemp > -100.0) ? (float)TemperatureManager::currentSsrTemp : JsonVariant();
     doc["fan_active"] = ActuatorManager::fanActive;
     doc["fan_percent"] = ActuatorManager::fanPercent;
+#ifndef DISABLE_STATS
     doc["total_import"] = StatsManager::totalImportToday;
     doc["total_redirect"] = StatsManager::totalRedirectToday;
     doc["total_export"] = StatsManager::totalExportToday;
+#endif
     doc["free_ram"] = Utils::getFreeHeap();
     doc["total_ram"] = Utils::getTotalHeap();
     doc["free_psram"] = Utils::getFreePsram();
     doc["total_psram"] = Utils::getTotalPsram();
     doc["uptime"] = millis() / 1000;
     doc["rssi"] = NetworkManager::getRSSI();
+    doc["version"] = String(FIRMWARE_VERSION);
+    doc["build_time"] = String(__DATE__) + " " + String(__TIME__);
 
     doc["esp_temp"] = TemperatureManager::lastEspTemp;
 
