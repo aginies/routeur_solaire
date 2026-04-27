@@ -71,10 +71,11 @@ void WebManager::broadcastLog(const String& log) {
 String WebManager::templateProcessor(const String& var) {
     if (!_config) return String();
 
+    // Logger::debug("Template request: " + var);
     if (var == "") return "%"; 
     if (var == "NAME") return _config->name;
     if (var == "EQUIPMENT_NAME") return _config->equipment_name;
-    if (var == "VERSION") return FIRMWARE_VERSION;
+    if (var == "VERSION") return String(FIRMWARE_VERSION);
     if (var == "BUILD_TIME") return String(__DATE__) + " " + String(__TIME__);
 
 #ifdef MAX_STATS_DAYS
