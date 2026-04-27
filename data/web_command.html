@@ -298,9 +298,11 @@
             </div>
         </div>
         <div class="card">
-            <div class="label"><span>Mode forcé</span></div>
+            <div class="label" style="flex-direction: row; align-items: center; justify-content: center; gap: 8px;">
+                <span>FORCE</span>
+                <span id="forceMode"><span class="badge badge-off">Inactif</span></span>
+            </div>
 
-            <div id="forceMode"><span class="badge badge-off">Inactif</span></div>
             <div style="margin-top: 12px;">
                 <form action="/boost" method="POST" style="display:flex; gap: 4px; justify-content: center;">
                     <select name="min" style="padding: 4px; background: #0d0d1a; color: #eee; border: 1px solid #444; border-radius: 4px; font-size: 0.8em;">

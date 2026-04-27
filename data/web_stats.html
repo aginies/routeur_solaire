@@ -360,6 +360,7 @@
             if (loader) loader.style.display = 'block';
             try {
                 const r = await fetch('/get_stats');
+                if (!r.ok) throw new Error('HTTP ' + r.status);
                 statsData = await r.json();
             } catch (e) {
                 console.error('Error loading stats:', e);
@@ -413,7 +414,7 @@
             const selectedDate = document.getElementById('statDate').value;
             const [selYear, selMonth] = selectedDate.split('-');
 
-            let labels = [], importData = [], redirectData = [], exportData = [];
+            let labels = [], importArr = [], redirectArr = [], exportArr = [];
             let totalActiveSecs = 0;
             let hasData = false;
 
@@ -424,15 +425,15 @@
                     // Always show 24 hours for daily view if we have hourly data
                     if (day.h_import && day.h_redirect) {
                         labels       = Array.from({length: 24}, (_, i) => `${i}h`);
-                        importData   = day.h_import.map(v => v / 1000);
-                        redirectData = day.h_redirect.map(v => v / 1000);
-                        exportData   = day.h_export ? day.h_export.map(v => v / 1000) : Array(24).fill(0);
+                        importArr   = day.h_import.map(v => v / 1000);
+                        redirectArr = day.h_redirect.map(v => v / 1000);
+                        exportArr   = day.h_export ? day.h_export.map(v => v / 1000) : Array(24).fill(0);
                     } else {
                         // Fallback for days without hourly breakdown
                         labels       = [selectedDate.split('-').reverse().join('/')];
-                        importData   = [day.import / 1000];
-                        redirectData = [day.redirect / 1000];
-                        exportData   = [(day.export || 0) / 1000];
+                        importArr   = [day.import / 1000];
+                        redirectArr = [day.redirect / 1000];
+                        exportArr   = [(day.export || 0) / 1000];
                     }
                     totalActiveSecs = day.active_time || 0;
                 }
@@ -445,12 +446,12 @@
                     labels.push(new Date(y, m - 1, d).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' }));
                     if (statsData[ds]) {
                         hasData = true;
-                        importData.push(statsData[ds].import / 1000);
-                        redirectData.push(statsData[ds].redirect / 1000);
-                        exportData.push((statsData[ds].export || 0) / 1000);
+                        importArr.push(statsData[ds].import / 1000);
+                        redirectArr.push(statsData[ds].redirect / 1000);
+                        exportArr.push((statsData[ds].export || 0) / 1000);
                         totalActiveSecs += (statsData[ds].active_time || 0);
                     } else {
-                        importData.push(0); redirectData.push(0); exportData.push(0);
+                        importArr.push(0); redirectArr.push(0); exportArr.push(0);
                     }
                 }
             } else if (currentView === 'month') {
@@ -458,9 +459,9 @@
                 const days = Object.keys(statsData).filter(d => d.startsWith(prefix)).sort();
                 hasData      = days.length > 0;
                 labels       = days.map(d => d.split('-')[2]);
-                importData   = days.map(d => statsData[d].import / 1000);
-                redirectData = days.map(d => statsData[d].redirect / 1000);
-                exportData   = days.map(d => (statsData[d].export || 0) / 1000);
+                importArr   = days.map(d => statsData[d].import / 1000);
+                redirectArr = days.map(d => statsData[d].redirect / 1000);
+                exportArr   = days.map(d => (statsData[d].export || 0) / 1000);
                 days.forEach(d => { totalActiveSecs += (statsData[d].active_time || 0); });
             } else if (currentView === 'year') {
                 const months = {};
@@ -475,17 +476,17 @@
                 });
                 hasData = Object.keys(months).length > 0;
                 const mKeys  = Object.keys(months).sort();
-                importData   = mKeys.map(m => months[m].i);
-                redirectData = mKeys.map(m => months[m].r);
-                exportData   = mKeys.map(m => months[m].e);
+                importArr   = mKeys.map(m => months[m].i);
+                redirectArr = mKeys.map(m => months[m].r);
+                exportArr   = mKeys.map(m => months[m].e);
                 mKeys.forEach(m => { totalActiveSecs += months[m].s; });
                 labels = mKeys.map(m => m.split('-').reverse().join('/'));
             }
 
             // Summary boxes
-            const tImp  = importData.reduce((a, b) => a + b, 0);
-            const tRed  = redirectData.reduce((a, b) => a + b, 0);
-            const tExp  = exportData.reduce((a, b) => a + b, 0);
+            const tImp  = importArr.reduce((a, b) => a + b, 0);
+            const tRed  = redirectArr.reduce((a, b) => a + b, 0);
+            const tExp  = exportArr.reduce((a, b) => a + b, 0);
             const rate  = (tExp + tRed) > 0 ? tRed / (tExp + tRed) * 100 : 0;
 
             document.getElementById('totalImport').textContent   = tImp.toFixed(2) + ' kWh';
@@ -538,9 +539,9 @@
                 data: {
                     labels: labels,
                     datasets: [
-                        { label: 'Réseau (Import) (kWh)', data: importData,   backgroundColor: gradImport,   borderColor: '#e74c3c', borderWidth: 1, borderRadius: 6 },
-                        { label: 'Solaire redirigé (kWh)', data: redirectData, backgroundColor: gradRedirect, borderColor: '#2ecc71', borderWidth: 1, borderRadius: 6 },
-                        { label: 'Injecté (Export) (kWh)', data: exportData,  backgroundColor: gradExport,   borderColor: '#f1c40f', borderWidth: 1, borderRadius: 6 }
+                        { label: 'Réseau (Import) (kWh)', data: importArr,   backgroundColor: gradImport,   borderColor: '#e74c3c', borderWidth: 1, borderRadius: 6 },
+                        { label: 'Solaire redirigé (kWh)', data: redirectArr, backgroundColor: gradRedirect, borderColor: '#2ecc71', borderWidth: 1, borderRadius: 6 },
+                        { label: 'Injecté (Export) (kWh)', data: exportArr,  backgroundColor: gradExport,   borderColor: '#f1c40f', borderWidth: 1, borderRadius: 6 }
                     ]
                 },
                 options: {

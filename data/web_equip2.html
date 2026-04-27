@@ -86,7 +86,8 @@
     </div>
 
     <script>
-        let currentSchedule = BigInt("%EQUIP2_SCHEDULE_RAW%" || "0");
+        let currentSchedule;
+        try { currentSchedule = BigInt("%EQUIP2_SCHEDULE_RAW%" || "0"); } catch(e) { currentSchedule = 0n; }
 
         function initGrid() {
             const grid = document.getElementById('scheduleGrid');
@@ -116,19 +117,24 @@
         }
 
         async function saveSchedule() {
-            const formData = new FormData();
-            formData.append('schedule', currentSchedule.toString());
-            const r = await fetch('/save_eq2_schedule', { method: 'POST', body: formData });
-            if (r.ok) alert('Planning sauvegardé');
-            else alert('Erreur lors de la sauvegarde');
+            try {
+                const formData = new FormData();
+                formData.append('schedule', currentSchedule.toString());
+                const r = await fetch('/save_eq2_schedule', { method: 'POST', body: formData });
+                if (r.ok) alert('Planning sauvegardé');
+                else alert('Erreur lors de la sauvegarde');
+            } catch(e) {
+                console.warn("saveSchedule error:", e);
+                alert('Erreur réseau lors de la sauvegarde');
+            }
         }
 
         async function updateStatus() {
             try {
                 const r = await fetch('/status_eq2');
                 const d = await r.json();
-                document.getElementById('eq2State').textContent = d.state;
-                document.getElementById('eq2Power').textContent = d.power + ' W';
+                document.getElementById('eq2State').textContent = d.state ?? '—';
+                document.getElementById('eq2Power').textContent = (d.power ?? '—') + ' W';
                 
                 const mt = document.getElementById('minTimeBox');
                 if (d.min_time > 0) {
@@ -139,7 +145,7 @@
                 } else {
                     mt.style.display = 'none';
                 }
-            } catch(e) {}
+            } catch(e) { console.warn("updateStatus (eq2) error:", e); }
         }
 
         initGrid();
