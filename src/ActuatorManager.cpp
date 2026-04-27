@@ -47,6 +47,8 @@ void ActuatorManager::closeRelay() {
 
 bool ActuatorManager::setFanSpeed(int percent, bool isTest) {
     if (!_config || !_config->e_fan) return false;
+    if (percent < 0) percent = 0;
+    if (percent > 100) percent = 100;
     if (percent == fanPercent && !isTest) return true;
 
     int duty = (percent * 4095) / 100;
@@ -61,6 +63,7 @@ bool ActuatorManager::setFanSpeed(int percent, bool isTest) {
 }
 
 void ActuatorManager::startBoost(int minutes) {
+    if (!_config) return;
     int duration = (minutes == -1) ? _config->boost_minutes : minutes;
     boostEndTime = (millis() / 1000) + (duration * 60);
     Logger::info("Solar Boost Started (" + String(duration) + " min)");

@@ -3,6 +3,7 @@
 #ifndef DISABLE_HISTORY
 #include "GridSensorService.h"
 #include "ActuatorManager.h"
+#include "Shelly1PMManager.h"
 #include "TemperatureManager.h"
 #include "Logger.h"
 #include <LittleFS.h>
@@ -49,9 +50,13 @@ void HistoryBuffer::save() {
         file.write((uint8_t*)&maxHistory, sizeof(int));
         file.write((uint8_t*)&historyWriteIdx, sizeof(int));
         file.write((uint8_t*)&historyCount, sizeof(int));
-        file.write((uint8_t*)powerHistory, sizeof(PowerPoint) * maxHistory);
+        // Write only the filled entries in chronological order to save flash space
+        for (int i = 0; i < historyCount; i++) {
+            int idx = (historyWriteIdx - historyCount + i + maxHistory) % maxHistory;
+            file.write((uint8_t*)&powerHistory[idx], sizeof(PowerPoint));
+        }
         file.close();
-        Logger::info("HistoryBuffer: State saved (" + String(sizeof(PowerPoint) * maxHistory) + " bytes)");
+        Logger::info("HistoryBuffer: State saved (" + String(sizeof(PowerPoint) * historyCount) + " bytes, " + String(historyCount) + " points)");
     }
     xSemaphoreGive(_dataMutex);
 }
@@ -67,10 +72,12 @@ void HistoryBuffer::load() {
             file.read((uint8_t*)&savedIdx, sizeof(int)) == sizeof(int) &&
             file.read((uint8_t*)&savedCount, sizeof(int)) == sizeof(int)) {
             
-            if (savedMax == maxHistory && savedCount >= 0 && savedCount <= maxHistory) {
-                file.read((uint8_t*)powerHistory, sizeof(PowerPoint) * maxHistory);
-                historyWriteIdx = savedIdx;
+            if (savedMax == maxHistory && savedCount >= 0 && savedCount <= maxHistory
+                && savedIdx >= 0 && savedIdx < maxHistory) {
+                // Records were saved in chronological order; read them back into the start of the buffer
+                file.read((uint8_t*)powerHistory, sizeof(PowerPoint) * savedCount);
                 historyCount = savedCount;
+                historyWriteIdx = savedCount % maxHistory;
                 Logger::info("HistoryBuffer: Restored " + String(historyCount) + " points");
             } else {
                 Logger::warn("HistoryBuffer: Saved state incompatible, ignoring");
@@ -95,6 +102,7 @@ void HistoryBuffer::historyTask(void* pvParameters) {
                 (uint32_t)now,
                 GridSensorService::currentGridPower,
                 ActuatorManager::equipmentPower,
+                Shelly1PMManager::getPower(),
                 TemperatureManager::currentSsrTemp,
                 ActuatorManager::fanActive
             };
@@ -120,6 +128,7 @@ String HistoryBuffer::getHistoryJson() {
             obj["t"] = p.t;
             obj["g"] = p.g;
             obj["e"] = p.e;
+            obj["e2"] = p.e2;
             obj["s"] = p.s;
             obj["f"] = p.f;
         }
@@ -144,6 +153,7 @@ void HistoryBuffer::streamHistoryJson(AsyncWebServerRequest *request) {
             obj["t"] = p.t;
             obj["g"] = p.g;
             obj["e"] = p.e;
+            obj["e2"] = p.e2;
             obj["s"] = p.s;
             obj["f"] = p.f;
         }

@@ -31,6 +31,9 @@ float DallasTemperature::mockTemp = 25.0f;
 
 void TemperatureManager::init(const Config& config) {
     _config = &config;
+    // Free previous instances before re-initializing
+    delete _sensors; _sensors = nullptr;
+    delete _oneWire;  _oneWire = nullptr;
     if (config.e_ssr_temp) {
         _oneWire = new OneWire(config.ds18b20_pin);
         _sensors = new DallasTemperature(_oneWire);

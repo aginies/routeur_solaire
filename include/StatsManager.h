@@ -31,7 +31,7 @@ class StatsManager {
 public:
     static void init();
     static void startTask();
-    static void update(float gridPower, float equipmentPower, uint32_t intervalMs);
+    static void update(float gridPower, float equipmentPower, uint32_t intervalMs, bool isNight);
     static void save();
 #ifndef NATIVE_TEST
     static void streamStatsJson(AsyncWebServerRequest *request);
@@ -44,7 +44,7 @@ public:
     private:
     static String getTodayKey();
     static void statsTask(void* pvParameters);
-    static bool _saveRequested;
+    static volatile bool _saveRequested;
 
     #ifdef NATIVE_TEST
 public:
@@ -62,7 +62,7 @@ class StatsManager {
 public:
     static void init() {}
     static void startTask() {}
-    static void update(float, float, uint32_t) {}
+    static void update(float, float, uint32_t, bool) {}
     static void save() {}
     static constexpr float totalImportToday = 0;
     static constexpr float totalRedirectToday = 0;

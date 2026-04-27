@@ -11,6 +11,7 @@ struct PowerPoint {
     uint32_t t;
     float g;
     float e;
+    float e2;
     float s;
     bool f;
 };

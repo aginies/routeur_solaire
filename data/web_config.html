@@ -246,7 +246,7 @@
 
             <!-- 2. PARTIE RÉGULATION -->
             <details>
-                <summary>Régulation</summary>
+                <summary>Régulation equipement(s)</summary>
                 <div class="section-content">
                     <h3>Paramètres Diverteur (Eq 1)</h3>
                     <div class="form-group">
@@ -285,7 +285,7 @@
 
                     <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
 
-                    <h3>Équipement 2 (PAC / Shelly 1PM)</h3>
+                    <h3>Équipement 2 (+Shelly 1PM)</h3>
                     <div class="form-group">
                         <label for="E_EQUIP2">Activer l'équipement 2:</label>
                         <select id="E_EQUIP2" name="E_EQUIP2">
@@ -299,7 +299,7 @@
                         <input type="text" id="EQUIP2_NAME" name="EQUIP2_NAME" value="%EQUIP2_NAME%">
                     </div>
                     <div class="form-group">
-                        <label for="EQUIP2_IP">IP du Shelly 1PM (Eq 2):</label>
+                        <label for="EQUIP2_IP">IP du Shelly 1PM (Gestion Marche/Arrêt Eq 2):</label>
                         <input type="text" id="EQUIP2_IP" name="EQUIP2_IP" value="%EQUIP2_IP%">
                     </div>
                     <div class="form-group">
@@ -309,8 +309,8 @@
                     <div class="form-group">
                         <label for="EQUIP2_PRIO">Priorité Eq 2:</label>
                         <select id="EQUIP2_PRIO" name="EQUIP2_PRIO">
-                            <option value="1" %EQUIP2_PRIO_1%>Ballon d'abord (Eq 1)</option>
-                            <option value="2" %EQUIP2_PRIO_2%>PAC d'abord (Eq 2)</option>
+                            <option value="1" %EQUIP2_PRIO_1%>Equipement 1 d'abord</option>
+                            <option value="2" %EQUIP2_PRIO_2%>Equipement 2 d'abord</option>
                         </select>
                     </div>
                     <div class="form-group">

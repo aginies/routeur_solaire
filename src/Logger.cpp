@@ -19,13 +19,17 @@ void Logger::init(const char* filename, size_t maxBytes) {
     _logFile = filename;
     _maxBytes = maxBytes;
     if (_mutex == nullptr) {
-        _mutex = xSemaphoreCreateMutex();
+        _mutex = xSemaphoreCreateRecursiveMutex();
     }
     _lastFlush = millis();
     
     if (!LittleFS.exists(_logFile)) {
         File file = LittleFS.open(_logFile, "w");
         if (file) { file.println("--- System Log Started ---"); file.close(); }
+    }
+    if (!LittleFS.exists(_dataFile)) {
+        File file = LittleFS.open(_dataFile, "w");
+        if (file) { file.println("--- Data Log Started ---"); file.close(); }
     }
 }
 
@@ -40,7 +44,7 @@ String Logger::levelToString(LogLevel level) {
 }
 
 void Logger::log(const String& message, LogLevel level, bool critical) {
-    if (_mutex == nullptr || xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+    if (_mutex == nullptr || xSemaphoreTakeRecursive(_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
         Serial.printf("[%s] %s\n", levelToString(level).c_str(), message.c_str());
         return;
     }
@@ -63,7 +67,7 @@ void Logger::log(const String& message, LogLevel level, bool critical) {
     }
     
     bool shouldFlush = (_logBuffer.size() >= 50);
-    xSemaphoreGive(_mutex);
+    xSemaphoreGiveRecursive(_mutex);
 
     if (critical || shouldFlush) {
         flushAll();
@@ -77,10 +81,10 @@ void Logger::error(const String& message, bool critical) { log(message, LOG_ERRO
 
 #ifndef DISABLE_DATA_LOG
 void Logger::logData(const String& message) {
-    if (_mutex == nullptr || xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) != pdTRUE) return;
+    if (_mutex == nullptr || xSemaphoreTakeRecursive(_mutex, pdMS_TO_TICKS(100)) != pdTRUE) return;
     _dataBuffer.push_back(message);
     bool shouldFlush = (_dataBuffer.size() >= 50);
-    xSemaphoreGive(_mutex);
+    xSemaphoreGiveRecursive(_mutex);
     if (shouldFlush) flushAll();
 }
 #endif
@@ -93,20 +97,25 @@ void Logger::loop() {
 }
 
 void Logger::flushAll() {
-    if (_mutex == nullptr || xSemaphoreTake(_mutex, pdMS_TO_TICKS(1000)) != pdTRUE) return;
+    if (_mutex == nullptr || xSemaphoreTakeRecursive(_mutex, pdMS_TO_TICKS(1000)) != pdTRUE) return;
     
     flushFile(_logFile, _logBuffer);
 #ifndef DISABLE_DATA_LOG
     flushFile(_dataFile, _dataBuffer);
 #endif
     
-    xSemaphoreGive(_mutex);
+    xSemaphoreGiveRecursive(_mutex);
 }
 
 void Logger::flushFile(const char* filename, std::vector<String>& buffer) {
     if (buffer.empty()) return;
 
     rotate(filename);
+
+    if (!LittleFS.exists(filename)) {
+        File f = LittleFS.open(filename, "w");
+        if (f) f.close();
+    }
 
     File file = LittleFS.open(filename, "a");
     if (!file) file = LittleFS.open(filename, "w");
@@ -141,13 +150,14 @@ void Logger::rotate(const char* filename) {
     if (LittleFS.exists(rotated2)) LittleFS.remove(rotated2);
     if (LittleFS.exists(rotated1)) LittleFS.rename(rotated1, rotated2);
     LittleFS.rename(base, rotated1);
-    Logger::info("Logger: Log file rotated (" + String(size) + " bytes)");
+    // Use Serial directly to avoid re-entering the mutex from within flushAll() -> rotate()
+    Serial.printf("[INFO] Logger: Log file rotated (%zu bytes)\n", size);
 }
 
 #ifndef NATIVE_TEST
 void Logger::streamLogs(AsyncWebServerRequest *request) {
     AsyncResponseStream *response = request->beginResponseStream("text/plain");
-    if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(500)) == pdTRUE) {
+    if (_mutex && xSemaphoreTakeRecursive(_mutex, pdMS_TO_TICKS(500)) == pdTRUE) {
         File file = LittleFS.open(_logFile, "r");
         if (file) {
             size_t size = file.size();
@@ -164,7 +174,7 @@ void Logger::streamLogs(AsyncWebServerRequest *request) {
             response->print(entry);
             response->print("\n");
         }
-        xSemaphoreGive(_mutex);
+        xSemaphoreGiveRecursive(_mutex);
     }
     request->send(response);
 }
@@ -172,7 +182,7 @@ void Logger::streamLogs(AsyncWebServerRequest *request) {
 #ifndef DISABLE_DATA_LOG
 void Logger::streamDataLogs(AsyncWebServerRequest *request) {
     AsyncResponseStream *response = request->beginResponseStream("text/plain");
-    if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(500)) == pdTRUE) {
+    if (_mutex && xSemaphoreTakeRecursive(_mutex, pdMS_TO_TICKS(500)) == pdTRUE) {
         File file = LittleFS.open(_dataFile, "r");
         if (file) {
             size_t size = file.size();
@@ -189,7 +199,7 @@ void Logger::streamDataLogs(AsyncWebServerRequest *request) {
             response->print(entry);
             response->print("\n");
         }
-        xSemaphoreGive(_mutex);
+        xSemaphoreGiveRecursive(_mutex);
     }
     request->send(response);
 }

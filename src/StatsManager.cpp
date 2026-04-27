@@ -23,7 +23,7 @@ uint32_t StatsManager::_lastSave = 0;
 float StatsManager::totalImportToday = 0;
 float StatsManager::totalRedirectToday = 0;
 float StatsManager::totalExportToday = 0;
-bool StatsManager::_saveRequested = false;
+volatile bool StatsManager::_saveRequested = false;
 #ifndef NATIVE_TEST
 SemaphoreHandle_t StatsManager::_statsMutex = nullptr;
 #endif
@@ -56,6 +56,7 @@ void StatsManager::init() {
     if (!LittleFS.exists("/stats.json")) {
         File file = LittleFS.open("/stats.json", "w");
         if (file) { file.print("{}"); file.close(); }
+        prefs.end();
         return;
     }
 
@@ -107,7 +108,7 @@ void StatsManager::init() {
 #endif
 }
 
-void StatsManager::update(float gridPower, float equipmentPower, uint32_t intervalMs) {
+void StatsManager::update(float gridPower, float equipmentPower, uint32_t intervalMs, bool isNight) {
     if (gridPower < -90000.0) return;
     
     time_t now_t; time(&now_t); struct tm ti; localtime_r(&now_t, &ti);
@@ -119,7 +120,19 @@ void StatsManager::update(float gridPower, float equipmentPower, uint32_t interv
 
     float energyImport = 0;
     float energyExport = 0;
-    float solarRedirPower = (gridPower > 0) ? ((equipmentPower > gridPower) ? (equipmentPower - gridPower) : 0) : equipmentPower;
+    
+    // Logic: 
+    // 1. If it's night, there's no solar surplus. Any power sent to equipment is NOT redirection.
+    // 2. If it's day (not night), redirection is:
+    //    - If exporting (grid < 0): full equipment power is considered redirected.
+    //    - If importing (grid > 0): only the part of equipment power that prevents more export is redirected.
+    //      (Basically: redir = equipmentPower - (gridPower > 0 ? gridPower : 0), but clamped to [0, equipmentPower])
+    
+    float solarRedirPower = 0;
+    if (!isNight) {
+        solarRedirPower = (gridPower > 0) ? ((equipmentPower > gridPower) ? (equipmentPower - gridPower) : 0) : equipmentPower;
+    }
+    
     float energyRedirect = solarRedirPower * intervalHours;
 
 #ifndef NATIVE_TEST

@@ -4,6 +4,8 @@
 #include "MqttManager.h"
 #include "Logger.h"
 
+static constexpr float SENSOR_ERROR_VALUE = -99999.0f;
+
 float GridSensorService::currentGridPower = 0.0;
 float GridSensorService::currentGridVoltage = 230.0;
 bool GridSensorService::hasFreshData = false;
@@ -32,13 +34,13 @@ bool GridSensorService::isJsyActive() {
 bool GridSensorService::fetchGridData() {
     if (!_config) return false;
     
-    float gridPower = -99999.0;
+    float gridPower = SENSOR_ERROR_VALUE;
     bool fresh = false;
 
     // JSY Priority (Fast wired method)
     if (_config->e_jsy) {
         gridPower = readJSY();
-        if (gridPower != -99999.0) {
+        if (gridPower != SENSOR_ERROR_VALUE) {
             fresh = true;
         }
     } 
@@ -60,7 +62,7 @@ bool GridSensorService::fetchGridData() {
         if (now - lastHttpPoll >= 1000) { 
             gridPower = getShellyPower();
             lastHttpPoll = now;
-            if (gridPower != -99999.0) {
+            if (gridPower != SENSOR_ERROR_VALUE) {
                 fresh = true;
             }
         }
@@ -76,7 +78,7 @@ bool GridSensorService::fetchGridData() {
 }
 
 float GridSensorService::readJSY() {
-    if (!_jsySerial) return -99999.0;
+    if (!_jsySerial) return SENSOR_ERROR_VALUE;
 
     // Modbus RTU Request for registers 0x0000 (Voltage, Current, Power, Energy...)
     // Address 01, Function 03, Start 0000, Count 0006
@@ -98,7 +100,7 @@ float GridSensorService::readJSY() {
         }
     }
 
-    if (idx < 19) return -99999.0;
+    if (idx < 19) return SENSOR_ERROR_VALUE;
     
     // Simple CRC check (optional but recommended)
     // uint16_t crc = calculateCRC(response, 17);
@@ -143,7 +145,7 @@ uint16_t GridSensorService::calculateCRC(uint8_t *array, uint8_t len) {
 }
 
 float GridSensorService::getShellyPower() {
-    if (!_config) return -99999.0;
+    if (!_config) return SENSOR_ERROR_VALUE;
     
     if (_config->fake_shelly) {
         static float phase = 0;
@@ -162,7 +164,7 @@ float GridSensorService::getShellyPower() {
     http.begin(_wifiClient, url);
     
     int httpCode = http.GET();
-    float power = -99999.0;
+    float power = SENSOR_ERROR_VALUE;
 
     if (httpCode == HTTP_CODE_OK) {
         String payload = http.getString();

@@ -66,9 +66,10 @@ String WebManager::templateProcessor(const String& var) {
 #endif
     }
 
+    if (var == "EQUIP2_URL") return "/web_equip2";
     if (var == "EQUIP2_LINK") {
         if (_config->e_equip2) {
-            return "<a href=\"/web_equip2\" style=\"background:#3498db; color:#fff; font-weight:bold;\">" + _config->equip2_name + "</a>";
+            return "<a href=\"/web_equip2\" style=\"background:#3498db; color:#fff; font-weight:bold;\">Planning Eq2</a>";
         }
         return "";
     }
@@ -170,6 +171,7 @@ String WebManager::templateProcessor(const String& var) {
     if (var == "EQUIP2_ENABLED_NO") return !_config->e_equip2 ? "selected" : "";
     if (var == "EQUIP2_PRIO_1") return _config->equip2_priority == 1 ? "selected" : "";
     if (var == "EQUIP2_PRIO_2") return _config->equip2_priority == 2 ? "selected" : "";
+    if (var == "E_EQUIP2_BOOL") return _config->e_equip2 ? "true" : "false";
     if (var == "EQUIP2_SCHEDULE_RAW") return String(_config->equip2_schedule);
 
 #ifdef DISABLE_STATS
@@ -215,6 +217,7 @@ void WebManager::setupRoutes() {
 
     _server.on("/download_logs", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
+        Logger::flushAll(); // Ensure all buffered entries are on disk before serving
         if (LittleFS.exists("/log.txt")) {
             AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/log.txt", "text/plain");
             response->addHeader("Content-Disposition", "attachment; filename=solar_log.txt");
@@ -226,6 +229,7 @@ void WebManager::setupRoutes() {
 
     _server.on("/download_data", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
+        Logger::flushAll(); // Ensure all buffered entries are on disk before serving
         if (LittleFS.exists("/solar_data.txt")) {
             AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/solar_data.txt", "text/plain");
             response->addHeader("Content-Disposition", "attachment; filename=solar_data.txt");
@@ -263,9 +267,19 @@ void WebManager::setupRoutes() {
         _rebootRequested = true;
     }, [authRequired](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
         if (!authRequired(request)) return;
+        static size_t uploadedBytes = 0;
+        static constexpr size_t MAX_STATS_UPLOAD_BYTES = 200 * 1024; // 200 KB hard limit
         if (!index) {
+            uploadedBytes = 0;
             Logger::info("Importation des stats : " + filename);
             uploadFile = LittleFS.open("/stats.json", "w");
+        }
+        uploadedBytes += len;
+        if (uploadedBytes > MAX_STATS_UPLOAD_BYTES) {
+            if (uploadFile) { uploadFile.close(); }
+            LittleFS.remove("/stats.json");
+            Logger::error("Stats upload rejected: file too large (" + String(uploadedBytes) + " bytes)");
+            return;
         }
         if (uploadFile) {
             if (len) uploadFile.write(data, len);
@@ -426,10 +440,13 @@ void WebManager::setupRoutes() {
     }, [](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
         if (!index) {
             int command = (filename.indexOf("spiffs") > -1 || filename.indexOf("littlefs") > -1) ? U_SPIFFS : U_FLASH;
-            Update.begin(UPDATE_SIZE_UNKNOWN, command);
+            if (!Update.begin(UPDATE_SIZE_UNKNOWN, command)) {
+                Logger::error("OTA begin failed: " + String(Update.errorString()));
+                return;
+            }
         }
-        if (len) Update.write(data, len);
-        if (final) Update.end(true);
+        if (Update.isRunning() && len) Update.write(data, len);
+        if (Update.isRunning() && final) Update.end(true);
     });
 
     _server.on("/RESET_device", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
@@ -447,7 +464,7 @@ void WebManager::setupRoutes() {
 
     _server.on("/boost", HTTP_POST, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
-        ActuatorManager::boostEndTime = millis() + (_config->boost_minutes * 60 * 1000);
+        ActuatorManager::startBoost(_config->boost_minutes);
         Logger::info("Manual boost started for " + String(_config->boost_minutes) + " min");
         request->redirect("/");
     });
@@ -472,6 +489,7 @@ String WebManager::getStatusJson() {
     JsonDocument doc;
     doc["grid_power"] = GridSensorService::currentGridPower;
     doc["equipment_power"] = ActuatorManager::equipmentPower;
+    doc["equip2_power"] = Shelly1PMManager::getPower();
     doc["boost_active"] = (SafetyManager::currentState == SystemState::STATE_BOOST);
     doc["force_mode"] = _config->force_equipment;
     doc["emergency_mode"] = (SafetyManager::currentState == SystemState::STATE_EMERGENCY_FAULT);
@@ -502,6 +520,8 @@ String WebManager::getStatusJson() {
     doc["mqtt_enabled"] = _config->e_mqtt;
     doc["mqtt_status"] = MqttManager::isConnected();
     doc["e_ssr_temp"] = _config->e_ssr_temp;
+    doc["e_equip2"] = _config->e_equip2;
+    doc["equip2_name"] = _config->equip2_name;
     doc["night_mode"] = SolarMonitor::isNight(Utils::getCurrentMinutes());
 
     time_t now; time(&now); struct tm ti; localtime_r(&now, &ti);

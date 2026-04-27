@@ -29,7 +29,8 @@ void SolarMonitor::init(const Config& config) {
     HistoryBuffer::init(config);
     Equipment2Manager::init(config);
 
-    // Initialize PID Controller
+    // Initialize PID Controller — delete previous instance if re-initializing
+    delete _ctrl;
     _ctrl = new IncrementalController(
         (int32_t)(config.delta * 1000.0f),
         (int32_t)(config.deltaneg * 1000.0f),
@@ -179,7 +180,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
 
         // 5. Stats & MQTT
 #ifndef DISABLE_STATS
-        StatsManager::update(GridSensorService::currentGridPower, ActuatorManager::equipmentPower, now - lastStatsUpdate);
+        StatsManager::update(GridSensorService::currentGridPower, ActuatorManager::equipmentPower, now - lastStatsUpdate, nightActive);
 #endif
         lastStatsUpdate = now;
 

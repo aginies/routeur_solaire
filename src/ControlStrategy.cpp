@@ -41,6 +41,7 @@ void IRAM_ATTR ControlStrategy::handleZxInterrupt() {
 }
 
 void ControlStrategy::burstControlTask(void* pvParameters) {
+    if (!_config) { vTaskDelete(NULL); return; }
     while (true) {
         float duty = ActuatorManager::currentDuty;
         float periodMs = _config->burst_period * 1000.0;
@@ -63,6 +64,7 @@ void ControlStrategy::burstControlTask(void* pvParameters) {
 }
 
 void ControlStrategy::cycleStealingTask(void* pvParameters) {
+    if (!_config) { vTaskDelete(NULL); return; }
     pinMode(_config->zx_pin, INPUT_PULLUP);
     int lastZx = digitalRead(_config->zx_pin);
     uint32_t lastZxTime = micros();
@@ -98,6 +100,7 @@ void ControlStrategy::cycleStealingTask(void* pvParameters) {
 }
 
 void ControlStrategy::trameControlTask(void* pvParameters) {
+    if (!_config) { vTaskDelete(NULL); return; }
     uint32_t localZxCount = 0;
     float accumulator = 0.0f;
     
@@ -142,6 +145,7 @@ void ControlStrategy::trameControlTask(void* pvParameters) {
 }
 
 void ControlStrategy::phaseControlTask(void* pvParameters) {
+    if (!_config) { vTaskDelete(NULL); return; }
     uint32_t localZxCount = 0;
     const uint32_t halfPeriodUs = 10000;
     

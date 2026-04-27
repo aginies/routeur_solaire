@@ -58,6 +58,7 @@ SystemState SafetyManager::evaluateState(float espTemp, float ssrTemp, uint32_t 
 }
 
 void SafetyManager::applyState(SystemState newState) {
+    if (!_config) return;
     if (newState != currentState) {
         logStateChange(currentState, newState);
         currentState = newState;

@@ -38,6 +38,9 @@
             text-align: center;
             margin-bottom: 24px;
             position: relative;
+            max-width: 1000px;
+            margin-left: auto;
+            margin-right: auto;
         }
         h1 { color: var(--accent-color); font-size: 1.6em; }
         #dateTime { font-size: 0.9em; color: var(--muted-text); margin-top: 4px; }
@@ -71,19 +74,19 @@
         .cards {
             display: flex;
             flex-wrap: wrap;
-            gap: 16px;
+            gap: 12px;
             justify-content: center;
             margin-bottom: 24px;
-            max-width: 800px;
+            max-width: 1000px;
             margin-left: auto;
             margin-right: auto;
         }
         .card {
             background: var(--card-bg);
             border-radius: 12px;
-            padding: 24px 16px;
-            flex: 1 1 180px;
-            min-width: 150px;
+            padding: 16px 12px;
+            flex: 1 1 160px;
+            min-width: 140px;
             text-align: center;
             box-shadow: 0 4px 12px rgba(0,0,0,0.2);
             border: 1px solid var(--border-color);
@@ -92,7 +95,7 @@
             background: var(--card-bg);
             border-radius: 12px;
             padding: 16px;
-            max-width: 800px;
+            max-width: 1000px;
             height: 360px;
             margin: 0 auto 24px auto;
             box-shadow: 0 4px 12px rgba(0,0,0,0.2);
@@ -132,7 +135,7 @@
 
         /* Collapsible Details Styles */
         details.collapsible-box {
-            max-width: 800px;
+            max-width: 1000px;
             margin: 0 auto 15px auto;
             background: var(--card-bg);
             border-radius: 8px;
@@ -184,7 +187,8 @@
             padding: 10px 16px;
             border-radius: 8px;
             text-align: center;
-            margin-bottom: 16px;
+            margin: 0 auto 16px auto;
+            max-width: 1000px;
             display: none;
         }
         .footer {
@@ -192,7 +196,8 @@
             flex-wrap: wrap;
             gap: 10px;
             justify-content: center;
-            margin-top: 24px;
+            margin: 24px auto 0 auto;
+            max-width: 1000px;
         }
         .footer a {
             background: #0f3460;
@@ -263,7 +268,7 @@
     </div>
 
     <div id="errorBox" class="error-box"></div>
-    <div id="nightBox" class="error-box" style="background: #2c3e50; border: 1px solid #34495e;">Pas de production possible (Mode Nuit) [<span id="nightTime">--:--</span>]</div>
+    <div id="nightBox" class="error-box" style="background: #2c3e50; border: 1px solid #34495e;">Pas de production solaire possible (Mode Nuit)</div>
 
     <div class="cards">
         <div class="card">
@@ -273,9 +278,17 @@
             </div>
             <div class="value" id="gridPower">—<span class="unit">W</span></div>
         </div>
-        <div class="card">
-            <div class="label"><span>%EQUIPMENT_NAME%</span></div>
-            <div class="value" id="equipmentPower">—<span class="unit">W</span></div>
+        <div class="card" style="flex: 1 1 180px;">
+            <!-- Équipement 1 -->
+            <div style="margin-bottom: 8px;">
+                <div class="label"><span>%EQUIPMENT_NAME%</span></div>
+                <div class="value" id="equipmentPower">—<span class="unit">W</span></div>
+            </div>
+            <!-- Équipement 2 -->
+            <div id="eq2Row" style="display: none; border-top: 1px solid var(--border-color); padding-top: 10px; margin-top: 4px;">
+                <div class="label"><a href="%EQUIP2_URL%" id="eq2Link" style="color: inherit; text-decoration: none;"><span id="eq2NameLabel">Équipement 2</span></a></div>
+                <div class="value" id="equip2Power">—<span class="unit">W</span></div>
+            </div>
         </div>
         <div class="card" id="ssrTempCard">
             <div class="label"><span>Temp SSR</span></div>
@@ -304,7 +317,7 @@
         </div>
     </div>
 
-    <div id="todaySummary" style="font-size: 0.75em; color: #666; text-align: center; margin-top: 15px; letter-spacing: 0.05em; opacity: 0.8;">
+    <div id="todaySummary" style="font-size: 1em; color: #666; text-align: center; margin: 15px auto 0 auto; letter-spacing: 0.10em; opacity: 0.8; max-width: 1000px;">
         Aujourd'hui : <span id="sumImport" style="color:#e74c3c">—</span> réseau | 
         <span id="sumRedirect" style="color:#2ecc71">—</span> redirigé | 
         <span id="sumExport" style="color:#f1c40f">—</span> injecté
@@ -353,7 +366,6 @@
 
     <div class="footer">
         <a href="/web_config">Configuration</a>
-	%EQUIP2_LINK%
         %STATS_LINK%
         <a href="/RESET_device" onclick="return confirm('Redémarrer le device ?')">Reset</a>
     </div>
@@ -406,6 +418,16 @@
                 const epEl = document.getElementById('equipmentPower');
                 if (epEl) epEl.innerHTML = num(d.equipment_power) + '<span class="unit">W</span>';
 
+                // Eq2
+                const eq2Row = document.getElementById('eq2Row');
+                if (eq2Row) {
+                    eq2Row.style.display = d.e_equip2 ? 'block' : 'none';
+                    const eq2PowerEl = document.getElementById('equip2Power');
+                    if (eq2PowerEl) eq2PowerEl.innerHTML = num(d.equip2_power) + '<span class="unit">W</span>';
+                    const nameLabel = document.getElementById('eq2NameLabel');
+                    if (nameLabel) nameLabel.textContent = d.equip2_name || 'Équipement 2';
+                }
+
                 // Force Mode & Boost
                 const fmEl = document.getElementById('forceMode');
                 if (fmEl) {
@@ -448,8 +470,6 @@
                 if (d.rtc_date && d.rtc_time) {
                     const dt = document.getElementById('dateTime');
                     if (dt) dt.textContent = d.rtc_date + ' ' + d.rtc_time;
-                    const nt = document.getElementById('nightTime');
-                    if (nt) nt.textContent = d.rtc_time;
                 }
 
                 const cc = document.getElementById('chartCard');
@@ -604,15 +624,12 @@
                 });
                 const gridData = history.map(p => p.g);
                 const equipmentData  = history.map(p => p.e);
+                const equip2Data = history.map(p => p.e2 || 0);
                 const ssrTempData = history.map(p => p.s <= -100 ? null : p.s);
 
                 if (!powerChart) {
                     const ctx = document.getElementById('powerChart').getContext('2d');
-                    powerChart = new Chart(ctx, {
-                        type: 'line',
-                        data: {
-                            labels: labels,
-                            datasets: [{
+                    const datasets = [{
                                 label: 'Réseau (W)',
                                 data: gridData,
                                 borderColor: '#ff9800',
@@ -630,7 +647,22 @@
                                 tension: 0.3,
                                 pointRadius: 0,
                                 yAxisID: 'y'
-                            }, {
+                            }];
+
+                    if ("%E_EQUIP2_BOOL%" === "true") {
+                        datasets.push({
+                            label: '%EQUIP2_NAME% (W)',
+                            data: equip2Data,
+                            borderColor: '#e74c3c',
+                            backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                            fill: true,
+                            tension: 0.3,
+                            pointRadius: 0,
+                            yAxisID: 'y'
+                        });
+                    }
+
+                    datasets.push({
                                 label: 'Temp SSR (°C)',
                                 data: ssrTempData,
                                 borderColor: '#3498db',
@@ -639,7 +671,13 @@
                                 tension: 0.3,
                                 pointRadius: 0,
                                 yAxisID: 'y1'
-                            }]
+                            });
+
+                    powerChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: datasets
                         },
                         options: {
                             responsive: true,
@@ -674,7 +712,18 @@
                     powerChart.data.labels = labels;
                     powerChart.data.datasets[0].data = gridData;
                     powerChart.data.datasets[1].data = equipmentData;
-                    powerChart.data.datasets[2].data = ssrTempData;
+                    
+                    let ssrIdx = 2;
+                    if ("%E_EQUIP2_BOOL%" === "true") {
+                        if (powerChart.data.datasets.length >= 3) {
+                            powerChart.data.datasets[2].data = equip2Data;
+                            ssrIdx = 3;
+                        }
+                    }
+                    
+                    if (powerChart.data.datasets[ssrIdx]) {
+                        powerChart.data.datasets[ssrIdx].data = ssrTempData;
+                    }
                     powerChart.update('none');
                 }
             } catch(e) {}
