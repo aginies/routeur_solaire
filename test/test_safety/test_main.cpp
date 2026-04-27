@@ -109,11 +109,34 @@ void test_normal_state(void) {
     TEST_ASSERT_EQUAL_INT((int)SystemState::STATE_NORMAL, (int)state);
 }
 
+void test_ssr_hysteresis(void) {
+    Config cfg;
+    cfg.max_esp32_temp = 80.0f;
+    cfg.e_ssr_temp = true;
+    cfg.ssr_max_temp = 65.0f;
+    SafetyManager::init(cfg);
+    
+    // 1. Trigger Overheat
+    SystemState state = SafetyManager::evaluateState(40.0f, 66.0f, millis(), false, false, false);
+    TEST_ASSERT_EQUAL_INT((int)SystemState::STATE_EMERGENCY_FAULT, (int)state);
+    SafetyManager::applyState(state);
+    
+    // 2. Cooling down but still in hysteresis zone (66 -> 62)
+    // Threshold is 65, but hysteresis says must go below 65-5=60 to recover.
+    state = SafetyManager::evaluateState(40.0f, 62.0f, millis(), false, false, false);
+    TEST_ASSERT_EQUAL_INT((int)SystemState::STATE_EMERGENCY_FAULT, (int)state);
+    
+    // 3. Cooling down below hysteresis (62 -> 59)
+    state = SafetyManager::evaluateState(40.0f, 59.0f, millis(), false, false, false);
+    TEST_ASSERT_EQUAL_INT((int)SystemState::STATE_NORMAL, (int)state);
+}
+
 int main(int argc, char **argv) {
     UNITY_BEGIN();
     RUN_TEST(test_priority_overheat_vs_boost);
     RUN_TEST(test_priority_timeout_vs_night);
     RUN_TEST(test_priority_boost_vs_night);
     RUN_TEST(test_normal_state);
+    RUN_TEST(test_ssr_hysteresis);
     return UNITY_END();
 }

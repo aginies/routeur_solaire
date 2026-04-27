@@ -444,8 +444,14 @@
                 nightMode = !!d.night_mode;
                 const nb = document.getElementById('nightBox');
                 if (nb) nb.style.display = nightMode ? 'block' : 'none';
-                const nt = document.getElementById('nightTime');
-                if (nt && d.rtc_time) nt.textContent = d.rtc_time;
+                
+                if (d.rtc_date && d.rtc_time) {
+                    const dt = document.getElementById('dateTime');
+                    if (dt) dt.textContent = d.rtc_date + ' ' + d.rtc_time;
+                    const nt = document.getElementById('nightTime');
+                    if (nt) nt.textContent = d.rtc_time;
+                }
+
                 const cc = document.getElementById('chartCard');
 
                 // Safe State
@@ -660,10 +666,9 @@
         updateStatus(); // Initial call starts the interval chain
         updateLog();
         updateChart();
-        updateDateTime();
+        updateDateTime(); // Initial fallback
         setInterval(updateLog, 15000); // Slower logs in web UI
         setInterval(() => { if(!nightMode) updateChart(); }, 30000); // Slower chart in web UI
-        setInterval(updateDateTime, 5000);
     </script>
 </body>
 </html>
