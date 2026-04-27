@@ -93,6 +93,7 @@
             border-radius: 12px;
             padding: 16px;
             max-width: 800px;
+            height: 360px;
             margin: 0 auto 24px auto;
             box-shadow: 0 4px 12px rgba(0,0,0,0.2);
             border: 1px solid var(--border-color);
@@ -555,6 +556,7 @@
             powerChart.options.scales.x.ticks.color = textColor;
             powerChart.options.scales.x.grid.color = gridColor;
             powerChart.options.scales.y.ticks.color = textColor;
+            powerChart.options.scales.y1.ticks.color = '#3498db'; // Keep temperature axis blue
             powerChart.options.plugins.legend.labels.color = textColor;
             powerChart.update();
         }
@@ -647,8 +649,23 @@
                             },
                             scales: {
                                 x: { ticks: { color: '#999', maxRotation: 0, autoSkip: true, maxTicksLimit: 12 }, grid: { color: '#333' } },
-                                y: { type: 'linear', display: true, position: 'left', ticks: { color: '#999' }, grid: { color: '#333' } },
-                                y1: { type: 'linear', display: true, position: 'right', ticks: { color: '#3498db' }, grid: { drawOnChartArea: false } }
+                                y: { 
+                                    type: 'linear', 
+                                    display: true, 
+                                    position: 'left', 
+                                    ticks: { color: '#999' }, 
+                                    grid: { color: '#333' },
+                                    grace: '10%'
+                                },
+                                y1: { 
+                                    type: 'linear', 
+                                    display: true, 
+                                    position: 'right', 
+                                    ticks: { color: '#3498db' }, 
+                                    grid: { drawOnChartArea: false },
+                                    min: 0,
+                                    grace: 5
+                                }
                             }
                         }
                     });
