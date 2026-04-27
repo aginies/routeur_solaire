@@ -309,17 +309,17 @@
         <span id="sumExport" style="color:#f1c40f">—</span> injecté
     </div>
 
-    <div id="chartCard" class="chart-card" style="display: none;">
+    <div id="chartCard" class="chart-card" style="display: none; %HISTORY_DISABLED_STYLE%">
         <canvas id="powerChart"></canvas>
     </div>
 
     <div id="safeStateBox" class="error-box"></div>
-    
+
     <details class="collapsible-box" id="logDetails">
         <summary>Journaux</summary>
         <div class="tab-container">
             <button id="tabSys" class="tab-btn active" onclick="setLogMode('sys')">Système</button>
-            <button id="tabData" class="tab-btn" onclick="setLogMode('data')" style="%STATS_DISABLED_STYLE%">Données (1m)</button>
+            <button id="tabData" class="tab-btn" onclick="setLogMode('data')" style="%DATA_LOG_DISABLED_STYLE%">Données (1m)</button>
         </div>
         <div class="log-box" id="logBox">Chargement...</div>
     </details>
