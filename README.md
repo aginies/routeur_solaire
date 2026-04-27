@@ -65,6 +65,18 @@ The system can be fully configured via the web interface. Below is a detailed br
     - **DS18B20 Sonde**: Heatsink temperature monitoring with a safety cutoff.
 - **System**: Adjustable CPU frequency and GPIO pin remapping.
 
+## Power Redirection Logic
+
+The core of the system is an **Incremental Controller** that continuously adjusts the power sent to the equipment (load) based on the grid power balance.
+
+### Incremental Algorithm
+The system targets a balance point between `Delta` (max import tolerated) and `Deltaneg` (max export tolerated).
+1.  **Importing Power**: If grid consumption exceeds `Delta`, the controller reduces the load's duty cycle proportional to the excess power and the `Compensation` factor.
+2.  **Exporting Surplus**: If the system detects power being injected into the grid (below `Deltaneg`), it increases the duty cycle to consume that surplus.
+3.  **Stability (Slow Start)**: To prevent rapid oscillations and "flicker," the increase in power is capped at **20% per cycle**, allowing the system to stabilize smoothly as production changes.
+
+The resulting **Duty Cycle (0-100%)** is then translated into physical pulses by the selected regulation mode (Trame, Burst, or Phase).
+
 ## Getting Started
 
 1.  **Installation**: Install [PlatformIO](https://platformio.org/).
