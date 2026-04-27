@@ -316,13 +316,10 @@
     <div id="safeStateBox" class="error-box"></div>
     
     <details class="collapsible-box" id="logDetails">
-        <summary>Journaux (Logs)</summary>
-        <div class="tab-container" style="display:flex; justify-content: space-between; align-items: center;">
-            <div>
-                <button id="tabSys" class="tab-btn active" onclick="setLogMode('sys')">Système</button>
-                <button id="tabData" class="tab-btn" onclick="setLogMode('data')">Données (1m)</button>
-            </div>
-            <a href="/download_logs" style="color:var(--primary-color); font-size:0.8em; text-decoration:none;">📥 Télécharger log.txt</a>
+        <summary>Journaux</summary>
+        <div class="tab-container">
+            <button id="tabSys" class="tab-btn active" onclick="setLogMode('sys')">Système</button>
+            <button id="tabData" class="tab-btn" onclick="setLogMode('data')" style="%STATS_DISABLED_STYLE%">Données (1m)</button>
         </div>
         <div class="log-box" id="logBox">Chargement...</div>
     </details>
