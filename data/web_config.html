@@ -248,7 +248,17 @@
             <details>
                 <summary>Régulation & Modes</summary>
                 <div class="section-content">
-                    <h3>Paramètres Diverteur</h3>
+                    <h3>Équipement 2 (PAC / Piscine)</h3>
+                    <div class="form-group">
+                        <label for="E_EQUIP2">Activer l'équipement 2:</label>
+                        <select id="E_EQUIP2" name="E_EQUIP2">
+                            <option value="True"  %EQUIP2_ENABLED_YES%>Oui (Activer la gestion du second équipement)</option>
+                            <option value="False" %EQUIP2_ENABLED_NO%>Non (Désactiver complètement)</option>
+                        </select>
+                        %EQUIP2_LINK%
+                    </div>
+                    <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
+                    <h3>Paramètres Diverteur (Eq 1)</h3>
                     <div class="form-group">
                         <label for="EQUIPMENT_NAME">Nom de l'équipement:</label>
                         <input type="text" id="EQUIPMENT_NAME" name="EQUIPMENT_NAME" value="%EQUIPMENT_NAME%">
@@ -400,6 +410,10 @@
                         </select>
                     </div>
                     <div class="form-group">
+                        <label for="DS18B20_PIN">GPIO Pin Sonde DS18B20:</label>
+                        <input type="number" id="DS18B20_PIN" name="DS18B20_PIN" value="%DS18B20_PIN%">
+                    </div>
+                    <div class="form-group">
                         <label for="SSR_MAX_TEMP">Température max sécurité SSR (°C):</label>
                         <input type="number" step="0.5" id="SSR_MAX_TEMP" name="SSR_MAX_TEMP" value="%SSR_MAX_TEMP%">
                     </div>
@@ -433,7 +447,7 @@
 
             <!-- 4. PARTIE EXPÉRIMENTALE -->
             <details>
-                <summary>🛠 Expérimental</summary>
+                <summary>🛠 Expérimental & Sécurité</summary>
                 <div class="section-content">
                     <div class="form-group">
                         <label for="FAKE_SHELLY">Activer FAKE_SHELLY (Mode simulation):</label>
@@ -441,6 +455,16 @@
                             <option value="True"  %FAKE_SHELLY_YES%>True</option>
                             <option value="False" %FAKE_SHELLY_NO%>False</option>
                         </select>
+                    </div>
+                    <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
+                    <h3>Sécurité Web (Admin)</h3>
+                    <div class="form-group">
+                        <label for="WEB_USER">Utilisateur Web (laisser vide pour aucun):</label>
+                        <input type="text" id="WEB_USER" name="WEB_USER" value="%WEB_USER%">
+                    </div>
+                    <div class="form-group">
+                        <label for="WEB_PASSWORD">Mot de passe Web:</label>
+                        <input type="password" id="WEB_PASSWORD" name="WEB_PASSWORD" value="%WEB_PASSWORD%">
                     </div>
                 </div>
             </details>

@@ -9,6 +9,8 @@
 #include "TemperatureManager.h"
 #include "SafetyManager.h"
 #include "HistoryBuffer.h"
+#include "Equipment2Manager.h"
+#include "Shelly1PMManager.h"
 #include "Utils.h"
 #include <LittleFS.h>
 #include <Update.h>
@@ -62,6 +64,13 @@ String WebManager::templateProcessor(const String& var) {
 #else
         return "<a href=\"/stats\" style=\"background:#f0c040; color:#1a1a2e; font-weight:bold;\">Statistiques</a>";
 #endif
+    }
+
+    if (var == "EQUIP2_LINK") {
+        if (_config->e_equip2) {
+            return "<a href=\"/web_equip2\" style=\"background:#3498db; color:#fff; font-weight:bold;\">" + _config->equip2_name + "</a>";
+        }
+        return "";
     }
 
     if (var == "TZ_PARIS") return (_config->timezone == "CET-1CEST,M3.5.0,M10.5.0/3") ? "selected" : "";
@@ -148,6 +157,20 @@ String WebManager::templateProcessor(const String& var) {
 
     if (var == "FAKE_SHELLY_YES") return _config->fake_shelly ? "selected" : "";
     if (var == "FAKE_SHELLY_NO") return !_config->fake_shelly ? "selected" : "";
+
+    if (var == "WEB_USER") return _config->web_user;
+    if (var == "WEB_PASSWORD") return _config->web_password;
+
+    // Equipment 2 tokens
+    if (var == "EQUIP2_NAME") return _config->equip2_name;
+    if (var == "EQUIP2_IP") return _config->equip2_shelly_ip;
+    if (var == "EQUIP2_POWER") return String(_config->equip2_max_power);
+    if (var == "EQUIP2_MIN_TIME") return String(_config->equip2_min_on_time);
+    if (var == "EQUIP2_ENABLED_YES") return _config->e_equip2 ? "selected" : "";
+    if (var == "EQUIP2_ENABLED_NO") return !_config->e_equip2 ? "selected" : "";
+    if (var == "EQUIP2_PRIO_1") return _config->equip2_priority == 1 ? "selected" : "";
+    if (var == "EQUIP2_PRIO_2") return _config->equip2_priority == 2 ? "selected" : "";
+    if (var == "EQUIP2_SCHEDULE_RAW") return String(_config->equip2_schedule);
 
 #ifdef DISABLE_STATS
     if (var == "STATS_DISABLED_STYLE") return "display:none;";
@@ -256,6 +279,60 @@ void WebManager::setupRoutes() {
         request->send(LittleFS, "/web_config.html", "text/html", false, templateProcessor);
     });
 
+    _server.on("/web_equip2", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
+        request->send(LittleFS, "/web_equip2.html", "text/html", false, templateProcessor);
+    });
+
+    _server.on("/save_config_eq2", HTTP_POST, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
+        
+        auto getParam = [&](const char* name) -> String {
+            return request->hasParam(name, true) ? request->getParam(name, true)->value() : String();
+        };
+
+        Config newCfg = *_config;
+        newCfg.e_equip2 = (getParam("E_EQUIP2") == "True");
+        newCfg.equip2_name = getParam("EQUIP2_NAME");
+        newCfg.equip2_shelly_ip = getParam("EQUIP2_IP");
+        newCfg.equip2_max_power = getParam("EQUIP2_POWER").toFloat();
+        newCfg.equip2_min_on_time = getParam("EQUIP2_MIN_TIME").toInt();
+        newCfg.equip2_priority = getParam("EQUIP2_PRIO").toInt();
+        
+        if (ConfigManager::save(newCfg)) {
+            request->send(200, "text/plain", "OK");
+            _rebootRequested = true;
+        } else request->send(500);
+    });
+    _server.on("/save_eq2_schedule", HTTP_POST, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
+        Config newCfg = *_config;
+        if (request->hasParam("schedule", true)) {
+            String schedStr = request->getParam("schedule", true)->value();
+            if (schedStr.length() == 0) schedStr = "0";
+            newCfg.equip2_schedule = strtoull(schedStr.c_str(), NULL, 10);
+            if (ConfigManager::save(newCfg)) request->send(200);
+            else request->send(500);
+        } else {
+            request->send(400, "text/plain", "Missing schedule parameter");
+        }
+    });
+
+    _server.on("/status_eq2", HTTP_GET, [](AsyncWebServerRequest *request) {
+        JsonDocument doc;
+        Eq2State s = Equipment2Manager::getState();
+        String stateStr = "OFF";
+        if (s == Eq2State::ON) stateStr = "MARCHE";
+        else if (s == Eq2State::PENDING_OFF) stateStr = "ARRÊT IMMINENT";
+        doc["state"] = stateStr;
+        doc["power"] = Shelly1PMManager::getPower();
+        doc["min_time"] = Equipment2Manager::getRemainingMinTime();
+        String out;
+        serializeJson(doc, out);
+        request->send(200, "application/json", out);
+    });
+
+
     _server.on("/save_config", HTTP_POST, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
         
@@ -275,6 +352,7 @@ void WebManager::setupRoutes() {
         newCfg.wifi_gateway = getParam("WIFI_GATEWAY");
         newCfg.wifi_dns = getParam("WIFI_DNS");
         newCfg.e_wifi = (getParam("E_WIFI") == "True");
+        newCfg.e_equip2 = (getParam("E_EQUIP2") == "True");
         
         newCfg.shelly_em_ip = getParam("SHELLY_EM_IP");
         newCfg.e_shelly_mqtt = (getParam("E_SHELLY_MQTT") == "True");

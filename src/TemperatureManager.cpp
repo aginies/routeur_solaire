@@ -38,6 +38,7 @@ void TemperatureManager::init(const Config& config) {
         int count = _sensors->getDeviceCount();
         _sensors->setWaitForConversion(false);
         _sensors->requestTemperatures();
+        delay(800); // Wait for first conversion (750ms for 12-bit)
         Logger::info("DS18B20 initialized on pin " + String(config.ds18b20_pin) + ", found " + String(count) + " sensors");
     }
 }
@@ -47,7 +48,6 @@ void TemperatureManager::startTask() {
     xTaskCreate(tempTask, "tempTask", 4096, NULL, 1, NULL);
 #endif
 }
-
 void TemperatureManager::readTemperatures() {
     if (!_sensors || !_config) return;
 
@@ -61,16 +61,19 @@ void TemperatureManager::readTemperatures() {
             ssrFaultCount = 0; // Reset counter on success
         } else {
             ssrFaultCount++;
-            // Only mark as hard fault after 3 consecutive failures (approx 15 seconds)
-            if (ssrFaultCount >= 3) {
+            // Only mark as hard fault after 10 consecutive failures (approx 50 seconds)
+            if (ssrFaultCount >= 10) {
                 currentSsrTemp = -999.0;
             }
             Logger::debug("DS18B20 reading failed (count: " + String(ssrFaultCount) + ")");
         }
-    }
-    _sensors->requestTemperatures();
-}
 
+        // Request next reading immediately so it's ready for the next call
+        _sensors->requestTemperatures();
+    } else {
+        currentSsrTemp = -999.0;
+    }
+}
 void TemperatureManager::tempTask(void* pvParameters) {
 #ifndef NATIVE_TEST
     esp_task_wdt_add(NULL);

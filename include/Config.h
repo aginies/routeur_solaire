@@ -84,6 +84,15 @@ struct Config {
     float equipment_max_power = 2300.0;
     float export_setpoint = 0.0;
 
+    // Equipment 2 (PAC / Shelly 1PM)
+    bool e_equip2 = false;
+    String equip2_name = "Piscine";
+    String equip2_shelly_ip = "";
+    float equip2_max_power = 1900.0;
+    int equip2_priority = 1; // 1 = Water Heater first, 2 = PAC first
+    int equip2_min_on_time = 15; // Minutes
+    uint64_t equip2_schedule = 0; // 48 bits for 30min slots
+
     // Incremental Controller (pv-router algorithm)
     float delta = 50.0;          // upper threshold (W) — above this, importing too much
     float deltaneg = 0.0;        // lower threshold (W) — below this, exporting surplus

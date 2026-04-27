@@ -88,6 +88,15 @@ Config ConfigManager::load() {
     if (doc.containsKey("equipment_max_power")) config.equipment_max_power = doc["equipment_max_power"];
     if (doc.containsKey("export_setpoint")) config.export_setpoint = doc["export_setpoint"];
 
+    // Equipment 2
+    if (doc.containsKey("e_equip2")) config.e_equip2 = doc["e_equip2"];
+    if (doc.containsKey("equip2_name")) config.equip2_name = doc["equip2_name"].as<String>();
+    if (doc.containsKey("equip2_shelly_ip")) config.equip2_shelly_ip = doc["equip2_shelly_ip"].as<String>();
+    if (doc.containsKey("equip2_max_power")) config.equip2_max_power = doc["equip2_max_power"];
+    if (doc.containsKey("equip2_priority")) config.equip2_priority = doc["equip2_priority"];
+    if (doc.containsKey("equip2_min_on_time")) config.equip2_min_on_time = doc["equip2_min_on_time"];
+    if (doc.containsKey("equip2_schedule")) config.equip2_schedule = doc["equip2_schedule"];
+
     // Incremental Controller
     if (doc.containsKey("delta")) config.delta = doc["delta"];
     if (doc.containsKey("deltaneg")) config.deltaneg = doc["deltaneg"];
@@ -184,6 +193,16 @@ bool ConfigManager::save(const Config& config) {
     doc["equipment_name"] = config.equipment_name;
     doc["equipment_max_power"] = config.equipment_max_power;
     doc["export_setpoint"] = config.export_setpoint;
+
+    // Equipment 2
+    doc["e_equip2"] = config.e_equip2;
+    doc["equip2_name"] = config.equip2_name;
+    doc["equip2_shelly_ip"] = config.equip2_shelly_ip;
+    doc["equip2_max_power"] = config.equip2_max_power;
+    doc["equip2_priority"] = config.equip2_priority;
+    doc["equip2_min_on_time"] = config.equip2_min_on_time;
+    doc["equip2_schedule"] = config.equip2_schedule;
+
     doc["delta"] = config.delta;
     doc["deltaneg"] = config.deltaneg;
     doc["compensation"] = config.compensation;

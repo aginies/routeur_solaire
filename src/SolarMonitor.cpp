@@ -7,6 +7,8 @@
 #include "HistoryBuffer.h"
 #include "MqttManager.h"
 #include "StatsManager.h"
+#include "Equipment2Manager.h"
+#include "Shelly1PMManager.h"
 #include "Logger.h"
 #include "Utils.h"
 #include <esp_task_wdt.h>
@@ -25,6 +27,7 @@ void SolarMonitor::init(const Config& config) {
     ActuatorManager::init(config);
     ControlStrategy::init(config);
     HistoryBuffer::init(config);
+    Equipment2Manager::init(config);
 
     // Initialize PID Controller
     _ctrl = new IncrementalController(
@@ -44,7 +47,9 @@ void SolarMonitor::startTasks() {
     // Sub-service tasks
     TemperatureManager::startTask();
     ControlStrategy::startTasks();
+#ifndef DISABLE_HISTORY
     HistoryBuffer::startTask();
+#endif
 }
 
 void SolarMonitor::monitorTask(void* pvParameters) {
@@ -106,7 +111,34 @@ void SolarMonitor::monitorTask(void* pvParameters) {
                 Logger::info("Grid Power Recovered");
             }
             
-            // RUN PID CONTROL: only if in NORMAL state
+            // --- EQUIPMENT 2 (PAC) PRIORITY LOGIC ---
+            float gridPower = GridSensorService::currentGridPower;
+            float eq1Power = ActuatorManager::equipmentPower;
+            float surplus = -gridPower + eq1Power; // Available power for diversion (excluding Eq2)
+            if (Equipment2Manager::isCurrentlyOn()) {
+                surplus += Shelly1PMManager::getPower();
+            }
+
+            bool eq2Requested = false;
+            if (_config->e_equip2 && SafetyManager::currentState == SystemState::STATE_NORMAL) {
+                if (_config->equip2_priority == 1) {
+                    // WATER HEATER FIRST
+                    // Turn on Eq2 if Eq1 is at ~100% AND there is still surplus > Eq2 power
+                    if (ActuatorManager::currentDuty >= 0.95f && surplus >= (_config->equip2_max_power + _config->delta)) {
+                        eq2Requested = true;
+                    }
+                } else {
+                    // PAC FIRST
+                    // Turn on Eq2 if available surplus > Eq2 power
+                    if (surplus >= (_config->equip2_max_power + _config->delta)) {
+                        eq2Requested = true;
+                    }
+                }
+            }
+            Equipment2Manager::requestPower(eq2Requested);
+            Equipment2Manager::loop(); // Run Eq2 state machine
+
+            // RUN PID CONTROL for Eq1: only if in NORMAL state
             if (SafetyManager::currentState == SystemState::STATE_NORMAL) {
                 static int freshDataCounter = 0;
                 float effectiveGrid = GridSensorService::currentGridPower - _config->export_setpoint;
@@ -166,7 +198,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
             );
         }
 
-        vTaskDelay(pdMS_TO_TICKS(100)); 
+        vTaskDelay(pdMS_TO_TICKS(110)); 
     }
 }
 
