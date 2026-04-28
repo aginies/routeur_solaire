@@ -19,6 +19,8 @@ void ControlStrategy::startTasks() {
     if (_config->control_mode == "burst") {
         xTaskCreatePinnedToCore(burstControlTask, "burstTask", 2048, NULL, 5, NULL, 1);
     } else if (_config->control_mode == "cycle_stealing" || _config->control_mode == "zero_crossing") {
+        pinMode(_config->zx_pin, INPUT_PULLUP);
+        attachInterrupt(digitalPinToInterrupt(_config->zx_pin), handleZxInterrupt, RISING);
         xTaskCreatePinnedToCore(cycleStealingTask, "cycleTask", 4096, NULL, 5, NULL, 1);
     } else if (_config->control_mode == "trame") {
         pinMode(_config->zx_pin, INPUT_PULLUP);
@@ -65,37 +67,43 @@ void ControlStrategy::burstControlTask(void* pvParameters) {
 
 void ControlStrategy::cycleStealingTask(void* pvParameters) {
     if (!_config) { vTaskDelete(NULL); return; }
-    pinMode(_config->zx_pin, INPUT_PULLUP);
-    int lastZx = digitalRead(_config->zx_pin);
-    uint32_t lastZxTime = micros();
+    
+    uint32_t localZxCount = 0;
     float accumulator = 0;
     
-    Logger::log("Cycle Stealing Task Started on pin " + String(_config->zx_pin));
+    Logger::log("Cycle Stealing Task Started (Interrupt Driven) on pin " + String(_config->zx_pin));
 
     while (true) {
-        int currentZx = digitalRead(_config->zx_pin);
-        if (currentZx != lastZx) {
-            lastZx = currentZx;
-            uint32_t now = micros();
-            uint32_t diff = now - lastZxTime;
-            lastZxTime = now;
-
-            if (diff > 5000 && diff < 15000) {
-                accumulator += ActuatorManager::currentDuty;
-                if (accumulator >= 1.0) {
-                    digitalWrite(ActuatorManager::ssrPin, HIGH);
-                    accumulator -= 1.0;
-                } else {
-                    digitalWrite(ActuatorManager::ssrPin, LOW);
-                }
+        // Wait for Zero-Crossing interrupt
+        xEventGroupWaitBits(_zxEventGroup, 0x01, pdTRUE, pdFALSE, pdMS_TO_TICKS(100));
+        
+        while (localZxCount < _zxCounter) {
+            localZxCount++;
+            esp_task_wdt_reset();
+            
+            accumulator += ActuatorManager::currentDuty;
+            if (accumulator >= 1.0) {
+                digitalWrite(ActuatorManager::ssrPin, HIGH);
+                accumulator -= 1.0;
+                ActuatorManager::equipmentActive = true;
+            } else {
+                digitalWrite(ActuatorManager::ssrPin, LOW);
+                // We don't set equipmentActive to false here if accumulator > 0 because 
+                // some cycles are just "skipped" in this mode.
             }
         }
         
-        if (micros() - lastZxTime > 200000) {
-            digitalWrite(ActuatorManager::ssrPin, LOW);
-            vTaskDelay(pdMS_TO_TICKS(100));
+        // Safety: Turn off if no interrupts for 500ms
+        static uint32_t lastCheck = 0;
+        static uint32_t lastCount = 0;
+        if (millis() - lastCheck > 500) {
+            if (_zxCounter == lastCount) {
+                digitalWrite(ActuatorManager::ssrPin, LOW);
+                ActuatorManager::equipmentActive = false;
+            }
+            lastCount = _zxCounter;
+            lastCheck = millis();
         }
-        if (micros() % 1000 < 50) vTaskDelay(1);
     }
 }
 

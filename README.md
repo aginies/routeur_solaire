@@ -13,6 +13,7 @@ This C++ version is a **migration from the original MicroPython implementation f
 - **Asynchronous Web Server**: Provides a rich web interface for real-time monitoring, logging, and configuration without blocking the control loop.
 - **Advanced Statistics**: Tracks and stores daily/hourly energy usage (Import/Export/Redirected) with historical data retention.
 - **Safety & Protection**: Includes watchdog timers, temperature monitoring (Internal & SSR heatsink), and automatic fan control.
+- **Weather-Aware Control**: Uses Open-Meteo cloud cover, solar radiation, sunrise, and sunset data to improve equipment decisions.
 - **Home Assistant Integration**: MQTT support with auto-discovery for easy integration into smart home systems.
 
 ## Board Support: S3 vs. WROOM
@@ -53,7 +54,8 @@ The system can be fully configured via the web interface. Below is a detailed br
     - **Compensation**: Gain factor for the regulation algorithm.
 - **Smart Modes**:
     - **Force Window**: Daily scheduled blocks (e.g., for off-peak water heating).
-    - **Night Mode**: Reduces polling frequency during non-productive hours to save resources.
+    - **Night Mode**: Reduces polling frequency during non-productive hours. When Open-Meteo is enabled, sunrise and sunset are fetched automatically and used instead of the manually configured night window.
+    - **Weather Anticipation**: Optional Open-Meteo integration using latitude/longitude to estimate solar availability and pause Equipment 2 when conditions are not favorable.
 
 ### Hardware & Safety
 - **Regulation Modes**:
@@ -76,6 +78,18 @@ The system targets a balance point between `Delta` (max import tolerated) and `D
 3.  **Stability (Slow Start)**: To prevent rapid oscillations and "flicker," the increase in power is capped at **20% per cycle**, allowing the system to stabilize smoothly as production changes.
 
 The resulting **Duty Cycle (0-100%)** is then translated into physical pulses by the selected regulation mode (Trame, Burst, or Phase).
+
+## Weather And Solar Confidence
+
+When weather support is enabled, the firmware calls the Open-Meteo Forecast API every 9 minutes. The data is used for two separate decisions:
+
+- **Solar confidence index**: The web interface displays a simple confidence percentage estimating the available solar potential compared with clear-sky conditions.
+- **Radiation-based cloud impact**: `shortwave_radiation_instant` is compared with `terrestrial_radiation_instant` to estimate how much available sunlight is being lost right now.
+- **Cloud layer fallback**: Low, mid, and high cloud cover are still fetched and combined as a fallback/stabilizer when radiation data is missing or not usable.
+- **Equipment 2 start condition**: Equipment 2 can start only when the solar confidence reaches the configured minimum threshold, unless it is inside a forced schedule.
+- **Automatic night mode**: `daily=sunrise,sunset` with `timezone=auto` provides local sunrise and sunset times. When available, these values define night mode instead of the manual `night_start` / `night_end` settings.
+
+Manual night start/end values remain as a fallback when weather support is disabled or sunrise/sunset data has not been received yet.
 
 ## Getting Started
 

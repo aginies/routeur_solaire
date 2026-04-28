@@ -8,6 +8,7 @@
 #include "MqttManager.h"
 #include "StatsManager.h"
 #include "Equipment2Manager.h"
+#include "WeatherManager.h"
 #include "Shelly1PMManager.h"
 #include "NetworkManager.h"
 #include "WebManager.h"
@@ -44,13 +45,13 @@ void SolarMonitor::init(const Config& config) {
 }
 
 void SolarMonitor::startTasks() {
-    // Priority 3: Monitoring and logic - Core 0 (System Core)
-    // Above background maintenance (Pri 1-2) but coexists with networking.
-    xTaskCreatePinnedToCore(monitorTask, "monitorTask", 16384, NULL, 3, NULL, 0);
+    // Priority 3: Monitoring and logic - Core 1
+    // We move back to Core 1 but keep a moderate priority to coexist with ControlStrategy.
+    xTaskCreatePinnedToCore(monitorTask, "monitorTask", 32768, NULL, 3, NULL, 1);
     
     // Sub-service tasks - Core 0
     TemperatureManager::startTask();
-    ControlStrategy::startTasks(); // These will remain on Core 1 as configured in their own startTasks()
+    ControlStrategy::startTasks(); // These will remain on Core 1 at Priority 5
 #ifndef DISABLE_HISTORY
     HistoryBuffer::startTask();
 #endif
@@ -194,6 +195,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
 
         if (_config->e_mqtt && (now - lastMqttReport >= (_config->mqtt_report_interval * 1000))) {
             lastMqttReport = now;
+            esp_task_wdt_reset();
             MqttManager::publishStatus(
                 GridSensorService::currentGridPower,
                 ActuatorManager::equipmentPower,
@@ -208,8 +210,11 @@ void SolarMonitor::monitorTask(void* pvParameters) {
         }
 
         // 6. Maintenance Loops (Moved from main loop for core isolation)
+        esp_task_wdt_reset();
         NetworkManager::loop();
+        esp_task_wdt_reset();
         WebManager::loop();
+        esp_task_wdt_reset();
         MqttManager::loop();
 
         vTaskDelay(pdMS_TO_TICKS(110)); 
@@ -218,6 +223,8 @@ void SolarMonitor::monitorTask(void* pvParameters) {
 
 bool SolarMonitor::isNight(int currMin) {
     if (!_config) return false;
+    if (_config->e_weather) return WeatherManager::isNight();
+
     int start = ActuatorManager::timeToMinutes(_config->night_start);
     int end = ActuatorManager::timeToMinutes(_config->night_end);
     if (start < end) return (currMin >= start && currMin < end);

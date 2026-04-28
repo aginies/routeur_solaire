@@ -276,12 +276,12 @@
         <div id="dateTime">--/--/---- --:--</div>
         <button id="themeToggle" onclick="toggleTheme()">☀️ Mode</button>
         <div style="display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap;">
-            <div id="weatherBadge" class="mqtt-badge" style="display: none; background: #3498db; color: white; gap: 8px;">
+            <div id="weatherBadge" class="mqtt-badge" style="display: none; background: #3498db; color: white; gap: 8px; cursor: help;" title="Confiance solaire: estimation de la lumiere solaire disponible.">
                 <svg id="weatherSvgIcon" style="width: 40px; height: 40px; fill: white;">
                     <use xlink:href="#day"></use>
                 </svg>
                 <div style="display: flex; flex-direction: column; align-items: flex-start; line-height: 1.1;">
-                    <span id="weatherText" style="font-size: 0.95em; opacity: 0.95;">--%% nuages</span>
+                    <span id="weatherText" style="font-size: 0.95em; opacity: 0.95;">Confiance solaire: --%%</span>
                     <span id="weatherPrecip" style="font-size: 0.8em; opacity: 0.8; display: none;"></span>
                 </div>
             </div>
@@ -526,25 +526,26 @@
                             wi.querySelector('use').setAttribute('xlink:href', '#' + d.weather_icon);
                         }
 
-                        // Clouds
+                        // Solar confidence
                         const wtText = document.getElementById('weatherText');
+                        const confidenceValue = d.weather_solar_confidence !== undefined ? d.weather_solar_confidence : (100 - parseFloat(d.weather_effective_clouds));
+                        const confidence = isNaN(confidenceValue) ? null : Math.max(0, Math.min(100, confidenceValue));
+                        const tooltip = confidence === null
+                            ? 'Confiance solaire indisponible: les donnees meteo ne sont pas encore disponibles.'
+                            : 'Confiance solaire ' + Math.round(confidence) + '%%: estimation du potentiel solaire actuel. ' +
+                              Math.round(100 - confidence) + '%% de lumiere utile est estimee perdue par rapport a un ciel clair. ' +
+                              'Calcul base surtout sur le rayonnement solaire mesure par Open-Meteo, avec les couches nuageuses en stabilisation.';
+                        wb.title = tooltip;
                         if (wtText) {
-                            const details = `(L:${d.weather_clouds_low}%% M:${d.weather_clouds_mid}%% H:${d.weather_clouds_high}%%)`;
-                            wtText.textContent = d.weather_clouds + '%% nuages ' + details;
+                            wtText.textContent = confidence === null ? 'Confiance solaire: --%%' : 'Confiance solaire: ' + Math.round(confidence) + '%%';
+                            wtText.title = tooltip;
                         }
 
-                        // Precip
+                        // Keep weather badge focused on the confidence index only.
                         const wtPrecip = document.getElementById('weatherPrecip');
                         if (wtPrecip) {
-                            let precipStr = '';
-                            if (d.weather_rain > 0) precipStr += '☔ ' + num(d.weather_rain) + 'mm';
-                            if (d.weather_snow > 0) precipStr += (precipStr ? ' ' : '') + '❄ ' + num(d.weather_snow) + 'cm';
-                            if (precipStr) {
-                                wtPrecip.textContent = precipStr;
-                                wtPrecip.style.display = 'block';
-                            } else {
-                                wtPrecip.style.display = 'none';
-                            }
+                            wtPrecip.textContent = '';
+                            wtPrecip.style.display = 'none';
                         }
 
                         if (d.weather_too_cloudy) {

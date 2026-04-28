@@ -365,14 +365,7 @@
                     </div>
                     <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
 
-                    <div class="form-group">
-                        <label for="NIGHT_START">Début Mode Nuit (24h - HH:MM):</label>
-                        <input type="text" id="NIGHT_START" name="NIGHT_START" value="%NIGHT_START%" pattern="^([01][0-9]|2[0-3]):[0-5][0-9]$" placeholder="ex: 22:00">
-                    </div>
-                    <div class="form-group">
-                        <label for="NIGHT_END">Fin Mode Nuit (24h - HH:MM):</label>
-                        <input type="text" id="NIGHT_END" name="NIGHT_END" value="%NIGHT_END%" pattern="^([01][0-9]|2[0-3]):[0-5][0-9]$" placeholder="ex: 06:00">
-                    </div>
+                    <p style="font-size: 0.85em; color: #888; margin-bottom: 18px;">Le mode nuit est calculé automatiquement avec les heures de lever/coucher du soleil Open-Meteo lorsque la météo est activée.</p>
                     <div class="form-group">
                         <label for="NIGHT_POLL_INTERVAL">Intervalle de lecture Nuit (secondes):</label>
                         <input type="number" min="1" max="3600" id="NIGHT_POLL_INTERVAL" name="NIGHT_POLL_INTERVAL" value="%NIGHT_POLL_INTERVAL%">
@@ -512,9 +505,9 @@
                         <input type="text" id="WEATHER_LON" name="WEATHER_LON" value="%WEATHER_LON%" placeholder="ex: 1.444">
                     </div>
                     <div class="form-group">
-                        <label for="WEATHER_THRESH">Seuil couverture nuageuse (%%):</label>
+                        <label for="WEATHER_THRESH">Confiance solaire minimum pour démarrer l'équipement 2 (%%):</label>
                         <input type="number" min="0" max="100" id="WEATHER_THRESH" name="WEATHER_THRESH" value="%WEATHER_THRESH%">
-                        <p style="font-size: 0.8em; color: #888; margin-top: 4px;">Au-delà de ce seuil de nuages (total), l'équipement 2 pourra être mis en pause.</p>
+                        <p style="font-size: 0.8em; color: #888; margin-top: 4px;">L'équipement 2 peut démarrer si la confiance solaire est au moins égale à ce seuil. Exemple: 40 signifie démarrage possible à partir de 40%% de potentiel solaire estimé.</p>
                     </div>
                 </div>
             </details>
@@ -565,17 +558,11 @@
                 </div>
             </details>
 
-            <div class="button-group">
-                <input type="submit" value="Sauvegarder">
-                <a href="/" class="cancel-button">Annuler</a>
-            </div>
-        </form>
-
-        <!-- 9. MISE À JOUR (OTA) -->
-        <details style="margin-top: 20px;">
-            <summary>🚀 Mise à jour (OTA)</summary>
-            <div class="section-content">
-                <form method='POST' action='/update' enctype='multipart/form-data' id='upload_form'>
+            <!-- 9. MISE À JOUR (OTA) -->
+            <details style="margin-top: 20px;">
+                <summary>🚀 Mise à jour (OTA)</summary>
+                <div class="section-content">
+                    <div id='upload_form'>
                     <div class="form-group">
                         <label>Sélectionner le fichier firmware (.bin):</label>
                         <input type='file' id='update_file' name='update' accept='.bin' style="width: 100%; padding: 10px; border: 1px solid #444; border-radius: 8px; background: #0d0d1a; color: #eee;">
@@ -583,21 +570,21 @@
                     <div class="button-group">
                         <input type='button' id='update_btn' value='Mettre à jour' onclick="startUpdate()" style="background-color: #e67e22; color: #fff; padding: 12px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 700; flex-grow: 1;">
                     </div>
-                </form>
-                <div id='prg_container' style="margin-top: 15px; display: none;">
+                    </div>
+                    <div id='prg_container' style="margin-top: 15px; display: none;">
                     <label id='prg_label'>Mise à jour en cours...</label>
                     <div style="width: 100%; background-color: #333; border-radius: 8px; margin-top: 8px; height: 20px; overflow: hidden; border: 1px solid #444;">
                         <div id='prg_bar' style="width: 0%; height: 100%; background-color: #f0c040; transition: width 0.3s;"></div>
                     </div>
                     <p id='prg_status' style="font-size: 0.9em; color: #aaa; margin-top: 8px; text-align: center;"></p>
+                    </div>
                 </div>
-            </div>
-        </details>
+            </details>
 
-        <!-- 10. LICENCES -->
-        <details style="margin-top: 20px; margin-left: 10px; margin-right: 10px;">
-            <summary>📜 Licences</summary>
-            <div class="section-content" style="font-size: 0.8em; color: #bbb; line-height: 1.5;">
+            <!-- 10. LICENCES -->
+            <details style="margin-top: 20px;">
+                <summary>📜 Licences</summary>
+                <div class="section-content" style="font-size: 0.8em; color: #bbb; line-height: 1.5;">
                 <p><strong>Code Source :</strong></p>
                 <p>Ce projet est distribué sous la licence <strong>GNU GPLv3</strong>.</p>
                 <p><a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" style="color: #f0c040;">Voir les détails de la licence GPLv3</a></p>
@@ -605,8 +592,14 @@
                 <p><strong>Icônes Météo :</strong></p>
                 <p>The works contained in this archive were created by amCharts (https://www.amcharts.com/) and is licensed under Creative Commons Attribution 4.0 International Public License.</p>
                 <p><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" style="color: #f0c040;">Creative Commons Attribution 4.0 International (CC BY 4.0)</a></p>
+                </div>
+            </details>
+
+            <div class="button-group">
+                <input type="submit" value="Sauvegarder">
+                <a href="/" class="cancel-button">Annuler</a>
             </div>
-        </details>
+        </form>
 
         <div style="text-align: center; font-size: 0.7em; color: #aaa; margin-top: 15px;">
             Version %VERSION% | Build: %BUILD_TIME%

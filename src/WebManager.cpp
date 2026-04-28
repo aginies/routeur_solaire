@@ -124,8 +124,6 @@ String WebManager::templateProcessor(const String& var) {
     if (var == "FORCE_START") return _config->force_start;
     if (var == "FORCE_END") return _config->force_end;
     
-    if (var == "NIGHT_START") return _config->night_start;
-    if (var == "NIGHT_END") return _config->night_end;
     if (var == "NIGHT_POLL_INTERVAL") return String(_config->night_poll_interval);
 
     if (var == "JSY_YES") return _config->e_jsy ? "selected" : "";
@@ -433,8 +431,6 @@ void WebManager::setupRoutes() {
         newCfg.force_start = getParam("FORCE_START");
         newCfg.force_end = getParam("FORCE_END");
         
-        newCfg.night_start = getParam("NIGHT_START");
-        newCfg.night_end = getParam("NIGHT_END");
         newCfg.night_poll_interval = getParam("NIGHT_POLL_INTERVAL").toInt();
 
         newCfg.e_jsy = (getParam("E_JSY") == "True");
@@ -570,9 +566,15 @@ String WebManager::getStatusJson() {
         doc["weather_clouds_low"] = WeatherManager::getCloudCoverLow();
         doc["weather_clouds_mid"] = WeatherManager::getCloudCoverMid();
         doc["weather_clouds_high"] = WeatherManager::getCloudCoverHigh();
+        doc["weather_effective_clouds"] = WeatherManager::getEffectiveCloudiness();
+        doc["weather_solar_confidence"] = WeatherManager::getSolarConfidence();
+        doc["weather_shortwave_radiation"] = WeatherManager::getShortwaveRadiationInstant();
+        doc["weather_terrestrial_radiation"] = WeatherManager::getTerrestrialRadiationInstant();
         doc["weather_temp"] = WeatherManager::getTemperature();
         doc["weather_rain"] = WeatherManager::getRain();
         doc["weather_snow"] = WeatherManager::getSnow();
+        doc["weather_sunrise"] = WeatherManager::getSunrise();
+        doc["weather_sunset"] = WeatherManager::getSunset();
         doc["weather_age"] = millis() - WeatherManager::getLastUpdate();
         doc["weather_icon"] = WeatherManager::getWeatherIcon();
         doc["weather_too_cloudy"] = WeatherManager::isTooCloudy();

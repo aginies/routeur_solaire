@@ -97,7 +97,7 @@ struct Config {
     bool e_weather = false;
     String weather_lat = "";
     String weather_lon = "";
-    int weather_cloud_threshold = 80; // Percentage
+    int weather_cloud_threshold = 40; // Minimum solar confidence percentage
 
     // Incremental Controller (pv-router algorithm)
     float delta = 50.0;          // upper threshold (W) — above this, importing too much
