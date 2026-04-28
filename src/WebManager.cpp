@@ -561,7 +561,7 @@ String WebManager::getStatusJson() {
     doc["eq1_real_power"] = Shelly1PMManager::getPowerEq1();
     doc["equip2_power"] = Shelly1PMManager::getPower();
     doc["boost_active"] = (SafetyManager::currentState == SystemState::STATE_BOOST);
-    doc["force_mode"] = _config->force_equipment;
+    doc["force_mode"] = (SafetyManager::currentState == SystemState::STATE_BOOST);
     doc["emergency_mode"] = (SafetyManager::currentState == SystemState::STATE_EMERGENCY_FAULT);
     doc["emergency_reason"] = SafetyManager::emergencyReason;
     doc["ssr_temp"] = (TemperatureManager::currentSsrTemp > -100.0) ? (float)TemperatureManager::currentSsrTemp : JsonVariant();

@@ -156,52 +156,56 @@ void Logger::rotate(const char* filename) {
 
 #ifndef NATIVE_TEST
 void Logger::streamLogs(AsyncWebServerRequest *request) {
-    AsyncResponseStream *response = request->beginResponseStream("text/plain");
-    if (_mutex && xSemaphoreTakeRecursive(_mutex, pdMS_TO_TICKS(500)) == pdTRUE) {
-        File file = LittleFS.open(_logFile, "r");
-        if (file) {
-            size_t size = file.size();
-            if (size > 8192) file.seek(size - 8192);
-            
-            uint8_t buf[512];
-            while (file.available()) {
-                size_t len = file.read(buf, sizeof(buf));
-                response->write(buf, len);
-            }
-            file.close();
-        }
-        for (const auto& entry : _logBuffer) {
-            response->print(entry);
-            response->print("\n");
-        }
-        xSemaphoreGiveRecursive(_mutex);
+    if (!_mutex || xSemaphoreTakeRecursive(_mutex, pdMS_TO_TICKS(500)) != pdTRUE) {
+        request->send(503, "text/plain", "Logger busy");
+        return;
     }
-    request->send(response);
+
+    String result;
+    result.reserve(4096);
+
+    File file = LittleFS.open(_logFile, "r");
+    if (file) {
+        size_t size = file.size();
+        if (size > 4096) file.seek(size - 4096);
+        while (file.available()) {
+            result += (char)file.read();
+        }
+        file.close();
+    }
+    for (const auto& entry : _logBuffer) {
+        result += entry + "\n";
+    }
+    xSemaphoreGiveRecursive(_mutex);
+
+    request->send(200, "text/plain", result);
 }
 
 #ifndef DISABLE_DATA_LOG
 void Logger::streamDataLogs(AsyncWebServerRequest *request) {
-    AsyncResponseStream *response = request->beginResponseStream("text/plain");
-    if (_mutex && xSemaphoreTakeRecursive(_mutex, pdMS_TO_TICKS(500)) == pdTRUE) {
-        File file = LittleFS.open(_dataFile, "r");
-        if (file) {
-            size_t size = file.size();
-            if (size > 4096) file.seek(size - 4096);
-            
-            uint8_t buf[512];
-            while (file.available()) {
-                size_t len = file.read(buf, sizeof(buf));
-                response->write(buf, len);
-            }
-            file.close();
-        }
-        for (const auto& entry : _dataBuffer) {
-            response->print(entry);
-            response->print("\n");
-        }
-        xSemaphoreGiveRecursive(_mutex);
+    if (!_mutex || xSemaphoreTakeRecursive(_mutex, pdMS_TO_TICKS(500)) != pdTRUE) {
+        request->send(503, "text/plain", "Logger busy");
+        return;
     }
-    request->send(response);
+
+    String result;
+    result.reserve(4096);
+
+    File file = LittleFS.open(_dataFile, "r");
+    if (file) {
+        size_t size = file.size();
+        if (size > 4096) file.seek(size - 4096);
+        while (file.available()) {
+            result += (char)file.read();
+        }
+        file.close();
+    }
+    for (const auto& entry : _dataBuffer) {
+        result += entry + "\n";
+    }
+    xSemaphoreGiveRecursive(_mutex);
+
+    request->send(200, "text/plain", result);
 }
 #else
 void Logger::streamDataLogs(AsyncWebServerRequest *request) {

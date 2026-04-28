@@ -106,21 +106,23 @@ void Shelly1PMManager::updateDevice(Shelly1PMDevice& dev, const String& ip, int 
     http.setConnectTimeout(2000);
     http.setTimeout(2000);
 
-    // Try Gen2 API first (/rpc/Shelly.GetStatus), fall back to Gen1 (/status)
-    String url = "http://" + ip + "/rpc/Shelly.GetStatus";
+    // Try Gen2 API first (small response), fall back to Gen1
+    String url = "http://" + ip + "/rpc/Switch.GetStatus?id=" + String(index);
     if (!http.begin(client, url)) {
-        Logger::warn("Shelly1PM: http.begin failed for " + ip);
+        Logger::warn("Shelly: http.begin failed for " + ip);
         return;
     }
 
     int code = http.GET();
-    if (code != 200) {
+    bool isGen2 = (code == 200);
+
+    if (!isGen2) {
         http.end();
         url = "http://" + ip + "/status";
         if (!http.begin(client, url)) return;
         code = http.GET();
         if (code != 200) {
-            Logger::warn("Shelly1PM: HTTP " + String(code) + " from " + ip);
+            Logger::warn("Shelly: HTTP " + String(code) + " from " + ip);
             http.end();
             return;
         }
@@ -131,31 +133,33 @@ void Shelly1PMManager::updateDevice(Shelly1PMDevice& dev, const String& ip, int 
     http.end();
 
     if (error) {
-        Logger::warn("Shelly1PM: JSON parse error from " + ip + ": " + String(error.c_str()));
+        Logger::warn("Shelly: JSON parse error from " + ip + ": " + String(error.c_str()));
         return;
     }
 
-    // Relay state
-    if (doc.containsKey("relays")) {
-        dev.relayState = doc["relays"][0]["ison"];
-    }
-
-    // Power: Gen1 1PM/PlugS
-    if (doc.containsKey("meters")) {
-        dev.currentPower = doc["meters"][index]["power"];
-        dev.lastUpdate = now;
-    // Power: Gen1 EM/3EM
-    } else if (doc.containsKey("emeters")) {
-        dev.currentPower = doc["emeters"][index]["power"];
-        dev.lastUpdate = now;
-    // Power: Gen2 (switch:0, switch:1, etc.)
-    } else if (doc.containsKey("switch:" + String(index))) {
-        JsonObject sw = doc["switch:" + String(index)];
-        if (sw.containsKey("apower")) {
-            dev.currentPower = sw["apower"];
+    if (isGen2) {
+        // Gen2 response: {"id":0,"source":"...","output":true,"apower":1234.5,...}
+        if (doc.containsKey("apower")) {
+            dev.currentPower = doc["apower"];
             dev.lastUpdate = now;
         }
+        if (doc.containsKey("output")) {
+            dev.relayState = doc["output"];
+        }
     } else {
-        Logger::warn("Shelly1PM: No power data found in response from " + ip);
+        // Gen1: relay state
+        if (doc.containsKey("relays")) {
+            dev.relayState = doc["relays"][0]["ison"];
+        }
+        // Gen1: power from meters or emeters
+        if (doc.containsKey("meters")) {
+            dev.currentPower = doc["meters"][index]["power"];
+            dev.lastUpdate = now;
+        } else if (doc.containsKey("emeters")) {
+            dev.currentPower = doc["emeters"][index]["power"];
+            dev.lastUpdate = now;
+        } else {
+            Logger::warn("Shelly: No power data in Gen1 response from " + ip);
+        }
     }
 }
