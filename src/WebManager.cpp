@@ -289,6 +289,11 @@ void WebManager::setupRoutes() {
         Logger::streamDataLogs(request);
     });
 
+    _server.on("/weather_refresh", HTTP_GET, [](AsyncWebServerRequest *request) {
+        WeatherManager::forceUpdate();
+        request->send(200, "text/plain", "OK");
+    });
+
     _server.serveStatic("/chart.min.js", LittleFS, "/chart.min.js");
     _server.serveStatic("/icons", LittleFS, "/icons");
 

@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='20' fill='%23f0c040'/><g stroke='%23f0c040' stroke-width='4' stroke-linecap='round'><line x1='50' y1='10' x2='50' y2='22'/><line x1='50' y1='78' x2='50' y2='90'/><line x1='10' y1='50' x2='22' y2='50'/><line x1='78' y1='50' x2='90' y2='50'/><line x1='22' y1='22' x2='30' y2='30'/><line x1='70' y1='70' x2='78' y2='78'/><line x1='78' y1='22' x2='70' y2='30'/><line x1='30' y1='70' x2='22' y2='78'/></g></svg>">
     <title>Solaire</title>
-    <script src="/chart.min.js"></script>
     <style>
         :root {
             --bg-color: #1a1a2e;
@@ -272,12 +271,18 @@
             });
     </script>
 
+    <div id="loadingOverlay" style="position:fixed;top:0;left:0;width:100%%;height:100%%;background:#1a1a2e;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;color:#f0c040;font-size:1.3em;">
+        <div style="font-size:2em;margin-bottom:15px;">☀️</div>
+        <div>Démarrage en cours...</div>
+        <div style="font-size:0.8em;color:#888;margin-top:10px;">Connexion au système solaire</div>
+    </div>
+
     <div class="header">
         <h1>Gestion Solaire</h1>
         <div id="dateTime">--/--/---- --:--</div>
         <button id="themeToggle" onclick="toggleTheme()">☀️ Mode</button>
         <div style="display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap;">
-            <div id="weatherBadge" class="mqtt-badge" style="display: none; background: #3498db; color: white; gap: 8px; cursor: help;" title="Confiance solaire: estimation de la lumiere solaire disponible.">
+            <div id="weatherBadge" class="mqtt-badge" style="display: none; background: #3498db; color: white; gap: 8px; cursor: pointer;" title="Clic: détails / Double-clic: rafraîchir">
                 <svg id="weatherSvgIcon" style="width: 40px; height: 40px; fill: white;">
                     <use xlink:href="#day"></use>
                 </svg>
@@ -285,6 +290,13 @@
                     <span id="weatherText" style="font-size: 0.95em; opacity: 0.95;">Confiance solaire: --%%</span>
                     <span id="weatherPrecip" style="font-size: 0.8em; opacity: 0.8; display: none;"></span>
                 </div>
+            </div>
+            <div id="weatherDetail" style="display:none;position:fixed;top:50%%;left:50%%;transform:translate(-50%%,-50%%);background:#16213e;border:2px solid #f0c040;border-radius:12px;padding:20px;z-index:9999;color:#eee;min-width:280px;max-width:90%%;box-shadow:0 8px 24px rgba(0,0,0,0.6);">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                    <strong style="color:#f0c040;font-size:1.1em;">Détails Météo</strong>
+                    <span onclick="document.getElementById('weatherDetail').style.display='none'" style="cursor:pointer;font-size:1.3em;color:#888;">✕</span>
+                </div>
+                <div id="weatherDetailContent" style="font-size:0.9em;line-height:1.8;"></div>
             </div>
             <div id="shellyStatus" class="mqtt-badge mqtt-off">SHELLY: --</div>
             <div id="mqttStatus" class="mqtt-badge mqtt-off" style="display: none;">MQTT: --</div>
@@ -406,6 +418,42 @@
         let powerChart = null;
         let logMode = 'sys'; // 'sys' or 'data'
         let nightMode = false;
+        let lastStatus = null;
+
+        (function() {
+            const wb = document.getElementById('weatherBadge');
+            if (!wb) return;
+            let clickTimer = null;
+            wb.addEventListener('click', function(e) {
+                if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; return; }
+                clickTimer = setTimeout(function() {
+                    clickTimer = null;
+                    if (!lastStatus || !lastStatus.e_weather) return;
+                    const d = lastStatus;
+                    const age = d.weather_age ? Math.round(d.weather_age / 60000) : '?';
+                    const lines = [
+                        '☀️ Confiance solaire: <b>' + Math.round(d.weather_solar_confidence || 0) + '%%</b>',
+                        '🌡️ Température: <b>' + (d.weather_temp !== undefined ? d.weather_temp.toFixed(1) + '°C' : '--') + '</b>',
+                        '☁️ Nuages: <b>' + (d.weather_clouds || 0) + '%%</b> (Bas:' + (d.weather_clouds_low||0) + ' Mid:' + (d.weather_clouds_mid||0) + ' Haut:' + (d.weather_clouds_high||0) + ')',
+                        '📡 Rayonnement SW: <b>' + (d.weather_shortwave_radiation||0).toFixed(0) + ' W/m²</b>',
+                        '🌍 Rayonnement terrestre: <b>' + (d.weather_terrestrial_radiation||0).toFixed(0) + ' W/m²</b>',
+                        '🌅 Lever: <b>' + (d.weather_sunrise||'--') + '</b> / Coucher: <b>' + (d.weather_sunset||'--') + '</b>',
+                        '🕐 Dernière MAJ: <b>' + age + ' min</b>',
+                    ];
+                    if (d.weather_rain > 0) lines.push('🌧️ Pluie: <b>' + d.weather_rain + ' mm</b>');
+                    if (d.weather_snow > 0) lines.push('❄️ Neige: <b>' + d.weather_snow + ' cm</b>');
+                    document.getElementById('weatherDetailContent').innerHTML = lines.join('<br>');
+                    document.getElementById('weatherDetail').style.display = 'block';
+                }, 250);
+            });
+            wb.addEventListener('dblclick', function(e) {
+                e.preventDefault();
+                fetch('/weather_refresh').then(() => {
+                    wb.style.outline = '2px solid #2ecc71';
+                    setTimeout(() => { wb.style.outline = ''; }, 1500);
+                });
+            });
+        })();
 
         function setLogMode(mode) {
             logMode = mode;
@@ -611,7 +659,6 @@
 
         let statusInterval = null;
         let currentPollingMode = null; // 'normal' or 'night'
-        let lastStatus = null;
 
         async function updateStatus() {
             try {
@@ -619,6 +666,9 @@
                 const d = await r.json();
                 lastStatus = d;
                 applyStatus(d);
+
+                const overlay = document.getElementById('loadingOverlay');
+                if (overlay) overlay.style.display = 'none';
 
                 // Update chart if in night mode (already throttled by 10s poll)
                 // or periodically in normal mode
@@ -812,10 +862,18 @@
         }
 
         updateStatus(); // Initial call starts the interval chain
-        updateLog();
-        updateDateTime(); // Initial fallback
-        setInterval(updateLog, 15000); // Slower logs in web UI
-        setInterval(() => { if(!nightMode && lastStatus) updateChart(lastStatus); }, 30000); // Slower chart in web UI
+        updateDateTime();
+        setTimeout(() => {
+            updateLog();
+            setInterval(updateLog, 15000);
+            setInterval(() => { if(!nightMode && lastStatus) updateChart(lastStatus); }, 30000);
+        }, 3000); // Delay log/chart fetches to let ESP32 stabilize
+
+        setTimeout(function() {
+            var s = document.createElement('script');
+            s.src = '/chart.min.js';
+            document.head.appendChild(s);
+        }, 30000);
     </script>
 </body>
 </html>

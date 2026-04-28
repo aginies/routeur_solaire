@@ -26,6 +26,7 @@ public:
     static String getWeatherIcon() { return _weatherIcon; }
     static uint32_t getLastUpdate() { return _lastUpdate; }
     static bool isTooCloudy();
+    static void forceUpdate() { updateWeather(); }
 
 private:
     static void weatherTask(void* pvParameters);
