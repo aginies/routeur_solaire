@@ -97,12 +97,16 @@ Config ConfigManager::load() {
     if (doc.containsKey("e_equip1")) config.e_equip1 = doc["e_equip1"];
     if (doc.containsKey("equip1_shelly_ip")) config.equip1_shelly_ip = doc["equip1_shelly_ip"].as<String>();
     if (doc.containsKey("equip1_shelly_index")) config.equip1_shelly_index = doc["equip1_shelly_index"];
+    if (doc.containsKey("e_equip1_mqtt")) config.e_equip1_mqtt = doc["e_equip1_mqtt"];
+    if (doc.containsKey("equip1_mqtt_topic")) config.equip1_mqtt_topic = doc["equip1_mqtt_topic"].as<String>();
 
     // Equipment 2
     if (doc.containsKey("e_equip2")) config.e_equip2 = doc["e_equip2"];
     if (doc.containsKey("equip2_name")) config.equip2_name = doc["equip2_name"].as<String>();
     if (doc.containsKey("equip2_shelly_ip")) config.equip2_shelly_ip = doc["equip2_shelly_ip"].as<String>();
     if (doc.containsKey("equip2_shelly_index")) config.equip2_shelly_index = doc["equip2_shelly_index"];
+    if (doc.containsKey("e_equip2_mqtt")) config.e_equip2_mqtt = doc["e_equip2_mqtt"];
+    if (doc.containsKey("equip2_mqtt_topic")) config.equip2_mqtt_topic = doc["equip2_mqtt_topic"].as<String>();
     if (doc.containsKey("equip2_max_power")) config.equip2_max_power = doc["equip2_max_power"];
     if (doc.containsKey("equip2_priority")) config.equip2_priority = doc["equip2_priority"];
     if (doc.containsKey("equip2_min_on_time")) config.equip2_min_on_time = doc["equip2_min_on_time"];
@@ -216,12 +220,16 @@ bool ConfigManager::save(const Config& config) {
     doc["e_equip1"] = config.e_equip1;
     doc["equip1_shelly_ip"] = config.equip1_shelly_ip;
     doc["equip1_shelly_index"] = config.equip1_shelly_index;
+    doc["e_equip1_mqtt"] = config.e_equip1_mqtt;
+    doc["equip1_mqtt_topic"] = config.equip1_mqtt_topic;
 
     // Equipment 2
     doc["e_equip2"] = config.e_equip2;
     doc["equip2_name"] = config.equip2_name;
     doc["equip2_shelly_ip"] = config.equip2_shelly_ip;
     doc["equip2_shelly_index"] = config.equip2_shelly_index;
+    doc["e_equip2_mqtt"] = config.e_equip2_mqtt;
+    doc["equip2_mqtt_topic"] = config.equip2_mqtt_topic;
     doc["equip2_max_power"] = config.equip2_max_power;
     doc["equip2_priority"] = config.equip2_priority;
     doc["equip2_min_on_time"] = config.equip2_min_on_time;

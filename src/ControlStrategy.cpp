@@ -81,15 +81,20 @@ void ControlStrategy::cycleStealingTask(void* pvParameters) {
             localZxCount++;
             esp_task_wdt_reset();
             
-            accumulator += ActuatorManager::currentDuty;
-            if (accumulator >= 1.0) {
+            float duty = ActuatorManager::currentDuty;
+            if (duty >= 1.0f) {
                 digitalWrite(ActuatorManager::ssrPin, HIGH);
-                accumulator -= 1.0;
                 ActuatorManager::equipmentActive = true;
+                accumulator = 0;
             } else {
-                digitalWrite(ActuatorManager::ssrPin, LOW);
-                // We don't set equipmentActive to false here if accumulator > 0 because 
-                // some cycles are just "skipped" in this mode.
+                accumulator += duty;
+                if (accumulator >= 1.0) {
+                    digitalWrite(ActuatorManager::ssrPin, HIGH);
+                    accumulator -= 1.0;
+                    ActuatorManager::equipmentActive = true;
+                } else {
+                    digitalWrite(ActuatorManager::ssrPin, LOW);
+                }
             }
         }
         
@@ -124,17 +129,22 @@ void ControlStrategy::trameControlTask(void* pvParameters) {
             esp_task_wdt_reset();
             
             float duty = ActuatorManager::currentDuty;
-            accumulator += duty;
-
-            if (accumulator >= 1.0f) {
+            if (duty >= 1.0f) {
                 digitalWrite(ActuatorManager::ssrPin, HIGH);
-                delayMicroseconds(1000); 
-                digitalWrite(ActuatorManager::ssrPin, LOW);
-                accumulator -= 1.0f;
                 ActuatorManager::equipmentActive = true;
+                accumulator = 0.0f;
             } else {
-                digitalWrite(ActuatorManager::ssrPin, LOW);
-                ActuatorManager::equipmentActive = false;
+                accumulator += duty;
+                if (accumulator >= 1.0f) {
+                    digitalWrite(ActuatorManager::ssrPin, HIGH);
+                    delayMicroseconds(1000);
+                    digitalWrite(ActuatorManager::ssrPin, LOW);
+                    accumulator -= 1.0f;
+                    ActuatorManager::equipmentActive = true;
+                } else {
+                    digitalWrite(ActuatorManager::ssrPin, LOW);
+                    ActuatorManager::equipmentActive = false;
+                }
             }
         }
         localZxCount = _zxCounter;

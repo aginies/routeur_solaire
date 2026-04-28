@@ -87,12 +87,16 @@ struct Config {
     bool e_equip1 = false;
     String equip1_shelly_ip = "";
     int equip1_shelly_index = 0;
+    bool e_equip1_mqtt = false;
+    String equip1_mqtt_topic = "";
 
     // Equipment 2 (PAC / Shelly 1PM)
     bool e_equip2 = false;
     String equip2_name = "Piscine";
     String equip2_shelly_ip = "";
     int equip2_shelly_index = 0;
+    bool e_equip2_mqtt = false;
+    String equip2_mqtt_topic = "";
     float equip2_max_power = 1900.0;
     int equip2_priority = 1; // 1 = Water Heater first, 2 = PAC first
     int equip2_min_on_time = 15; // Minutes

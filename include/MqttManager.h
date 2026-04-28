@@ -15,6 +15,10 @@ public:
     static float latestMqttGridPower;
     static float latestMqttGridVoltage;
     static bool hasLatestMqttGridPower;
+    static float latestMqttEq1Power;
+    static bool hasLatestMqttEq1Power;
+    static float latestMqttEq2Power;
+    static bool hasLatestMqttEq2Power;
 
 private:
     static void connectToMqtt();
@@ -24,6 +28,7 @@ private:
                               const char* topic, const uint8_t* payload,
                               size_t len, size_t index, size_t total);
     static void sendDiscovery();
+    static float parseShellySwitchPower(const uint8_t* payload, size_t len);
 
     static espMqttClient _mqttClient;
     static const Config* _config;

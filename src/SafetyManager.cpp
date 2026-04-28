@@ -74,6 +74,7 @@ void SafetyManager::applyState(SystemState newState) {
 
         case SystemState::STATE_BOOST:
             ActuatorManager::setDuty(1.0);
+            digitalWrite(_config->ssr_pin, HIGH);
             ActuatorManager::closeRelay();
             break;
 

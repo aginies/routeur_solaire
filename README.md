@@ -9,7 +9,7 @@ This C++ version is a **migration from the original MicroPython implementation f
 ## Key Features
 
 - **High-Speed Diversion**: Implements a highly responsive power diversion algorithm (burst-fire/trame mode) to match excess solar production with a resistive load.
-- **Multi-Source Monitoring**: Supports data acquisition from Shelly EM (via HTTP or MQTT) and JSY-MK-194 (via UART).
+- **Multi-Source Monitoring**: Supports data acquisition from Shelly EM (via HTTP or MQTT) and JSY-MK-194 (via UART). Equipment power measurement via Shelly Plus 1PM (HTTP or MQTT).
 - **Asynchronous Web Server**: Provides a rich web interface for real-time monitoring, logging, and configuration without blocking the control loop.
 - **Advanced Statistics**: Tracks and stores daily/hourly energy usage (Import/Export/Redirected) with historical data retention.
 - **Safety & Protection**: Includes watchdog timers, temperature monitoring (Internal & SSR heatsink), and automatic fan control.
@@ -44,6 +44,8 @@ The system can be fully configured via the web interface. Below is a detailed br
     - **Shelly IP**: The target meter address.
     - **MQTT Mode**: If enabled, uses low-latency pushes instead of HTTP polling.
     - **Poll Interval**: Frequency of data requests when in standard HTTP mode.
+- **Equipment 1 (+Mesure)**: Optional Shelly Plus 1PM for real power measurement of the diverted load (HTTP or MQTT).
+- **Equipment 2 (+Gestion Marche/Arrêt)**: Optional Shelly Plus 1PM for on/off relay control of a secondary equipment.
 - **MQTT Broker**: Connection details for integration with Home Assistant or other automation tools.
 
 ### Regulation Logic
@@ -91,6 +93,16 @@ When weather support is enabled, the firmware calls the Open-Meteo Forecast API 
 
 Manual night start/end values remain as a fallback when weather support is disabled or sunrise/sunset data has not been received yet.
 
+## Recommended Hardware
+
+| Component | Model | Role |
+| :--- | :--- | :--- |
+| **Grid Meter** | Shelly EM | Measures grid power (import/export) via HTTP or MQTT |
+| **Equipment 1 Meter** | Shelly Plus 1PM | Measures actual power consumption of the diverted load |
+| **Equipment 2 Control** | Shelly Plus 1PM | On/off relay control for the secondary equipment (e.g., heat pump, pool) |
+| **Microcontroller** | ESP32-S3 or ESP32-WROOM | Runs the diverter firmware |
+| **SSR** | Solid State Relay | Controls the resistive load (e.g., water heater) |
+
 ## Getting Started
 
 1.  **Installation**: Install [PlatformIO](https://platformio.org/).
@@ -105,5 +117,5 @@ Manual night start/end values remain as a fallback when weather support is disab
 | Source | Connection | Expected Latency |
 | :--- | :--- | :--- |
 | **JSY-MK-194** | Wired (UART) | ~100ms |
-| **Shelly MQTT** | Wi-Fi | ~200ms |
-| **Shelly HTTP** | Wi-Fi | ~1000ms+ |
+| **Shelly EM / Plus 1PM MQTT** | Wi-Fi | ~200ms |
+| **Shelly EM / Plus 1PM HTTP** | Wi-Fi | ~1000ms+ |

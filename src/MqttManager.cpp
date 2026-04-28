@@ -12,11 +12,15 @@ String MqttManager::_lwtTopic = "";
 float MqttManager::latestMqttGridPower = 0.0;
 float MqttManager::latestMqttGridVoltage = 230.0;
 bool MqttManager::hasLatestMqttGridPower = false;
+float MqttManager::latestMqttEq1Power = 0.0f;
+bool MqttManager::hasLatestMqttEq1Power = false;
+float MqttManager::latestMqttEq2Power = 0.0f;
+bool MqttManager::hasLatestMqttEq2Power = false;
 uint32_t MqttManager::_lastReconnectAttempt = 0;
 
 void MqttManager::init(const Config& config) {
     _config = &config;
-    if (!config.e_mqtt && !config.e_shelly_mqtt) return;
+    if (!config.e_mqtt && !config.e_shelly_mqtt && !config.e_equip1_mqtt && !config.e_equip2_mqtt) return;
 
     _nodeId = config.mqtt_name;
     _nodeId.replace(" ", "_");
@@ -41,7 +45,7 @@ void MqttManager::init(const Config& config) {
 }
 
 void MqttManager::loop() {
-    if (!_config || (!_config->e_mqtt && !_config->e_shelly_mqtt)) return;
+    if (!_config || (!_config->e_mqtt && !_config->e_shelly_mqtt && !_config->e_equip1_mqtt && !_config->e_equip2_mqtt)) return;
 
     _mqttClient.loop();
 
@@ -69,6 +73,15 @@ void MqttManager::onMqttConnect(bool sessionPresent) {
         Logger::info("Subscribed to Shelly topics: " + _config->shelly_mqtt_topic + " & " + voltageTopic);
     }
 
+    if (_config->e_equip1_mqtt && _config->equip1_mqtt_topic.length() > 0) {
+        _mqttClient.subscribe(_config->equip1_mqtt_topic.c_str(), 0);
+        Logger::info("Subscribed to Eq1 MQTT: " + _config->equip1_mqtt_topic);
+    }
+    if (_config->e_equip2_mqtt && _config->equip2_mqtt_topic.length() > 0) {
+        _mqttClient.subscribe(_config->equip2_mqtt_topic.c_str(), 0);
+        Logger::info("Subscribed to Eq2 MQTT: " + _config->equip2_mqtt_topic);
+    }
+
     if (!_discoverySent) {
         sendDiscovery();
     }
@@ -82,26 +95,51 @@ void MqttManager::onMqttMessage(const espMqttClientTypes::MessageProperties& pro
                                  const char* topic, const uint8_t* payload,
                                  size_t len, size_t index, size_t total) {
     String t = String(topic);
+    size_t cplen = (len > 31) ? 31 : len;
+    char buffer[32];
+    memcpy(buffer, payload, cplen);
+    buffer[cplen] = '\0';
+
     if (t == _config->shelly_mqtt_topic) {
-        size_t cplen = (len > 31) ? 31 : len;
-        char buffer[32];
-        memcpy(buffer, payload, cplen);
-        buffer[cplen] = '\0';
         latestMqttGridPower = atof(buffer);
         hasLatestMqttGridPower = true;
-    } else {
-        String voltageTopic = _config->shelly_mqtt_topic.substring(0, _config->shelly_mqtt_topic.lastIndexOf('/')) + "/voltage";
-        if (t == voltageTopic) {
-            size_t cplen = (len > 31) ? 31 : len;
-            char buffer[32];
-            memcpy(buffer, payload, cplen);
-            buffer[cplen] = '\0';
-            float v = atof(buffer);
-            if (v > 100.0 && v < 300.0) {
-                latestMqttGridVoltage = v;
-            }
-        }
+        return;
     }
+
+    String voltageTopic = _config->shelly_mqtt_topic.substring(0, _config->shelly_mqtt_topic.lastIndexOf('/')) + "/voltage";
+    if (t == voltageTopic) {
+        float v = atof(buffer);
+        if (v > 100.0 && v < 300.0) {
+            latestMqttGridVoltage = v;
+        }
+        return;
+    }
+
+    if (_config->e_equip1_mqtt && _config->equip1_mqtt_topic.length() > 0 && t == _config->equip1_mqtt_topic) {
+        latestMqttEq1Power = parseShellySwitchPower(payload, len);
+        hasLatestMqttEq1Power = true;
+        return;
+    }
+
+    if (_config->e_equip2_mqtt && _config->equip2_mqtt_topic.length() > 0 && t == _config->equip2_mqtt_topic) {
+        latestMqttEq2Power = parseShellySwitchPower(payload, len);
+        hasLatestMqttEq2Power = true;
+        return;
+    }
+}
+
+float MqttManager::parseShellySwitchPower(const uint8_t* payload, size_t len) {
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, payload, len);
+    if (!err && doc.containsKey("apower")) {
+        return doc["apower"].as<float>();
+    }
+    // Fallback: plain float value (Gen1)
+    char buf[32];
+    size_t cplen = (len > 31) ? 31 : len;
+    memcpy(buf, payload, cplen);
+    buf[cplen] = '\0';
+    return atof(buf);
 }
 
 void MqttManager::sendDiscovery() {

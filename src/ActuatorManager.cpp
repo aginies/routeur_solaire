@@ -75,11 +75,16 @@ void ActuatorManager::cancelBoost() {
 }
 
 bool ActuatorManager::inForceWindow() {
-    if (!_config || !_config->e_force_window) return false;
+//    if (!_config || !_config->e_force_window) return false;
+    if (!_config) return false;
+    if (_config->force_equipment) return true;
+    if (!_config->e_force_window) return false;
+
     time_t now;
     time(&now);
     struct tm ti;
     localtime_r(&now, &ti);
+    if (ti.tm_year + 1900 < 2024) return false;
     int currMin = ti.tm_hour * 60 + ti.tm_min;
     int start = timeToMinutes(_config->force_start);
     int end = timeToMinutes(_config->force_end);

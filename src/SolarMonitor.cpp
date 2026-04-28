@@ -93,12 +93,18 @@ void SolarMonitor::monitorTask(void* pvParameters) {
         struct tm ti;
         localtime_r(&t_now, &ti);
         int currMin = ti.tm_hour * 60 + ti.tm_min;
-        bool nightActive = isNight(currMin);
+        bool ntpSynced = (ti.tm_year + 1900 >= 2024);
+        bool nightActive = ntpSynced ? isNight(currMin) : false;
         bool forcedWindow = ActuatorManager::inForceWindow();
         bool boostActive = (millis() / 1000) < ActuatorManager::boostEndTime;
         int currentPollInterval = nightActive ? _config->night_poll_interval : _config->poll_interval;
 
-        // 3. Evaluate State Machine
+        // 3. Keep safety timer alive if MQTT data is flowing
+        if (_config->e_shelly_mqtt && MqttManager::hasLatestMqttGridPower) {
+            _lastGoodPoll = now;
+        }
+
+        // 4. Evaluate State Machine
         SystemState newState = SafetyManager::evaluateState(
             TemperatureManager::lastEspTemp,
             TemperatureManager::currentSsrTemp,
@@ -109,7 +115,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
         );
         SafetyManager::applyState(newState);
 
-        // 4. Grid Power Retrieval & Control Math
+        // 5. Grid Power Retrieval & Control Math
         if (now - lastPoll >= (uint32_t)(currentPollInterval * 1000)) {
             lastPoll = now;
             if (GridSensorService::fetchGridData()) {
@@ -146,6 +152,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
                 }
                 Equipment2Manager::requestPower(eq2Requested);
                 Equipment2Manager::loop(); // Run Eq2 state machine
+                esp_task_wdt_reset();
 
                 // RUN PID CONTROL for Eq1: only if in NORMAL state
                 if (SafetyManager::currentState == SystemState::STATE_NORMAL) {
@@ -219,7 +226,8 @@ void SolarMonitor::monitorTask(void* pvParameters) {
 
         // 7. Measured Power Update (Shelly 1PM)
         Shelly1PMManager::update();
-        if (_config->e_equip1) {
+        esp_task_wdt_reset();
+        if (_config->e_equip1 && Shelly1PMManager::hasValidEq1Data()) {
             ActuatorManager::equipmentPower = Shelly1PMManager::getPowerEq1();
         }
 

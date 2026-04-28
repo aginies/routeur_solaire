@@ -119,6 +119,9 @@ String WebManager::templateProcessor(const String& var) {
     if (var == "EQUIP1_SHELLY_IP") return _config->equip1_shelly_ip;
     if (var == "EQUIP1_SHELLY_INDEX_0") return _config->equip1_shelly_index == 0 ? "selected" : "";
     if (var == "EQUIP1_SHELLY_INDEX_1") return _config->equip1_shelly_index == 1 ? "selected" : "";
+    if (var == "EQUIP1_MQTT_YES") return _config->e_equip1_mqtt ? "selected" : "";
+    if (var == "EQUIP1_MQTT_NO") return !_config->e_equip1_mqtt ? "selected" : "";
+    if (var == "EQUIP1_MQTT_TOPIC") return _config->equip1_mqtt_topic;
     if (var == "DELTA") return String(_config->delta);
     if (var == "DELTANEG") return String(_config->deltaneg);
     if (var == "COMPENSATION") return String(_config->compensation);
@@ -183,6 +186,9 @@ String WebManager::templateProcessor(const String& var) {
     if (var == "EQUIP2_IP") return _config->equip2_shelly_ip;
     if (var == "EQUIP2_SHELLY_INDEX_0") return _config->equip2_shelly_index == 0 ? "selected" : "";
     if (var == "EQUIP2_SHELLY_INDEX_1") return _config->equip2_shelly_index == 1 ? "selected" : "";
+    if (var == "EQUIP2_MQTT_YES") return _config->e_equip2_mqtt ? "selected" : "";
+    if (var == "EQUIP2_MQTT_NO") return !_config->e_equip2_mqtt ? "selected" : "";
+    if (var == "EQUIP2_MQTT_TOPIC") return _config->equip2_mqtt_topic;
     if (var == "EQUIP2_POWER") return String(_config->equip2_max_power);
     if (var == "EQUIP2_MIN_TIME") return String(_config->equip2_min_on_time);
     if (var == "EQUIP2_ENABLED_YES") return _config->e_equip2 ? "selected" : "";
@@ -347,6 +353,8 @@ void WebManager::setupRoutes() {
         newCfg.equip2_name = getParam("EQUIP2_NAME");
         newCfg.equip2_shelly_ip = getParam("EQUIP2_IP");
         newCfg.equip2_shelly_index = getParam("EQUIP2_SHELLY_INDEX").toInt();
+        newCfg.e_equip2_mqtt = (getParam("E_EQUIP2_MQTT") == "True");
+        newCfg.equip2_mqtt_topic = getParam("EQUIP2_MQTT_TOPIC");
         newCfg.equip2_max_power = getParam("EQUIP2_POWER").toFloat();
         newCfg.equip2_min_on_time = getParam("EQUIP2_MIN_TIME").toInt();
         newCfg.equip2_priority = getParam("EQUIP2_PRIO").toInt();
@@ -408,6 +416,8 @@ void WebManager::setupRoutes() {
         newCfg.equip2_name = getParam("EQUIP2_NAME");
         newCfg.equip2_shelly_ip = getParam("EQUIP2_IP");
         newCfg.equip2_shelly_index = getParam("EQUIP2_SHELLY_INDEX").toInt();
+        newCfg.e_equip2_mqtt = (getParam("E_EQUIP2_MQTT") == "True");
+        newCfg.equip2_mqtt_topic = getParam("EQUIP2_MQTT_TOPIC");
         newCfg.equip2_max_power = getParam("EQUIP2_POWER").toFloat();
         newCfg.equip2_priority = getParam("EQUIP2_PRIO").toInt();
         newCfg.equip2_min_on_time = getParam("EQUIP2_MIN_TIME").toInt();
@@ -432,6 +442,8 @@ void WebManager::setupRoutes() {
         newCfg.e_equip1 = (getParam("E_EQUIP1") == "True");
         newCfg.equip1_shelly_ip = getParam("EQUIP1_SHELLY_IP");
         newCfg.equip1_shelly_index = getParam("EQUIP1_SHELLY_INDEX").toInt();
+        newCfg.e_equip1_mqtt = (getParam("E_EQUIP1_MQTT") == "True");
+        newCfg.equip1_mqtt_topic = getParam("EQUIP1_MQTT_TOPIC");
         newCfg.max_duty_percent = getParam("MAX_DUTY_PERCENT").toFloat();
         newCfg.export_setpoint = getParam("EXPORT_SETPOINT").toFloat();
         newCfg.delta = getParam("DELTA").toFloat();
@@ -521,15 +533,15 @@ void WebManager::setupRoutes() {
 
     _server.on("/boost", HTTP_POST, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
-        ActuatorManager::startBoost(_config->boost_minutes);
-        Logger::info("Manual boost started for " + String(_config->boost_minutes) + " min");
+        int minutes = request->hasParam("min", true) ? request->getParam("min", true)->value().toInt() : -1;
+        ActuatorManager::startBoost(minutes);
         request->redirect("/");
     });
 
     _server.on("/cancel_boost", HTTP_POST, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
-        ActuatorManager::boostEndTime = 0;
         Logger::info("Manual boost cancelled");
+        ActuatorManager::cancelBoost();
         request->redirect("/");
     });
 
