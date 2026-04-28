@@ -291,10 +291,11 @@
                     <span id="weatherPrecip" style="font-size: 0.8em; opacity: 0.8; display: none;"></span>
                 </div>
             </div>
+            <div id="weatherBackdrop" onclick="document.getElementById('weatherDetail').style.display='none';this.style.display='none'" style="display:none;position:fixed;top:0;left:0;width:100%%;height:100%%;z-index:9998;background:rgba(0,0,0,0.3);"></div>
             <div id="weatherDetail" style="display:none;position:fixed;top:50%%;left:50%%;transform:translate(-50%%,-50%%);background:#16213e;border:2px solid #f0c040;border-radius:12px;padding:20px;z-index:9999;color:#eee;min-width:280px;max-width:90%%;box-shadow:0 8px 24px rgba(0,0,0,0.6);">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
                     <strong style="color:#f0c040;font-size:1.1em;">Détails Météo</strong>
-                    <span onclick="document.getElementById('weatherDetail').style.display='none'" style="cursor:pointer;font-size:1.3em;color:#888;">✕</span>
+                    <span onclick="document.getElementById('weatherDetail').style.display='none';document.getElementById('weatherBackdrop').style.display='none'" style="cursor:pointer;font-size:1.3em;color:#888;">✕</span>
                 </div>
                 <div id="weatherDetailContent" style="font-size:0.9em;line-height:1.8;"></div>
             </div>
@@ -365,7 +366,7 @@
     </div>
 
     <div id="chartCard" class="chart-card" style="display: none; %HISTORY_DISABLED_STYLE%">
-        <canvas id="powerChart"></canvas>
+        <div id="powerChart" style="width:100%%;"></div>
     </div>
 
     <div id="safeStateBox" class="error-box"></div>
@@ -443,6 +444,7 @@
                     if (d.weather_rain > 0) lines.push('🌧️ Pluie: <b>' + d.weather_rain + ' mm</b>');
                     if (d.weather_snow > 0) lines.push('❄️ Neige: <b>' + d.weather_snow + ' cm</b>');
                     document.getElementById('weatherDetailContent').innerHTML = lines.join('<br>');
+                    document.getElementById('weatherBackdrop').style.display = 'block';
                     document.getElementById('weatherDetail').style.display = 'block';
                 }, 250);
             });
@@ -704,17 +706,7 @@
         }
 
         function updateChartStyle() {
-            if (!powerChart) return;
-            const isLight = document.body.classList.contains('light-mode');
-            const textColor = isLight ? '#333' : '#ccc';
-            const gridColor = isLight ? '#eee' : '#333';
-            
-            powerChart.options.scales.x.ticks.color = textColor;
-            powerChart.options.scales.x.grid.color = gridColor;
-            powerChart.options.scales.y.ticks.color = textColor;
-            powerChart.options.scales.y1.ticks.color = '#3498db'; // Keep temperature axis blue
-            powerChart.options.plugins.legend.labels.color = textColor;
-            powerChart.update();
+            if (lastStatus) updateChart(lastStatus);
         }
 
         async function updateLog() {
@@ -743,137 +735,85 @@
         }
 
         async function updateChart(status) {
-            if (typeof Chart === 'undefined') return;
+            if (typeof uPlot === 'undefined') return;
             try {
                 const r = await fetch('/history');
-                const history = await r.json();
-                if (!history || history.length === 0) return;
+                const hist = await r.json();
+                if (!hist || hist.length === 0) return;
 
                 document.getElementById('chartCard').style.display = 'block';
 
-                const labels = history.map(p => {
-                    const date = new Date(p.t * 1000);
-                    const h = date.getHours().toString().padStart(2, '0');
-                    const m = date.getMinutes().toString().padStart(2, '0');
-                    return h + ':' + m;
-                });
-                const gridData = history.map(p => p.g);
-                const equipmentData  = history.map(p => p.e);
-                const equip2Data = history.map(p => p.e2 || 0);
-                const ssrTempData = history.map(p => p.s <= -100 ? null : p.s);
+                const times = hist.map(p => Math.floor(p.t));
+                const gridData = hist.map(p => p.g);
+                const equipData = hist.map(p => p.e);
+                const ssrTemp = hist.map(p => p.s <= -100 ? null : p.s);
 
-                if (!powerChart) {
-                    const ctx = document.getElementById('powerChart').getContext('2d');
-                    const datasets = [{
-                                label: 'Réseau (W)',
-                                data: gridData,
-                                borderColor: '#ff9800',
-                                backgroundColor: 'rgba(255, 152, 0, 0.05)',
-                                fill: true,
-                                tension: 0.3,
-                                pointRadius: 0,
-                                yAxisID: 'y'
-                            }, {
-                                label: 'Solaire Redirigé (W)',
-                                data: equipmentData,
-                                borderColor: '#2ecc71',
-                                backgroundColor: 'rgba(46, 204, 113, 0.1)',
-                                fill: true,
-                                tension: 0.3,
-                                pointRadius: 0,
-                                yAxisID: 'y'
-                            }];
+                let data = [times, gridData, equipData];
+                let seriesDef = [
+                    {},
+                    { label: 'Réseau (W)', stroke: '#ff9800', width: 2, fill: 'rgba(255,152,0,0.05)', scale: 'W' },
+                    { label: 'Solaire Redirigé (W)', stroke: '#2ecc71', width: 2, fill: 'rgba(46,204,113,0.1)', scale: 'W' },
+                ];
 
-                    if ("%E_EQUIP2_BOOL%" === "true") {
-                        datasets.push({
-                            label: '%EQUIP2_NAME% (W)',
-                            data: equip2Data,
-                            borderColor: '#e74c3c',
-                            backgroundColor: 'rgba(231, 76, 60, 0.1)',
-                            fill: true,
-                            tension: 0.3,
-                            pointRadius: 0,
-                            yAxisID: 'y'
-                        });
-                    }
-
-                    datasets.push({
-                                label: 'Temp SSR (°C)',
-                                data: ssrTempData,
-                                borderColor: '#3498db',
-                                borderDash: [5, 5],
-                                fill: false,
-                                tension: 0.3,
-                                pointRadius: 0,
-                                yAxisID: 'y1'
-                            });
-
-                    powerChart = new Chart(ctx, {
-                        type: 'line',
-                        data: {
-                            labels: labels,
-                            datasets: datasets
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            interaction: { mode: 'index', intersect: false },
-                            plugins: {
-                                legend: { labels: { color: '#ccc' } }
-                            },
-                            scales: {
-                                x: { ticks: { color: '#999', maxRotation: 0, autoSkip: true, maxTicksLimit: 12 }, grid: { color: '#333' } },
-                                y: { 
-                                    type: 'linear', 
-                                    display: true, 
-                                    position: 'left', 
-                                    ticks: { color: '#999' }, 
-                                    grid: { color: '#333' },
-                                    grace: '10%%'
-                                },
-                                y1: { 
-                                    type: 'linear', 
-                                    display: true, 
-                                    position: 'right', 
-                                    ticks: { color: '#3498db' }, 
-                                    grid: { drawOnChartArea: false },
-                                    min: 0,
-                                    grace: 5
-                                }
-                            }
-                        }
-                    });
-                } else {
-                    powerChart.data.labels = labels;
-                    powerChart.data.datasets[0].data = gridData;
-                    powerChart.data.datasets[1].data = equipmentData;
-                    
-                    let nextIdx = 2;
-                    if ("%E_EQUIP2_BOOL%" === "true") {
-                        if (powerChart.data.datasets[nextIdx]) powerChart.data.datasets[nextIdx].data = equip2Data;
-                        nextIdx++;
-                    }
-                    if (powerChart.data.datasets[nextIdx]) {
-                        powerChart.data.datasets[nextIdx].data = ssrTempData;
-                    }
-                    powerChart.update('none');
+                if ("%E_EQUIP2_BOOL%" === "true") {
+                    data.push(hist.map(p => p.e2 || 0));
+                    seriesDef.push({ label: '%EQUIP2_NAME% (W)', stroke: '#e74c3c', width: 2, fill: 'rgba(231,76,60,0.1)', scale: 'W' });
                 }
-            } catch(e) {}
+
+                data.push(ssrTemp);
+                seriesDef.push({ label: 'Temp SSR (°C)', stroke: '#3498db', width: 1, dash: [5,5], scale: 'temp' });
+
+                const isLight = document.body.classList.contains('light-mode');
+                const textColor = isLight ? '#333' : '#ccc';
+                const gridColor = isLight ? 'rgba(200,200,200,0.3)' : 'rgba(80,80,80,0.5)';
+                const el = document.getElementById('powerChart');
+
+                const opts = {
+                    width: el.parentElement.clientWidth - 32,
+                    height: 280,
+                    tzDate: ts => new Date(ts * 1000),
+                    scales: {
+                        x: { time: true },
+                        W: { auto: true },
+                        temp: { auto: true },
+                    },
+                    axes: [
+                        { stroke: textColor, grid: { stroke: gridColor }, ticks: { stroke: gridColor },
+                          values: (u, vals) => vals.map(v => { var d = new Date(v * 1000); return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0'); }) },
+                        { stroke: textColor, grid: { stroke: gridColor }, ticks: { stroke: gridColor }, scale: 'W', label: 'W', labelSize: 20 },
+                        { stroke: '#3498db', scale: 'temp', side: 1, grid: { show: false }, ticks: { stroke: '#3498db' }, label: '°C', labelSize: 20 },
+                    ],
+                    series: seriesDef,
+                };
+
+                if (powerChart) powerChart.destroy();
+                el.innerHTML = '';
+                powerChart = new uPlot(opts, data, el);
+            } catch(e) { console.error('Chart error:', e); }
         }
 
         updateStatus(); // Initial call starts the interval chain
         updateDateTime();
-        setTimeout(() => {
+        setTimeout(function() {
             updateLog();
             setInterval(updateLog, 15000);
-            setInterval(() => { if(!nightMode && lastStatus) updateChart(lastStatus); }, 30000);
-        }, 3000); // Delay log/chart fetches to let ESP32 stabilize
-
-        setTimeout(function() {
+            setInterval(function() { if(!nightMode && lastStatus) updateChart(lastStatus); }, 30000);
+            var link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = '/uPlot.min.css';
+            document.head.appendChild(link);
             var s = document.createElement('script');
-            s.src = '/chart.min.js';
+            s.src = '/uPlot.iife.min.js';
+            s.onload = function() { if(lastStatus) updateChart(lastStatus); };
             document.head.appendChild(s);
-        }, 30000);
+        }, 3000);
+
+        window.addEventListener('resize', function() {
+            if (powerChart) {
+                var el = document.getElementById('powerChart');
+                powerChart.setSize({ width: el.parentElement.clientWidth - 32, height: 280 });
+            }
+        });
     </script>
 </body>
 </html>
