@@ -96,6 +96,8 @@ String WebManager::templateProcessor(const String& var) {
     if (var == "SHELLY_MQTT_NO") return !_config->e_shelly_mqtt ? "selected" : "";
     if (var == "SHELLY_MQTT_TOPIC") return _config->shelly_mqtt_topic;
     if (var == "POLL_INTERVAL") return String(_config->poll_interval);
+    if (var == "SHELLY_TIMEOUT") return String(_config->shelly_timeout);
+    if (var == "SAFETY_TIMEOUT") return String(_config->safety_timeout);
 
     if (var == "MQTT_YES") return _config->e_mqtt ? "selected" : "";
     if (var == "MQTT_NO") return !_config->e_mqtt ? "selected" : "";
@@ -384,6 +386,8 @@ void WebManager::setupRoutes() {
         newCfg.e_shelly_mqtt = (getParam("E_SHELLY_MQTT") == "True");
         newCfg.shelly_mqtt_topic = getParam("SHELLY_MQTT_TOPIC");
         newCfg.poll_interval = getParam("POLL_INTERVAL").toInt();
+        newCfg.shelly_timeout = getParam("SHELLY_TIMEOUT").toInt();
+        newCfg.safety_timeout = getParam("SAFETY_TIMEOUT").toInt();
         
         newCfg.mqtt_ip = getParam("MQTT_IP");
         newCfg.mqtt_port = getParam("MQTT_PORT").toInt();

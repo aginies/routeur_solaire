@@ -17,17 +17,17 @@ void ControlStrategy::startTasks() {
     if (!_config) return;
 
     if (_config->control_mode == "burst") {
-        xTaskCreate(burstControlTask, "burstTask", 2048, NULL, 5, NULL);
+        xTaskCreatePinnedToCore(burstControlTask, "burstTask", 2048, NULL, 5, NULL, 1);
     } else if (_config->control_mode == "cycle_stealing" || _config->control_mode == "zero_crossing") {
-        xTaskCreate(cycleStealingTask, "cycleTask", 4096, NULL, 5, NULL);
+        xTaskCreatePinnedToCore(cycleStealingTask, "cycleTask", 4096, NULL, 5, NULL, 1);
     } else if (_config->control_mode == "trame") {
         pinMode(_config->zx_pin, INPUT_PULLUP);
         attachInterrupt(digitalPinToInterrupt(_config->zx_pin), handleZxInterrupt, RISING);
-        xTaskCreate(trameControlTask, "trameTask", 4096, NULL, 5, NULL);
+        xTaskCreatePinnedToCore(trameControlTask, "trameTask", 4096, NULL, 5, NULL, 1);
     } else if (_config->control_mode == "phase") {
         pinMode(_config->zx_pin, INPUT_PULLUP);
         attachInterrupt(digitalPinToInterrupt(_config->zx_pin), handleZxInterrupt, RISING);
-        xTaskCreate(phaseControlTask, "phaseTask", 4096, NULL, 5, NULL);
+        xTaskCreatePinnedToCore(phaseControlTask, "phaseTask", 4096, NULL, 5, NULL, 1);
     }
 }
 

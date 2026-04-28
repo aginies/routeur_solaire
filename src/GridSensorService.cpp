@@ -10,7 +10,6 @@ float GridSensorService::currentGridPower = 0.0;
 float GridSensorService::currentGridVoltage = 230.0;
 bool GridSensorService::hasFreshData = false;
 const Config* GridSensorService::_config = nullptr;
-WiFiClient GridSensorService::_wifiClient;
 HardwareSerial* GridSensorService::_jsySerial = nullptr;
 
 void GridSensorService::init(const Config& config) {
@@ -154,14 +153,15 @@ float GridSensorService::getShellyPower() {
         return _config->export_setpoint + (sin(phase) * 100.0) + noise;
     }
 
-    if (WiFi.status() != WL_CONNECTED) return -99999.0;
+    if (WiFi.status() != WL_CONNECTED) return SENSOR_ERROR_VALUE;
 
+    WiFiClient client;
     HTTPClient http;
     http.setConnectTimeout(2000);
     http.setTimeout(_config->shelly_timeout * 1000);
     
     String url = "http://" + _config->shelly_em_ip + "/emeter/0";
-    http.begin(_wifiClient, url);
+    http.begin(client, url);
     
     int httpCode = http.GET();
     float power = SENSOR_ERROR_VALUE;

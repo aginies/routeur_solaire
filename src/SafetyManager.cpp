@@ -34,7 +34,7 @@ SystemState SafetyManager::evaluateState(float espTemp, float ssrTemp, uint32_t 
 
     // 1. Priority 1: SAFE TIMEOUT (Sensor loss)
     uint32_t now = millis();
-    uint32_t timeout = (_config->shelly_timeout * 1000);
+    uint32_t timeout = (_config->safety_timeout * 1000);
     if (now - lastGoodPoll >= timeout) {
         emergencyReason = "Shelly Timeout!";
         return SystemState::STATE_SAFE_TIMEOUT;

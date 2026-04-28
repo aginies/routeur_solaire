@@ -1,5 +1,6 @@
 #include "WeatherManager.h"
 #include <HTTPClient.h>
+#include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 #include "Logger.h"
 
@@ -40,13 +41,15 @@ void WeatherManager::weatherTask(void* pvParameters) {
 void WeatherManager::updateWeather() {
     if (!_config || !_config->e_weather) return;
 
+    WiFiClientSecure client;
+    client.setInsecure(); // Open-Meteo doesn't need strict cert check for this use case
     HTTPClient http;
     // Open-Meteo API: Free & Anonymous
     String url = "https://api.open-meteo.com/v1/forecast?latitude=" + _config->weather_lat + 
                  "&longitude=" + _config->weather_lon + 
                  "&current=temperature_2m,weather_code,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high";
 
-    if (http.begin(url)) {
+    if (http.begin(client, url)) {
         int httpCode = http.GET();
         if (httpCode == HTTP_CODE_OK) {
             JsonDocument doc;

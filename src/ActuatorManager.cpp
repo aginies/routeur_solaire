@@ -25,7 +25,7 @@ void ActuatorManager::init(const Config& config) {
     digitalWrite(config.relay_pin, LOW); // Relay ON (Normal Closed)
     
     if (config.e_fan) {
-        ledcSetup(4, 25000, 12);
+        ledcSetup(4, 10000, 10);
         ledcAttachPin(config.fan_pin, 4);
         ledcWrite(4, 0);
     }
@@ -51,9 +51,9 @@ bool ActuatorManager::setFanSpeed(int percent, bool isTest) {
     if (percent > 100) percent = 100;
     if (percent == fanPercent && !isTest) return true;
 
-    int duty = (percent * 4095) / 100;
+    int duty = (percent * 1023) / 100;
     if (isTest) {
-        Serial.printf("Fan: MANUAL TEST speed: %d%% (Duty: %d/4095)\n", percent, duty);
+        Serial.printf("Fan: MANUAL TEST speed: %d%% (Duty: %d/1023)\n", percent, duty);
     }
     
     ledcWrite(4, duty);

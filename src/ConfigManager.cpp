@@ -82,6 +82,8 @@ Config ConfigManager::load() {
     if (doc.containsKey("shelly_mqtt_topic")) config.shelly_mqtt_topic = doc["shelly_mqtt_topic"].as<String>();
     if (doc.containsKey("fake_shelly")) config.fake_shelly = doc["fake_shelly"];
     if (doc.containsKey("poll_interval")) config.poll_interval = doc["poll_interval"];
+    if (doc.containsKey("shelly_timeout")) config.shelly_timeout = doc["shelly_timeout"];
+    if (doc.containsKey("safety_timeout")) config.safety_timeout = doc["safety_timeout"];
 
     // Equipment
     if (doc.containsKey("equipment_name")) config.equipment_name = doc["equipment_name"].as<String>();
@@ -196,6 +198,8 @@ bool ConfigManager::save(const Config& config) {
     doc["shelly_mqtt_topic"] = config.shelly_mqtt_topic;
     doc["fake_shelly"] = config.fake_shelly;
     doc["poll_interval"] = config.poll_interval;
+    doc["shelly_timeout"] = config.shelly_timeout;
+    doc["safety_timeout"] = config.safety_timeout;
     doc["equipment_name"] = config.equipment_name;
     doc["equipment_max_power"] = config.equipment_max_power;
     doc["export_setpoint"] = config.export_setpoint;

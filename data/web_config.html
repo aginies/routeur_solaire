@@ -211,6 +211,16 @@
                         <label for="POLL_INTERVAL">Intervalle de lecture HTTP (secondes):</label>
                         <input type="number" min="1" max="60" id="POLL_INTERVAL" name="POLL_INTERVAL" value="%POLL_INTERVAL%">
                     </div>
+                    <div class="form-group">
+                        <label for="SHELLY_TIMEOUT">Timeout Requête HTTP (sec):</label>
+                        <input type="number" min="1" max="10" id="SHELLY_TIMEOUT" name="SHELLY_TIMEOUT" value="%SHELLY_TIMEOUT%">
+                        <p style="font-size: 0.8em; color: #888; margin-top: 4px;">Temps max d'attente pour une réponse Shelly.</p>
+                    </div>
+                    <div class="form-group">
+                        <label for="SAFETY_TIMEOUT">Délai Sécurité sans données (sec):</label>
+                        <input type="number" min="2" max="60" id="SAFETY_TIMEOUT" name="SAFETY_TIMEOUT" value="%SAFETY_TIMEOUT%">
+                        <p style="font-size: 0.8em; color: #888; margin-top: 4px;">Le système s'arrête si aucune donnée n'est reçue pendant ce délai.</p>
+                    </div>
                     <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
 
                     <h3>MQTT (Status & Discovery)</h3>

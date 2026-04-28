@@ -42,12 +42,13 @@ void SolarMonitor::init(const Config& config) {
 }
 
 void SolarMonitor::startTasks() {
-    // Priority 3: High level monitoring and logic
-    xTaskCreate(monitorTask, "monitorTask", 8192, NULL, 3, NULL);
+    // Priority 3: Monitoring and logic - Core 0 (System Core)
+    // Above background maintenance (Pri 1-2) but coexists with networking.
+    xTaskCreatePinnedToCore(monitorTask, "monitorTask", 16384, NULL, 3, NULL, 0);
     
-    // Sub-service tasks
+    // Sub-service tasks - Core 0
     TemperatureManager::startTask();
-    ControlStrategy::startTasks();
+    ControlStrategy::startTasks(); // These will remain on Core 1 as configured in their own startTasks()
 #ifndef DISABLE_HISTORY
     HistoryBuffer::startTask();
 #endif
@@ -58,12 +59,14 @@ void SolarMonitor::monitorTask(void* pvParameters) {
     uint32_t lastMqttReport = 0;
     uint32_t lastStatsUpdate = millis();
     uint32_t lastSolarDataLog = 0;
+    uint32_t lastPoll = 0;
 
     while (true) {
         esp_task_wdt_reset();
         uint32_t now = millis();
         
         // 0. Periodic Data Logging
+        // ... (lines 72-88) ...
         if (now - lastSolarDataLog >= 60000) {
             lastSolarDataLog = now;
             time_t t_now;
@@ -104,78 +107,81 @@ void SolarMonitor::monitorTask(void* pvParameters) {
         SafetyManager::applyState(newState);
 
         // 4. Grid Power Retrieval & Control Math
-        if (GridSensorService::fetchGridData()) {
-            esp_task_wdt_reset(); // Feed after slow HTTP call if applicable
-            _lastGoodPoll = now;
-            
-            if (SafetyManager::currentState == SystemState::STATE_SAFE_TIMEOUT) {
-                Logger::info("Grid Power Recovered");
-            }
-            
-            // --- EQUIPMENT 2 (PAC) PRIORITY LOGIC ---
-            float gridPower = GridSensorService::currentGridPower;
-            float eq1Power = ActuatorManager::equipmentPower;
-            float surplus = -gridPower + eq1Power; // Available power for diversion (excluding Eq2)
-            if (Equipment2Manager::isCurrentlyOn()) {
-                surplus += Shelly1PMManager::getPower();
-            }
+        if (now - lastPoll >= (uint32_t)(currentPollInterval * 1000)) {
+            lastPoll = now;
+            if (GridSensorService::fetchGridData()) {
+                esp_task_wdt_reset(); // Feed after slow HTTP call if applicable
+                _lastGoodPoll = now;
+                
+                if (SafetyManager::currentState == SystemState::STATE_SAFE_TIMEOUT) {
+                    Logger::info("Grid Power Recovered");
+                }
+                
+                // --- EQUIPMENT 2 (PAC) PRIORITY LOGIC ---
+                float gridPower = GridSensorService::currentGridPower;
+                float eq1Power = ActuatorManager::equipmentPower;
+                float surplus = -gridPower + eq1Power; // Available power for diversion (excluding Eq2)
+                if (Equipment2Manager::isCurrentlyOn()) {
+                    surplus += Shelly1PMManager::getPower();
+                }
 
-            bool eq2Requested = false;
-            if (_config->e_equip2 && SafetyManager::currentState == SystemState::STATE_NORMAL) {
-                if (_config->equip2_priority == 1) {
-                    // WATER HEATER FIRST
-                    // Turn on Eq2 if Eq1 is at ~100% AND there is still surplus > Eq2 power
-                    if (ActuatorManager::currentDuty >= 0.95f && surplus >= (_config->equip2_max_power + _config->delta)) {
-                        eq2Requested = true;
-                    }
-                } else {
-                    // PAC FIRST
-                    // Turn on Eq2 if available surplus > Eq2 power
-                    if (surplus >= (_config->equip2_max_power + _config->delta)) {
-                        eq2Requested = true;
+                bool eq2Requested = false;
+                if (_config->e_equip2 && SafetyManager::currentState == SystemState::STATE_NORMAL) {
+                    if (_config->equip2_priority == 1) {
+                        // WATER HEATER FIRST
+                        // Turn on Eq2 if Eq1 is at ~100% AND there is still surplus > Eq2 power
+                        if (ActuatorManager::currentDuty >= 0.95f && surplus >= (_config->equip2_max_power + _config->delta)) {
+                            eq2Requested = true;
+                        }
+                    } else {
+                        // PAC FIRST
+                        // Turn on Eq2 if available surplus > Eq2 power
+                        if (surplus >= (_config->equip2_max_power + _config->delta)) {
+                            eq2Requested = true;
+                        }
                     }
                 }
-            }
-            Equipment2Manager::requestPower(eq2Requested);
-            Equipment2Manager::loop(); // Run Eq2 state machine
+                Equipment2Manager::requestPower(eq2Requested);
+                Equipment2Manager::loop(); // Run Eq2 state machine
 
-            // RUN PID CONTROL for Eq1: only if in NORMAL state
-            if (SafetyManager::currentState == SystemState::STATE_NORMAL) {
-                static int freshDataCounter = 0;
-                float effectiveGrid = GridSensorService::currentGridPower - _config->export_setpoint;
-                
-                // DYNAMIC SENSOR LAG PROTECTION:
-                // If JSY is active, react every message (it's wired and fast).
-                // If Shelly is active:
-                //   If error is large (> dynamic_threshold_w), react instantly.
-                //   If fine-tuning near 0W, wait 2 messages for stabilization.
-                bool isJsy = GridSensorService::isJsyActive();
-                bool largeError = (abs(effectiveGrid) > _config->dynamic_threshold_w);
-                int requiredMessages = (isJsy || largeError) ? 1 : 2;
-
-                freshDataCounter++;
-                
-                if (freshDataCounter >= requiredMessages) {
-                    freshDataCounter = 0;
-                    int32_t currentDutyMilli = (int32_t)(ActuatorManager::currentDuty * 1000.0f);
-                    int32_t gridPowerMw = (int32_t)(effectiveGrid * 1000.0f);
+                // RUN PID CONTROL for Eq1: only if in NORMAL state
+                if (SafetyManager::currentState == SystemState::STATE_NORMAL) {
+                    static int freshDataCounter = 0;
+                    float effectiveGrid = GridSensorService::currentGridPower - _config->export_setpoint;
                     
-                    int32_t newDutyMilli = _ctrl->update(currentDutyMilli, gridPowerMw);
-                    float newDuty = (float)newDutyMilli / 1000.0f;
+                    // DYNAMIC SENSOR LAG PROTECTION:
+                    // If JSY is active, react every message (it's wired and fast).
+                    // If Shelly is active:
+                    //   If error is large (> dynamic_threshold_w), react instantly.
+                    //   If fine-tuning near 0W, wait 2 messages for stabilization.
+                    bool isJsy = GridSensorService::isJsyActive();
+                    bool largeError = (abs(effectiveGrid) > _config->dynamic_threshold_w);
+                    int requiredMessages = (isJsy || largeError) ? 1 : 2;
 
-                    float maxDuty = _config->max_duty_percent / 100.0f;
-                    if (newDuty > maxDuty) newDuty = maxDuty;
+                    freshDataCounter++;
                     
-                    ActuatorManager::setDuty(newDuty);
-                    Serial.printf("Ctrl: Grid=%.1fW, Setpoint=%.0fW, Duty=%.1f%%\n", 
-                        GridSensorService::currentGridPower, _config->export_setpoint, ActuatorManager::currentDuty * 100.0);
+                    if (freshDataCounter >= requiredMessages) {
+                        freshDataCounter = 0;
+                        int32_t currentDutyMilli = (int32_t)(ActuatorManager::currentDuty * 1000.0f);
+                        int32_t gridPowerMw = (int32_t)(effectiveGrid * 1000.0f);
+                        
+                        int32_t newDutyMilli = _ctrl->update(currentDutyMilli, gridPowerMw);
+                        float newDuty = (float)newDutyMilli / 1000.0f;
+
+                        float maxDuty = _config->max_duty_percent / 100.0f;
+                        if (newDuty > maxDuty) newDuty = maxDuty;
+                        
+                        ActuatorManager::setDuty(newDuty);
+                        Serial.printf("Ctrl: Grid=%.1fW, Setpoint=%.0fW, Duty=%.1f%%\n", 
+                            GridSensorService::currentGridPower, _config->export_setpoint, ActuatorManager::currentDuty * 100.0);
+                    }
                 }
+                GridSensorService::hasFreshData = false;
+            } else {
+                // Timeout Check
+                // The SafetyManager handles the STATE_SAFE_TIMEOUT automatically 
+                // via the lastGoodPoll variable passed to evaluateState().
             }
-            GridSensorService::hasFreshData = false;
-        } else {
-            // Timeout Check
-            // The SafetyManager handles the STATE_SAFE_TIMEOUT automatically 
-            // via the lastGoodPoll variable passed to evaluateState().
         }
 
         // 5. Stats & MQTT

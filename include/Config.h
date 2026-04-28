@@ -132,7 +132,8 @@ struct Config {
     int fan_temp_offset = 10;
 
     // Watchdog
-    int shelly_timeout = 10;
+    int shelly_timeout = 2;
+    int safety_timeout = 10;
 
     // JSY-MK-194
     bool e_jsy = false;

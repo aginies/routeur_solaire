@@ -21,7 +21,6 @@ private:
     static uint16_t calculateCRC(uint8_t *array, uint8_t len);
 
     static const Config* _config;
-    static WiFiClient _wifiClient;
     static HardwareSerial* _jsySerial;
 };
 

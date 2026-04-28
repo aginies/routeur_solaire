@@ -214,7 +214,9 @@ void StatsManager::save() {
     
     while (_history.size() > MAX_STATS_DAYS) _history.erase(_history.begin());
 
+    int iCount = 0;
     for (auto const& [date, ds] : _history) {
+        if (iCount++ % 5 == 0) esp_task_wdt_reset();
         JsonObject obj = doc[date].to<JsonObject>();
         obj["import"] = round(ds.import * 10) / 10.0;
         obj["redirect"] = round(ds.redirect * 10) / 10.0;
