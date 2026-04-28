@@ -294,7 +294,8 @@ void WebManager::setupRoutes() {
         request->send(200, "text/plain", "OK");
     });
 
-    _server.serveStatic("/chart.min.js", LittleFS, "/chart.min.js");
+    _server.serveStatic("/uPlot.iife.min.js", LittleFS, "/uPlot.iife.min.js");
+    _server.serveStatic("/uPlot.min.css", LittleFS, "/uPlot.min.css");
     _server.serveStatic("/icons", LittleFS, "/icons");
 
 #ifndef DISABLE_STATS
