@@ -294,8 +294,16 @@ void WebManager::setupRoutes() {
         request->send(200, "text/plain", "OK");
     });
 
-    _server.serveStatic("/uPlot.iife.min.js", LittleFS, "/uPlot.iife.min.js");
-    _server.serveStatic("/uPlot.min.css", LittleFS, "/uPlot.min.css");
+    _server.on("/uPlot.iife.min.js", HTTP_GET, [](AsyncWebServerRequest *request) {
+        AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/uPlot.iife.min.js.gz", "application/javascript");
+        response->addHeader("Content-Encoding", "gzip");
+        request->send(response);
+    });
+    _server.on("/uPlot.min.css", HTTP_GET, [](AsyncWebServerRequest *request) {
+        AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/uPlot.min.css.gz", "text/css");
+        response->addHeader("Content-Encoding", "gzip");
+        request->send(response);
+    });
     _server.serveStatic("/icons", LittleFS, "/icons");
 
 #ifndef DISABLE_STATS
