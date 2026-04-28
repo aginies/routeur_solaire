@@ -370,7 +370,7 @@
                 </div>
             </details>
 
-            <!-- 4. PARTIE HARDWARE -->
+            <!-- 5. HARDWARE & PINS -->
             <details>
                 <summary>Hardware & Pins</summary>
                 <div class="section-content">
@@ -481,7 +481,7 @@
                 </div>
             </details>
 
-            <!-- 5. WEATHER (OPEN-METEO) -->
+            <!-- 6. MÉTÉO (OPEN-METEO) -->
             <details>
                 <summary>Météo (Open-Meteo)</summary>
                 <div class="section-content">
@@ -509,7 +509,7 @@
                 </div>
             </details>
 
-            <!-- 6. PARTIE EXPÉRIMENTALE & SÉCURITÉ -->
+            <!-- 7. EXPÉRIMENTAL & SÉCURITÉ -->
             <details>
                 <summary>🛠 Expérimental & Sécurité</summary>
                 <div class="section-content">
@@ -533,7 +533,7 @@
                 </div>
             </details>
 
-            <!-- 5. MAINTENANCE & DIAGNOSTICS -->
+            <!-- 8. MAINTENANCE & DIAGNOSTICS -->
             <details>
                 <summary>🛠 Maintenance & Diagnostics</summary>
                 <div class="section-content">
@@ -547,7 +547,10 @@
                     <hr style="border: 0; border-top: 1px solid #333; margin: 20px 0;">
                     <div class="form-group">
                         <label>Actions système :</label>
-                        <a href="/RESET_device" class="reset-button" style="width:100%; text-align:center; box-sizing:border-box;" onclick="return confirm('Redémarrer le device ?')">Redémarrer l'ESP32</a>
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <a href="/RESET_device" class="reset-button" style="text-align:center; background-color: #e67e22;" onclick="return confirm('Redémarrer l\'ESP32 ?')">Redémarrer l'ESP32</a>
+                            <a href="/RESET_config" class="reset-button" style="text-align:center;" onclick="return confirm('EFFACER TOUTE LA CONFIGURATION ET REDÉMARRER ?')">Effacer la Configuration (Factory Reset)</a>
+                        </div>
                     </div>
                 </div>
             </details>
@@ -558,7 +561,7 @@
             </div>
         </form>
 
-        <!-- 5. MISE À JOUR (OTA) -->
+        <!-- 9. MISE À JOUR (OTA) -->
         <details style="margin-top: 20px;">
             <summary>🚀 Mise à jour (OTA)</summary>
             <div class="section-content">

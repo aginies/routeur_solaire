@@ -19,6 +19,7 @@ public:
     // Command from Solar Routing
     static void requestPower(bool canHavePower);
     static bool isCurrentlyOn();
+    static bool isBypassedByCloud();
     
     static Eq2State getState() { return _state; }
     static uint32_t getRemainingMinTime();

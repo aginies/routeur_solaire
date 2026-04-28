@@ -468,6 +468,13 @@ void WebManager::setupRoutes() {
         _rebootRequested = true;
     });
 
+    _server.on("/RESET_config", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
+        ConfigManager::reset();
+        request->send(200, "text/plain", "Configuration effacée. Redémarrage en cours...");
+        _rebootRequested = true;
+    });
+
     _server.on("/test_fan", HTTP_POST, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
         int speed = request->hasParam("speed") ? request->getParam("speed")->value().toInt() : 0;
@@ -535,6 +542,7 @@ String WebManager::getStatusJson() {
     doc["e_ssr_temp"] = _config->e_ssr_temp;
     doc["e_equip2"] = _config->e_equip2;
     doc["equip2_name"] = _config->equip2_name;
+    doc["equip2_bypassed"] = Equipment2Manager::isBypassedByCloud();
     doc["night_mode"] = SolarMonitor::isNight(Utils::getCurrentMinutes());
 
     // Weather
@@ -545,6 +553,7 @@ String WebManager::getStatusJson() {
         doc["weather_clouds_mid"] = WeatherManager::getCloudCoverMid();
         doc["weather_clouds_high"] = WeatherManager::getCloudCoverHigh();
         doc["weather_temp"] = WeatherManager::getTemperature();
+        doc["weather_age"] = millis() - WeatherManager::getLastUpdate();
         doc["weather_icon"] = WeatherManager::getWeatherIcon();
         doc["weather_too_cloudy"] = WeatherManager::isTooCloudy();
     }

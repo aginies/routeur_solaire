@@ -1,5 +1,6 @@
 #include "Equipment2Manager.h"
 #include "Shelly1PMManager.h"
+#include "WeatherManager.h"
 #include "Utils.h"
 #include "Logger.h"
 
@@ -34,6 +35,14 @@ bool Equipment2Manager::isCurrentlyOn() {
     return _state == Eq2State::ON || _state == Eq2State::PENDING_OFF;
 }
 
+bool Equipment2Manager::isBypassedByCloud() {
+    if (!_config || !_config->e_equip2) return false;
+    // If it's scheduled, it runs regardless of clouds (force mode)
+    if (isScheduled(Utils::getCurrentMinutes())) return false;
+    // Otherwise, if WeatherManager says it's too cloudy, we bypass
+    return WeatherManager::isTooCloudy();
+}
+
 uint32_t Equipment2Manager::getRemainingMinTime() {
     if (_state != Eq2State::ON && _state != Eq2State::PENDING_OFF) return 0;
     uint32_t elapsed = (millis() - _stateChangedMs) / 1000;
@@ -50,7 +59,9 @@ void Equipment2Manager::loop() {
     uint32_t now = millis();
     int currentMin = Utils::getCurrentMinutes();
     bool scheduled = isScheduled(currentMin);
-    bool shouldBeOn = scheduled || _powerRequested;
+    
+    // Eq2 should be on if scheduled OR if solar power requested AND not bypassed by clouds
+    bool shouldBeOn = scheduled || (_powerRequested && !isBypassedByCloud());
 
     switch (_state) {
         case Eq2State::OFF:

@@ -289,9 +289,10 @@
                 <div class="value" id="equipmentPower">—<span class="unit">W</span></div>
             </div>
             <!-- Équipement 2 -->
-            <div id="eq2Row" style="display: none; border-top: 1px solid var(--border-color); padding-top: 10px; margin-top: 4px;">
+            <div id="eq2Row" style="display: none; border-top: 1px solid var(--border-color); padding-top: 10px; margin-top: 4px; position: relative;">
                 <div class="label"><a href="%EQUIP2_URL%" id="eq2Link" style="color: inherit; text-decoration: none;"><span id="eq2NameLabel">Équipement 2</span></a></div>
                 <div class="value" id="equip2Power">—<span class="unit">W</span></div>
+                <div id="eq2BypassBadge" style="display:none; position: absolute; top: 10px; right: 0; background: #7f8c8d; color: #fff; font-size: 0.6em; padding: 2px 6px; border-radius: 4px; font-weight: bold;">NUAGES (PAUSE)</div>
             </div>
         </div>
         <div class="card" id="ssrTempCard">
@@ -432,6 +433,8 @@
                     if (eq2PowerEl) eq2PowerEl.innerHTML = num(d.equip2_power) + '<span class="unit">W</span>';
                     const nameLabel = document.getElementById('eq2NameLabel');
                     if (nameLabel) nameLabel.textContent = d.equip2_name || 'Équipement 2';
+                    const bypassBadge = document.getElementById('eq2BypassBadge');
+                    if (bypassBadge) bypassBadge.style.display = d.equip2_bypassed ? 'block' : 'none';
                 }
 
                 // Force Mode & Boost
@@ -501,7 +504,15 @@
                         const wt = document.getElementById('weatherText');
                         if (wt) {
                             const details = `(L:${d.weather_clouds_low}%% M:${d.weather_clouds_mid}%% H:${d.weather_clouds_high}%%)`;
-                            wt.textContent = d.weather_clouds + '%% nuages ' + details + ' (' + d.weather_temp.toFixed(1) + '°C)';
+                            let remainMs = 900000 - (d.weather_age || 0);
+                            if (remainMs < 0) remainMs = 0;
+                            
+                            // Arrondir au palier de 30 secondes inférieur pour un affichage plus calme
+                            remainMs = Math.ceil(remainMs / 30000) * 30000;
+                            
+                            const rm = Math.floor(remainMs / 60000);
+                            const rs = Math.floor((remainMs %% 60000) / 1000).toString().padStart(2, '0');
+                            wt.textContent = d.weather_clouds + '%% nuages ' + details + ' (Maj dans ' + rm + ':' + rs + ')';
                         }
                         const wi = document.getElementById('weatherIcon');
                         if (wi && d.weather_icon) {
