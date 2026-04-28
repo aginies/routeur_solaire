@@ -97,6 +97,12 @@ Config ConfigManager::load() {
     if (doc.containsKey("equip2_min_on_time")) config.equip2_min_on_time = doc["equip2_min_on_time"];
     if (doc.containsKey("equip2_schedule")) config.equip2_schedule = doc["equip2_schedule"];
 
+    // Weather
+    if (doc.containsKey("e_weather")) config.e_weather = doc["e_weather"];
+    if (doc.containsKey("weather_lat")) config.weather_lat = doc["weather_lat"].as<String>();
+    if (doc.containsKey("weather_lon")) config.weather_lon = doc["weather_lon"].as<String>();
+    if (doc.containsKey("weather_cloud_threshold")) config.weather_cloud_threshold = doc["weather_cloud_threshold"];
+
     // Incremental Controller
     if (doc.containsKey("delta")) config.delta = doc["delta"];
     if (doc.containsKey("deltaneg")) config.deltaneg = doc["deltaneg"];
@@ -202,6 +208,12 @@ bool ConfigManager::save(const Config& config) {
     doc["equip2_priority"] = config.equip2_priority;
     doc["equip2_min_on_time"] = config.equip2_min_on_time;
     doc["equip2_schedule"] = config.equip2_schedule;
+
+    // Weather
+    doc["e_weather"] = config.e_weather;
+    doc["weather_lat"] = config.weather_lat;
+    doc["weather_lon"] = config.weather_lon;
+    doc["weather_cloud_threshold"] = config.weather_cloud_threshold;
 
     doc["delta"] = config.delta;
     doc["deltaneg"] = config.deltaneg;

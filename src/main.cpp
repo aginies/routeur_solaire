@@ -10,6 +10,7 @@
 #include "MqttManager.h"
 #include "LedManager.h"
 #include "StatsManager.h"
+#include "WeatherManager.h"
 
 Config config;
 
@@ -62,6 +63,9 @@ void setup() {
     Logger::info("MQTT broker: " + config.mqtt_ip + ":" + String(config.mqtt_port));
     MqttManager::init(config);
     WebManager::init(config);
+
+    WeatherManager::init(config);
+    WeatherManager::startTask();
 
     SolarMonitor::init(config);
     SolarMonitor::startTasks();

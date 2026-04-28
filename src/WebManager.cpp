@@ -9,6 +9,7 @@
 #include "TemperatureManager.h"
 #include "SafetyManager.h"
 #include "HistoryBuffer.h"
+#include "WeatherManager.h"
 #include "Equipment2Manager.h"
 #include "Shelly1PMManager.h"
 #include "Utils.h"
@@ -155,6 +156,12 @@ String WebManager::templateProcessor(const String& var) {
     if (var == "SELECTED_80") return _config->cpu_freq == 80 ? "selected" : "";
     if (var == "SELECTED_160") return _config->cpu_freq == 160 ? "selected" : "";
     if (var == "SELECTED_240") return _config->cpu_freq == 240 ? "selected" : "";
+
+    if (var == "WEATHER_YES") return _config->e_weather ? "selected" : "";
+    if (var == "WEATHER_NO") return !_config->e_weather ? "selected" : "";
+    if (var == "WEATHER_LAT") return _config->weather_lat;
+    if (var == "WEATHER_LON") return _config->weather_lon;
+    if (var == "WEATHER_THRESH") return String(_config->weather_cloud_threshold);
 
     if (var == "FAKE_SHELLY_YES") return _config->fake_shelly ? "selected" : "";
     if (var == "FAKE_SHELLY_NO") return !_config->fake_shelly ? "selected" : "";
@@ -420,6 +427,12 @@ void WebManager::setupRoutes() {
         newCfg.control_mode = getParam("CONTROL_MODE");
 
         newCfg.fake_shelly = (getParam("FAKE_SHELLY") == "True");
+
+        newCfg.e_weather = (getParam("E_WEATHER") == "True");
+        newCfg.weather_lat = getParam("WEATHER_LAT");
+        newCfg.weather_lon = getParam("WEATHER_LON");
+        newCfg.weather_cloud_threshold = getParam("WEATHER_THRESH").toInt();
+
         newCfg.web_user = getParam("WEB_USER");
         newCfg.web_password = getParam("WEB_PASSWORD");
 
@@ -523,6 +536,18 @@ String WebManager::getStatusJson() {
     doc["e_equip2"] = _config->e_equip2;
     doc["equip2_name"] = _config->equip2_name;
     doc["night_mode"] = SolarMonitor::isNight(Utils::getCurrentMinutes());
+
+    // Weather
+    doc["e_weather"] = _config->e_weather;
+    if (_config->e_weather) {
+        doc["weather_clouds"] = WeatherManager::getCloudCover();
+        doc["weather_clouds_low"] = WeatherManager::getCloudCoverLow();
+        doc["weather_clouds_mid"] = WeatherManager::getCloudCoverMid();
+        doc["weather_clouds_high"] = WeatherManager::getCloudCoverHigh();
+        doc["weather_temp"] = WeatherManager::getTemperature();
+        doc["weather_icon"] = WeatherManager::getWeatherIcon();
+        doc["weather_too_cloudy"] = WeatherManager::isTooCloudy();
+    }
 
     time_t now; time(&now); struct tm ti; localtime_r(&now, &ti);
     char buf[12]; strftime(buf, sizeof(buf), "%H:%M", &ti);

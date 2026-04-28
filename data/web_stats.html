@@ -4,6 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Solaire - Statistiques</title>
+    <script>
+        function handleChartJsError() {
+            console.error("Chart.js failed to load");
+            const banner = document.getElementById('cdnErrorBanner');
+            if (banner) banner.style.display = 'block';
+            const bCard = document.getElementById('barCard');
+            if (bCard) bCard.style.display = 'none';
+            const pCard = document.getElementById('pieCard');
+            if (pCard) pCard.style.display = 'none';
+        }
+    </script>
     <script src="/chart.min.js" onerror="handleChartJsError()"></script>
     <style>
         :root {
@@ -177,9 +188,9 @@
         }
         .cdn-error-banner strong { display: block; margin-bottom: 8px; }
         @keyframes pulse {
-            0% { opacity: 0.6; }
-            50% { opacity: 1; }
-            100% { opacity: 0.6; }
+            0%% { opacity: 0.6; }
+            50%% { opacity: 1; }
+            100%% { opacity: 0.6; }
         }
     </style>
 </head>
@@ -236,7 +247,7 @@
                 <div class="value" id="totalRedirect">— kWh</div>
             </div>
             <div class="stat-box">
-                <div class="label">Utilisation Surplus</div>
+                <div class="label">Utilisation Surplus Solaire</div>
                 <div class="value" id="autoConsRate">— %%</div>
             </div>
             <div class="stat-box">
@@ -277,13 +288,6 @@
         let pieChart = null;
         let chartsAvailable = true;
         let autoRefreshTimer = null;
-
-        function handleChartJsError() {
-            chartsAvailable = false;
-            document.getElementById('cdnErrorBanner').style.display = 'block';
-            document.getElementById('barCard').style.display = 'none';
-            document.getElementById('pieCard').style.display = 'none';
-        }
 
         // Produce a YYYY-MM-DD string from a Date in local time (avoids UTC-midnight off-by-one)
         function localDateStr(d) {
@@ -411,6 +415,7 @@
         }
 
         function renderCharts() {
+            if (!chartsAvailable || typeof Chart === 'undefined') return;
             const selectedDate = document.getElementById('statDate').value;
             const [selYear, selMonth] = selectedDate.split('-');
 
@@ -437,8 +442,7 @@
                     }
                     totalActiveSecs = day.active_time || 0;
                 }
-            }
- else if (currentView === 'week') {
+            } else if (currentView === 'week') {
                 for (let i = 6; i >= 0; i--) {
                     const ds = addDays(selectedDate, -i);
                     const [y, m, d] = ds.split('-').map(Number);
@@ -497,8 +501,6 @@
             const hrs  = Math.floor(totalActiveSecs / 3600);
             const mins = Math.floor((totalActiveSecs %% 3600) / 60);
             document.getElementById('activeTime').textContent = totalActiveSecs > 0 ? `${hrs}h ${mins}m` : '—';
-
-            if (!chartsAvailable) return;
 
             // No-data state
             const barCanvas = document.getElementById('barChart');

@@ -262,6 +262,10 @@
         <div id="dateTime">--/--/---- --:--</div>
         <button id="themeToggle" onclick="toggleTheme()">☀️ Mode</button>
         <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+            <div id="weatherBadge" class="mqtt-badge" style="display: none; background: #3498db; color: white;">
+                <img id="weatherIcon" src="" style="height: 16px; vertical-align: middle; margin-right: 4px; display: none;">
+                <span id="weatherText">--%% nuages</span>
+            </div>
             <div id="shellyStatus" class="mqtt-badge mqtt-off">SHELLY: --</div>
             <div id="mqttStatus" class="mqtt-badge mqtt-off" style="display: none;">MQTT: --</div>
         </div>
@@ -490,6 +494,30 @@
                 }
 
                 // Status Badges (Shelly & MQTT)
+                const wb = document.getElementById('weatherBadge');
+                if (wb) {
+                    if (d.e_weather) {
+                        wb.style.display = 'inline-block';
+                        const wt = document.getElementById('weatherText');
+                        if (wt) {
+                            const details = `(L:${d.weather_clouds_low}%% M:${d.weather_clouds_mid}%% H:${d.weather_clouds_high}%%)`;
+                            wt.textContent = d.weather_clouds + '%% nuages ' + details + ' (' + d.weather_temp.toFixed(1) + '°C)';
+                        }
+                        const wi = document.getElementById('weatherIcon');
+                        if (wi && d.weather_icon) {
+                            wi.src = 'http://openweathermap.org/img/wn/' + d.weather_icon + '.png';
+                            wi.style.display = 'inline-block';
+                        }
+                        if (d.weather_too_cloudy) {
+                            wb.style.background = '#7f8c8d'; // Grey if too cloudy
+                        } else {
+                            wb.style.background = '#3498db'; // Blue if okay
+                        }
+                    } else {
+                        wb.style.display = 'none';
+                    }
+                }
+
                 const shEl = document.getElementById('shellyStatus');
                 if (shEl) {
                     if (d.shelly_mqtt_enabled) {
@@ -696,7 +724,7 @@
                                     position: 'left', 
                                     ticks: { color: '#999' }, 
                                     grid: { color: '#333' },
-                                    grace: '10%'
+                                    grace: '10%%'
                                 },
                                 y1: { 
                                     type: 'linear', 

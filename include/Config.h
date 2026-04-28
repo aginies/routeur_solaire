@@ -93,6 +93,12 @@ struct Config {
     int equip2_min_on_time = 15; // Minutes
     uint64_t equip2_schedule = 0; // 48 bits for 30min slots
 
+    // Weather (Open-Meteo)
+    bool e_weather = false;
+    String weather_lat = "";
+    String weather_lon = "";
+    int weather_cloud_threshold = 80; // Percentage
+
     // Incremental Controller (pv-router algorithm)
     float delta = 50.0;          // upper threshold (W) — above this, importing too much
     float deltaneg = 0.0;        // lower threshold (W) — below this, exporting surplus
