@@ -103,6 +103,7 @@ void HistoryBuffer::historyTask(void* pvParameters) {
                 GridSensorService::currentGridPower,
                 ActuatorManager::equipmentPower,
                 Shelly1PMManager::getPower(),
+                Shelly1PMManager::getPowerEq1(),
                 TemperatureManager::currentSsrTemp,
                 ActuatorManager::fanActive
             };
@@ -128,6 +129,7 @@ String HistoryBuffer::getHistoryJson() {
             obj["t"] = p.t;
             obj["g"] = p.g;
             obj["e"] = p.e;
+            obj["e1r"] = p.e1r;
             obj["e2"] = p.e2;
             obj["s"] = p.s;
             obj["f"] = p.f;
@@ -153,6 +155,7 @@ void HistoryBuffer::streamHistoryJson(AsyncWebServerRequest *request) {
             obj["t"] = p.t;
             obj["g"] = p.g;
             obj["e"] = p.e;
+            obj["e1r"] = p.e1r;
             obj["e2"] = p.e2;
             obj["s"] = p.s;
             obj["f"] = p.f;

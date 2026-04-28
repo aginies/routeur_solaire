@@ -84,7 +84,7 @@ The resulting **Duty Cycle (0-100%)** is then translated into physical pulses by
 When weather support is enabled, the firmware calls the Open-Meteo Forecast API every 9 minutes. The data is used for two separate decisions:
 
 - **Solar confidence index**: The web interface displays a simple confidence percentage estimating the available solar potential compared with clear-sky conditions.
-- **Radiation-based cloud impact**: `shortwave_radiation_instant` is compared with `terrestrial_radiation_instant` to estimate how much available sunlight is being lost right now.
+- **Radiation-based cloud impact**: `shortwave_radiation_instant` is compared with a realistic clear-sky ground reference derived from `terrestrial_radiation_instant` to estimate usable sunlight right now.
 - **Cloud layer fallback**: Low, mid, and high cloud cover are still fetched and combined as a fallback/stabilizer when radiation data is missing or not usable.
 - **Equipment 2 start condition**: Equipment 2 can start only when the solar confidence reaches the configured minimum threshold, unless it is inside a forced schedule.
 - **Automatic night mode**: `daily=sunrise,sunset` with `timezone=auto` provides local sunrise and sunset times. When available, these values define night mode instead of the manual `night_start` / `night_end` settings.

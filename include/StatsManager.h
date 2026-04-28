@@ -30,8 +30,8 @@ struct DailyStats {
 class StatsManager {
 public:
     static void init();
+    static void update(float gridPower, float equipmentPower, uint32_t intervalMs, bool isNight, bool isMeasured = false);
     static void startTask();
-    static void update(float gridPower, float equipmentPower, uint32_t intervalMs, bool isNight);
     static void save();
 #ifndef NATIVE_TEST
     static void streamStatsJson(AsyncWebServerRequest *request);

@@ -120,7 +120,7 @@ void StatsManager::init() {
 #endif
 }
 
-void StatsManager::update(float gridPower, float equipmentPower, uint32_t intervalMs, bool isNight) {
+void StatsManager::update(float gridPower, float equipmentPower, uint32_t intervalMs, bool isNight, bool isMeasured) {
     if (gridPower < -90000.0) return;
     
     time_t now_t; time(&now_t); struct tm ti; localtime_r(&now_t, &ti);
@@ -135,7 +135,13 @@ void StatsManager::update(float gridPower, float equipmentPower, uint32_t interv
     
     float solarRedirPower = 0;
     if (!isNight) {
-        solarRedirPower = (gridPower > 0) ? ((equipmentPower > gridPower) ? (equipmentPower - gridPower) : 0) : equipmentPower;
+        if (isMeasured) {
+            // If measured by Shelly, we take it as is
+            solarRedirPower = equipmentPower;
+        } else {
+            // If calculated by duty, we ensure we don't count what's coming from grid
+            solarRedirPower = (gridPower > 0) ? ((equipmentPower > gridPower) ? (equipmentPower - gridPower) : 0) : equipmentPower;
+        }
     }
     
     float energyRedirect = solarRedirPower * intervalHours;

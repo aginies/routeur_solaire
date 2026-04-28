@@ -34,10 +34,15 @@ float WeatherManager::getEffectiveCloudiness() {
     float cloudLayerIndex = getCloudLayerIndex();
     if (_terrestrialRadiationInstant <= 0.0f) return cloudLayerIndex;
 
-    float radiationRatio = constrain(_shortwaveRadiationInstant / _terrestrialRadiationInstant, 0.0f, 1.0f);
-    float radiationDeficitIndex = (1.0f - radiationRatio) * 100.0f;
+    float clearSkyGround = _terrestrialRadiationInstant * 0.75f;
+    if (clearSkyGround > 850.0f) clearSkyGround = 850.0f;
+    if (clearSkyGround <= 0.0f) return cloudLayerIndex;
 
-    return constrain((radiationDeficitIndex * 0.8f) + (cloudLayerIndex * 0.2f), 0.0f, 100.0f);
+    float radiationConfidence = constrain(_shortwaveRadiationInstant / clearSkyGround, 0.0f, 1.0f) * 100.0f;
+    float cloudConfidence = 100.0f - cloudLayerIndex;
+    float solarConfidence = (radiationConfidence * 0.9f) + (cloudConfidence * 0.1f);
+
+    return constrain(100.0f - solarConfidence, 0.0f, 100.0f);
 }
 
 float WeatherManager::getSolarConfidence() {

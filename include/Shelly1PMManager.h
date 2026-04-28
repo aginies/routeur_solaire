@@ -5,22 +5,35 @@
 #include <WiFiClient.h>
 #include "Config.h"
 
+struct Shelly1PMDevice {
+    bool relayState = false;
+    float currentPower = 0.0f;
+    uint32_t lastUpdate = 0;
+    uint32_t lastAttempt = 0;
+};
+
 class Shelly1PMManager {
 public:
     static void init(const Config& config);
+    
+    // EQ2 (PAC) - existing interface
     static bool turnOn();
     static bool turnOff();
     static bool isRelayOn();
     static float getPower();
-    static void update(); // Periodically refresh
+    
+    // EQ1 (Ballon) - new interface
+    static float getPowerEq1();
+    
+    static void update(); // Refresh both
 
 private:
     static const Config* _config;
-    static bool _relayState;
-    static float _currentPower;
-    static uint32_t _lastUpdate;
-    static uint32_t _lastAttempt;
+    static Shelly1PMDevice _dev1; // EQ1
+    static Shelly1PMDevice _dev2; // EQ2
     static WiFiClient _wifiClient;
+    
+    static void updateDevice(Shelly1PMDevice& dev, const String& ip, int index);
 };
 
 #endif

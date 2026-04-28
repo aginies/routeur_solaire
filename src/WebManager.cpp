@@ -34,7 +34,9 @@ void WebManager::loop() {
         Logger::flushAll(); // Save recent logs
         
 #ifndef DISABLE_STATS
+        esp_task_wdt_reset();
         StatsManager::save();   // Save daily stats
+        esp_task_wdt_reset();
         HistoryBuffer::save(); // Save chart history
 #endif
 
@@ -49,7 +51,7 @@ String WebManager::templateProcessor(const String& var) {
     // Logger::debug("Template request: " + var);
     if (var == "") return "%"; 
     if (var == "NAME") return _config->name;
-    if (var == "EQUIPMENT_NAME") return _config->equipment_name;
+    if (var == "EQUIP1_NAME") return _config->equip1_name;
     if (var == "VERSION") return String(FIRMWARE_VERSION);
     if (var == "BUILD_TIME") return String(__DATE__) + " " + String(__TIME__);
 
@@ -92,6 +94,8 @@ String WebManager::templateProcessor(const String& var) {
     if (var == "WIFI_DNS") return _config->wifi_dns;
 
     if (var == "SHELLY_EM_IP") return _config->shelly_em_ip;
+    if (var == "SHELLY_EM_INDEX_0") return _config->shelly_em_index == 0 ? "selected" : "";
+    if (var == "SHELLY_EM_INDEX_1") return _config->shelly_em_index == 1 ? "selected" : "";
     if (var == "SHELLY_MQTT_YES") return _config->e_shelly_mqtt ? "selected" : "";
     if (var == "SHELLY_MQTT_NO") return !_config->e_shelly_mqtt ? "selected" : "";
     if (var == "SHELLY_MQTT_TOPIC") return _config->shelly_mqtt_topic;
@@ -107,9 +111,14 @@ String WebManager::templateProcessor(const String& var) {
     if (var == "MQTT_PASSWORD") return _config->mqtt_password;
     if (var == "MQTT_NAME") return _config->mqtt_name;
 
-    if (var == "EQUIPMENT_MAX_POWER") return String(_config->equipment_max_power);
+    if (var == "EQUIP1_MAX_POWER") return String(_config->equip1_max_power);
     if (var == "MAX_DUTY_PERCENT") return String(_config->max_duty_percent);
     if (var == "EXPORT_SETPOINT") return String(_config->export_setpoint);
+    if (var == "EQUIP1_SHELLY_YES") return _config->e_equip1 ? "selected" : "";
+    if (var == "EQUIP1_SHELLY_NO") return !_config->e_equip1 ? "selected" : "";
+    if (var == "EQUIP1_SHELLY_IP") return _config->equip1_shelly_ip;
+    if (var == "EQUIP1_SHELLY_INDEX_0") return _config->equip1_shelly_index == 0 ? "selected" : "";
+    if (var == "EQUIP1_SHELLY_INDEX_1") return _config->equip1_shelly_index == 1 ? "selected" : "";
     if (var == "DELTA") return String(_config->delta);
     if (var == "DELTANEG") return String(_config->deltaneg);
     if (var == "COMPENSATION") return String(_config->compensation);
@@ -172,6 +181,8 @@ String WebManager::templateProcessor(const String& var) {
     // Equipment 2 tokens
     if (var == "EQUIP2_NAME") return _config->equip2_name;
     if (var == "EQUIP2_IP") return _config->equip2_shelly_ip;
+    if (var == "EQUIP2_SHELLY_INDEX_0") return _config->equip2_shelly_index == 0 ? "selected" : "";
+    if (var == "EQUIP2_SHELLY_INDEX_1") return _config->equip2_shelly_index == 1 ? "selected" : "";
     if (var == "EQUIP2_POWER") return String(_config->equip2_max_power);
     if (var == "EQUIP2_MIN_TIME") return String(_config->equip2_min_on_time);
     if (var == "EQUIP2_ENABLED_YES") return _config->e_equip2 ? "selected" : "";
@@ -222,41 +233,46 @@ void WebManager::setupRoutes() {
         request->send(LittleFS, "/web_command.html", "text/html", false, templateProcessor);
     });
 
-    _server.on("/download_logs", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
+    auto sendLogSnapshot = [authRequired](AsyncWebServerRequest *request, const char* path, const char* downloadName, const char* missingMessage) {
         if (!authRequired(request)) return;
-        
-        // Prevent concurrent write/rotate while sending
-        if (Logger::getMutex() && xSemaphoreTakeRecursive(Logger::getMutex(), pdMS_TO_TICKS(2000)) == pdTRUE) {
-            Logger::flushAll(); // Ensure all buffered entries are on disk
-            if (LittleFS.exists("/log.txt")) {
-                AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/log.txt", "text/plain");
-                response->addHeader("Content-Disposition", "attachment; filename=solar_log.txt");
-                request->send(response);
-            } else {
-                request->send(404, "text/plain", "Log file not found");
-            }
-            xSemaphoreGiveRecursive(Logger::getMutex());
-        } else {
+
+        if (!Logger::getMutex() || xSemaphoreTakeRecursive(Logger::getMutex(), pdMS_TO_TICKS(2000)) != pdTRUE) {
             request->send(503, "text/plain", "System busy, try again later");
+            return;
         }
+
+        Logger::flushAll();
+
+        if (!LittleFS.exists(path)) {
+            xSemaphoreGiveRecursive(Logger::getMutex());
+            request->send(404, "text/plain", missingMessage);
+            return;
+        }
+
+        AsyncResponseStream *response = request->beginResponseStream("text/plain");
+        response->addHeader("Content-Disposition", String("attachment; filename=") + downloadName);
+        response->addHeader("Cache-Control", "no-store");
+
+        File file = LittleFS.open(path, "r");
+        if (file) {
+            uint8_t buffer[512];
+            while (file.available()) {
+                size_t len = file.read(buffer, sizeof(buffer));
+                response->write(buffer, len);
+            }
+            file.close();
+        }
+
+        xSemaphoreGiveRecursive(Logger::getMutex());
+        request->send(response);
+    };
+
+    _server.on("/download_logs", HTTP_GET, [authRequired, sendLogSnapshot](AsyncWebServerRequest *request) {
+        sendLogSnapshot(request, "/log.txt", "solar_log.txt", "Log file not found");
     });
 
-    _server.on("/download_data", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
-        if (!authRequired(request)) return;
-
-        if (Logger::getMutex() && xSemaphoreTakeRecursive(Logger::getMutex(), pdMS_TO_TICKS(2000)) == pdTRUE) {
-            Logger::flushAll();
-            if (LittleFS.exists("/solar_data.txt")) {
-                AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/solar_data.txt", "text/plain");
-                response->addHeader("Content-Disposition", "attachment; filename=solar_data.txt");
-                request->send(response);
-            } else {
-                request->send(404, "text/plain", "Data file not found");
-            }
-            xSemaphoreGiveRecursive(Logger::getMutex());
-        } else {
-            request->send(503, "text/plain", "System busy, try again later");
-        }
+    _server.on("/download_data", HTTP_GET, [authRequired, sendLogSnapshot](AsyncWebServerRequest *request) {
+        sendLogSnapshot(request, "/solar_data.txt", "solar_data.txt", "Data file not found");
     });
 
     _server.on("/get_log_action", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -330,6 +346,7 @@ void WebManager::setupRoutes() {
         newCfg.e_equip2 = (getParam("E_EQUIP2") == "True");
         newCfg.equip2_name = getParam("EQUIP2_NAME");
         newCfg.equip2_shelly_ip = getParam("EQUIP2_IP");
+        newCfg.equip2_shelly_index = getParam("EQUIP2_SHELLY_INDEX").toInt();
         newCfg.equip2_max_power = getParam("EQUIP2_POWER").toFloat();
         newCfg.equip2_min_on_time = getParam("EQUIP2_MIN_TIME").toInt();
         newCfg.equip2_priority = getParam("EQUIP2_PRIO").toInt();
@@ -377,7 +394,7 @@ void WebManager::setupRoutes() {
 
         Config newCfg = *_config;
         newCfg.name = getParam("NAME");
-        newCfg.equipment_name = getParam("EQUIPMENT_NAME");
+        newCfg.equip1_name = getParam("EQUIP1_NAME");
         newCfg.timezone = getParam("TIMEZONE");
         newCfg.cpu_freq = getParam("CPU_FREQ").toInt();
         newCfg.wifi_ssid = getParam("WIFI_SSID");
@@ -390,11 +407,13 @@ void WebManager::setupRoutes() {
         newCfg.e_equip2 = (getParam("E_EQUIP2") == "True");
         newCfg.equip2_name = getParam("EQUIP2_NAME");
         newCfg.equip2_shelly_ip = getParam("EQUIP2_IP");
+        newCfg.equip2_shelly_index = getParam("EQUIP2_SHELLY_INDEX").toInt();
         newCfg.equip2_max_power = getParam("EQUIP2_POWER").toFloat();
         newCfg.equip2_priority = getParam("EQUIP2_PRIO").toInt();
         newCfg.equip2_min_on_time = getParam("EQUIP2_MIN_TIME").toInt();
         
         newCfg.shelly_em_ip = getParam("SHELLY_EM_IP");
+        newCfg.shelly_em_index = getParam("SHELLY_EM_INDEX").toInt();
         newCfg.e_shelly_mqtt = (getParam("E_SHELLY_MQTT") == "True");
         newCfg.shelly_mqtt_topic = getParam("SHELLY_MQTT_TOPIC");
         newCfg.poll_interval = getParam("POLL_INTERVAL").toInt();
@@ -408,7 +427,11 @@ void WebManager::setupRoutes() {
         newCfg.mqtt_name = getParam("MQTT_NAME");
         newCfg.e_mqtt = (getParam("E_MQTT") == "True");
 
-        newCfg.equipment_max_power = getParam("EQUIPMENT_MAX_POWER").toFloat();
+        newCfg.equip1_name = getParam("EQUIP1_NAME");
+        newCfg.equip1_max_power = getParam("EQUIP1_MAX_POWER").toFloat();
+        newCfg.e_equip1 = (getParam("E_EQUIP1") == "True");
+        newCfg.equip1_shelly_ip = getParam("EQUIP1_SHELLY_IP");
+        newCfg.equip1_shelly_index = getParam("EQUIP1_SHELLY_INDEX").toInt();
         newCfg.max_duty_percent = getParam("MAX_DUTY_PERCENT").toFloat();
         newCfg.export_setpoint = getParam("EXPORT_SETPOINT").toFloat();
         newCfg.delta = getParam("DELTA").toFloat();
@@ -523,6 +546,7 @@ String WebManager::getStatusJson() {
     JsonDocument doc;
     doc["grid_power"] = GridSensorService::currentGridPower;
     doc["equipment_power"] = ActuatorManager::equipmentPower;
+    doc["eq1_real_power"] = Shelly1PMManager::getPowerEq1();
     doc["equip2_power"] = Shelly1PMManager::getPower();
     doc["boost_active"] = (SafetyManager::currentState == SystemState::STATE_BOOST);
     doc["force_mode"] = _config->force_equipment;
@@ -554,6 +578,7 @@ String WebManager::getStatusJson() {
     doc["mqtt_enabled"] = _config->e_mqtt;
     doc["mqtt_status"] = MqttManager::isConnected();
     doc["e_ssr_temp"] = _config->e_ssr_temp;
+    doc["e_equip1"] = _config->e_equip1;
     doc["e_equip2"] = _config->e_equip2;
     doc["equip2_name"] = _config->equip2_name;
     doc["equip2_bypassed"] = Equipment2Manager::isBypassedByCloud();

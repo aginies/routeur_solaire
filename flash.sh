@@ -9,6 +9,7 @@ COMPRESS=false
 STATS_DAYS=""
 RUN_TESTS=false
 MONITOR=false
+ERASE=false
 
 usage() {
     echo "Usage: $0 [options]"
@@ -17,6 +18,7 @@ usage() {
     echo "  -d <days>   Override MAX_STATS_DAYS (history limit)"
     echo "  -t, --test  Run unit tests on host (native environment)"
     echo "  -m, --monitor Launch serial monitor after flashing"
+    echo "  --erase     Full chip erase (clears NVS/Stats) before upload"
     echo "  --compress  Gzip HTML/JS files before uploading FS"
     echo "  --skip-fs   Skip building and uploading filesystem"
     echo "  -h, --help  Show this help message"
@@ -52,6 +54,7 @@ while [[ "$#" -gt 0 ]]; do
             ;;
         -t|--test) RUN_TESTS=true ;;
         -m|--monitor) MONITOR=true ;;
+        --erase) ERASE=true ;;
         --compress) COMPRESS=true ;;
         --skip-fs) SKIP_FS=true ;;
         -h|--help) usage; exit 0 ;;
@@ -105,6 +108,11 @@ fi
 
 echo "--- 1. Cleaning project ---"
 pio run -e $PIO_ENV -t clean
+
+if [ "$ERASE" = true ]; then
+    echo "--- 1b. Erasing Full Chip (NVS/Flash) ---"
+    pio run -e $PIO_ENV -t erase
+fi
 
 echo "--- 2. Building and Uploading Firmware ($PIO_ENV) ---"
 pio run -e $PIO_ENV -t upload

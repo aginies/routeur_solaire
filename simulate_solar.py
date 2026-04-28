@@ -17,7 +17,7 @@ MAX_SOLAR       = 2300.0   # W (Peak production)
 BASE_LOAD_MIN   = 350.0    # W
 BASE_LOAD_MAX   = 2450.0    # W
 NOISE_AMPLITUDE = 10.0     # W
-EQUIPMENT_MAX   = 2300.0   # W (Matches equipment_max_power)
+EQUIPMENT_MAX   = 2300.0   # W (Matches equip1_max_power)
 
 # --- Shared State ---
 class SimulationState:

@@ -304,8 +304,15 @@
         <div class="card" style="flex: 1 1 180px;">
             <!-- Équipement 1 -->
             <div style="margin-bottom: 8px;">
-                <div class="label"><span>Redirigé vers %EQUIPMENT_NAME%</span></div>
+                <div class="label">
+                    <span>Redirigé vers %EQUIPMENT_NAME%</span>
+                </div>
                 <div class="value" id="equipmentPower">—<span class="unit">W</span></div>
+            </div>
+            <!-- Équipement 1 - Real Measure -->
+            <div id="eq1RealPowerRow" style="display: none; border-top: 1px dashed var(--border-color); padding-top: 6px; margin-top: 4px;">
+                <div class="label" style="height: auto; margin-bottom: 4px;"><span style="font-size: 0.85em;">Consommation Réelle</span></div>
+                <div class="value" id="eq1RealPower" style="font-size: 1.5em;">—<span class="unit">W</span></div>
             </div>
             <!-- Équipement 2 -->
             <div id="eq2Row" style="display: none; border-top: 1px solid var(--border-color); padding-top: 10px; margin-top: 4px; position: relative;">
@@ -442,6 +449,13 @@
                 // Equipment Power
                 const epEl = document.getElementById('equipmentPower');
                 if (epEl) epEl.innerHTML = num(d.equipment_power) + '<span class="unit">W</span>';
+                
+                const eq1RealRow = document.getElementById('eq1RealPowerRow');
+                if (eq1RealRow) {
+                    eq1RealRow.style.display = d.e_equip1 ? 'block' : 'none';
+                    const eq1rpEl = document.getElementById('eq1RealPower');
+                    if (eq1rpEl) eq1rpEl.innerHTML = num(d.eq1_real_power) + '<span class="unit">W</span>';
+                }
 
                 // Eq2
                 const eq2Row = document.getElementById('eq2Row');
@@ -598,17 +612,19 @@
 
         let statusInterval = null;
         let currentPollingMode = null; // 'normal' or 'night'
+        let lastStatus = null;
 
         async function updateStatus() {
             try {
                 const r = await fetch('/status');
                 const d = await r.json();
+                lastStatus = d;
                 applyStatus(d);
 
                 // Update chart if in night mode (already throttled by 10s poll)
                 // or periodically in normal mode
                 if (d.night_mode) {
-                    updateChart();
+                    updateChart(d);
                 }
 
                 // Dynamic Polling Adjustment
@@ -677,7 +693,7 @@
             } catch(e) {}
         }
 
-        async function updateChart() {
+        async function updateChart(status) {
             if (typeof Chart === 'undefined') return;
             try {
                 const r = await fetch('/history');
@@ -694,6 +710,7 @@
                 });
                 const gridData = history.map(p => p.g);
                 const equipmentData  = history.map(p => p.e);
+                const equip1RealData = history.map(p => p.e1r || 0);
                 const equip2Data = history.map(p => p.e2 || 0);
                 const ssrTempData = history.map(p => p.s <= -100 ? null : p.s);
 
@@ -709,7 +726,7 @@
                                 pointRadius: 0,
                                 yAxisID: 'y'
                             }, {
-                                label: 'Redirigé (W)',
+                                label: 'Solaire Redirigé (W)',
                                 data: equipmentData,
                                 borderColor: '#2ecc71',
                                 backgroundColor: 'rgba(46, 204, 113, 0.1)',
@@ -718,6 +735,19 @@
                                 pointRadius: 0,
                                 yAxisID: 'y'
                             }];
+
+                    if (status && status.e_equip1) {
+                        datasets.push({
+                            label: '%EQUIPMENT_NAME% Réel (W)',
+                            data: equip1RealData,
+                            borderColor: '#9b59b6',
+                            borderDash: [3, 3],
+                            fill: false,
+                            tension: 0.3,
+                            pointRadius: 0,
+                            yAxisID: 'y'
+                        });
+                    }
 
                     if ("%E_EQUIP2_BOOL%" === "true") {
                         datasets.push({
@@ -783,16 +813,17 @@
                     powerChart.data.datasets[0].data = gridData;
                     powerChart.data.datasets[1].data = equipmentData;
                     
-                    let ssrIdx = 2;
-                    if ("%E_EQUIP2_BOOL%" === "true") {
-                        if (powerChart.data.datasets.length >= 3) {
-                            powerChart.data.datasets[2].data = equip2Data;
-                            ssrIdx = 3;
-                        }
+                    let nextIdx = 2;
+                    if (status && status.e_equip1) {
+                        if (powerChart.data.datasets[nextIdx]) powerChart.data.datasets[nextIdx].data = equip1RealData;
+                        nextIdx++;
                     }
-                    
-                    if (powerChart.data.datasets[ssrIdx]) {
-                        powerChart.data.datasets[ssrIdx].data = ssrTempData;
+                    if ("%E_EQUIP2_BOOL%" === "true") {
+                        if (powerChart.data.datasets[nextIdx]) powerChart.data.datasets[nextIdx].data = equip2Data;
+                        nextIdx++;
+                    }
+                    if (powerChart.data.datasets[nextIdx]) {
+                        powerChart.data.datasets[nextIdx].data = ssrTempData;
                     }
                     powerChart.update('none');
                 }
@@ -801,10 +832,9 @@
 
         updateStatus(); // Initial call starts the interval chain
         updateLog();
-        updateChart();
         updateDateTime(); // Initial fallback
         setInterval(updateLog, 15000); // Slower logs in web UI
-        setInterval(() => { if(!nightMode) updateChart(); }, 30000); // Slower chart in web UI
+        setInterval(() => { if(!nightMode && lastStatus) updateChart(lastStatus); }, 30000); // Slower chart in web UI
     </script>
 </body>
 </html>

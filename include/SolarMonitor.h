@@ -12,6 +12,7 @@ struct PowerPoint {
     float g;
     float e;
     float e2;
+    float e1r; // Eq1 Real
     float s;
     bool f;
 };

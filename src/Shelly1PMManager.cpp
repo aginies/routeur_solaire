@@ -4,15 +4,12 @@
 #include <ArduinoJson.h>
 
 const Config* Shelly1PMManager::_config = nullptr;
-bool Shelly1PMManager::_relayState = false;
-float Shelly1PMManager::_currentPower = 0.0f;
-uint32_t Shelly1PMManager::_lastUpdate = 0;
-uint32_t Shelly1PMManager::_lastAttempt = 0;
+Shelly1PMDevice Shelly1PMManager::_dev1;
+Shelly1PMDevice Shelly1PMManager::_dev2;
 WiFiClient Shelly1PMManager::_wifiClient;
 
 void Shelly1PMManager::init(const Config& config) {
     _config = &config;
-    _lastUpdate = 0;
 }
 
 bool Shelly1PMManager::turnOn() {
@@ -25,7 +22,7 @@ bool Shelly1PMManager::turnOn() {
     http.end();
     
     if (code == 200) {
-        _relayState = true;
+        _dev2.relayState = true;
         Logger::info("Shelly1PM [" + _config->equip2_name + "]: Turned ON");
         return true;
     }
@@ -43,7 +40,7 @@ bool Shelly1PMManager::turnOff() {
     http.end();
     
     if (code == 200) {
-        _relayState = false;
+        _dev2.relayState = false;
         Logger::info("Shelly1PM [" + _config->equip2_name + "]: Turned OFF");
         return true;
     }
@@ -52,34 +49,63 @@ bool Shelly1PMManager::turnOff() {
 }
 
 bool Shelly1PMManager::isRelayOn() {
-    return _relayState;
+    return _dev2.relayState;
 }
 
 float Shelly1PMManager::getPower() {
-    return _currentPower;
+    return _dev2.currentPower;
+}
+
+float Shelly1PMManager::getPowerEq1() {
+    return _dev1.currentPower;
 }
 
 void Shelly1PMManager::update() {
-    if (!_config || _config->equip2_shelly_ip.length() == 0 || !_config->e_equip2) return;
+    if (!_config) return;
     
+    // Update Eq1
+    if (_config->e_equip1 && _config->equip1_shelly_ip.length() > 0) {
+        updateDevice(_dev1, _config->equip1_shelly_ip, _config->equip1_shelly_index);
+    }
+    
+    // Update Eq2
+    if (_config->e_equip2 && _config->equip2_shelly_ip.length() > 0) {
+        updateDevice(_dev2, _config->equip2_shelly_ip, _config->equip2_shelly_index);
+    }
+}
+
+void Shelly1PMManager::updateDevice(Shelly1PMDevice& dev, const String& ip, int index) {
     uint32_t now = millis();
-    if (now - _lastAttempt < 5000) return; // Limit polling
-    _lastAttempt = now;
+    if (now - dev.lastAttempt < 5000) return; // Limit polling to 5s
+    dev.lastAttempt = now;
 
     HTTPClient http;
     http.setTimeout(2000);
-    String url = "http://" + _config->equip2_shelly_ip + "/status";
-    http.begin(_wifiClient, url);
-    int code = http.GET();
+    String url = "http://" + ip + "/status";
     
-    if (code == 200) {
-        JsonDocument doc;
-        DeserializationError error = deserializeJson(doc, http.getStream());
-        if (!error) {
-            _relayState = doc["relays"][0]["ison"];
-            _currentPower = doc["meters"][0]["power"];
-            _lastUpdate = now;
+    if (http.begin(_wifiClient, url)) {
+        int code = http.GET();
+        if (code == 200) {
+            JsonDocument doc;
+            DeserializationError error = deserializeJson(doc, http.getStream());
+            if (!error) {
+                // Relay (Some models like EM only have 1 relay at index 0 even for channel 1)
+                if (doc.containsKey("relays")) {
+                    dev.relayState = doc["relays"][0]["ison"];
+                }
+
+                // Power Measurement
+                if (doc.containsKey("meters")) {
+                    // 1PM, PlugS
+                    dev.currentPower = doc["meters"][index]["power"];
+                    dev.lastUpdate = now;
+                } else if (doc.containsKey("emeters")) {
+                    // EM, 3EM
+                    dev.currentPower = doc["emeters"][index]["power"];
+                    dev.lastUpdate = now;
+                }
+            }
         }
+        http.end();
     }
-    http.end();
 }

@@ -54,8 +54,6 @@ uint32_t Equipment2Manager::getRemainingMinTime() {
 void Equipment2Manager::loop() {
     if (!_config || !_config->e_equip2) return;
 
-    Shelly1PMManager::update();
-    
     uint32_t now = millis();
     int currentMin = Utils::getCurrentMinutes();
     bool scheduled = isScheduled(currentMin);

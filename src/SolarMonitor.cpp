@@ -38,16 +38,16 @@ void SolarMonitor::init(const Config& config) {
         (int32_t)(config.delta * 1000.0f),
         (int32_t)(config.deltaneg * 1000.0f),
         (int32_t)config.compensation,
-        (int32_t)(config.equipment_max_power * 1000.0f)
+        (int32_t)(config.equip1_max_power * 1000.0f)
     );
     
     _lastGoodPoll = millis();
 }
 
 void SolarMonitor::startTasks() {
-    // Priority 3: Monitoring and logic - Core 1
-    // We move back to Core 1 but keep a moderate priority to coexist with ControlStrategy.
-    xTaskCreatePinnedToCore(monitorTask, "monitorTask", 32768, NULL, 3, NULL, 1);
+    // Priority 3: Monitoring and logic - Core 0 (System Core)
+    // We move to Core 0 to leave Core 1 for time-critical SSR and loopTask.
+    xTaskCreatePinnedToCore(monitorTask, "monitorTask", 32768, NULL, 3, NULL, 0);
     
     // Sub-service tasks - Core 0
     TemperatureManager::startTask();
@@ -189,7 +189,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
 
         // 5. Stats & MQTT
 #ifndef DISABLE_STATS
-        StatsManager::update(GridSensorService::currentGridPower, ActuatorManager::equipmentPower, now - lastStatsUpdate, nightActive);
+        StatsManager::update(GridSensorService::currentGridPower, ActuatorManager::equipmentPower, now - lastStatsUpdate, nightActive, _config->e_equip1);
 #endif
         lastStatsUpdate = now;
 
@@ -216,6 +216,12 @@ void SolarMonitor::monitorTask(void* pvParameters) {
         WebManager::loop();
         esp_task_wdt_reset();
         MqttManager::loop();
+
+        // 7. Measured Power Update (Shelly 1PM)
+        Shelly1PMManager::update();
+        if (_config->e_equip1) {
+            ActuatorManager::equipmentPower = Shelly1PMManager::getPowerEq1();
+        }
 
         vTaskDelay(pdMS_TO_TICKS(110)); 
     }

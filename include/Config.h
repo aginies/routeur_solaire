@@ -74,20 +74,25 @@ struct Config {
 
     // Shelly / Power Monitoring
     String shelly_em_ip = "192.168.1.60";
+    int shelly_em_index = 0; // 0 or 1
     bool e_shelly_mqtt = true;
     String shelly_mqtt_topic = "shellies/homeassistant/emeter/0/power";
     bool fake_shelly = false;
     int poll_interval = 1;
 
-    // Equipment
-    String equipment_name = "Ballon";
-    float equipment_max_power = 2300.0;
+    // Equipment 1 (Ballon)
+    String equip1_name = "Ballon";
+    float equip1_max_power = 2300.0;
     float export_setpoint = 0.0;
+    bool e_equip1 = false;
+    String equip1_shelly_ip = "";
+    int equip1_shelly_index = 0;
 
     // Equipment 2 (PAC / Shelly 1PM)
     bool e_equip2 = false;
     String equip2_name = "Piscine";
     String equip2_shelly_ip = "";
+    int equip2_shelly_index = 0;
     float equip2_max_power = 1900.0;
     int equip2_priority = 1; // 1 = Water Heater first, 2 = PAC first
     int equip2_min_on_time = 15; // Minutes

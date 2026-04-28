@@ -56,7 +56,7 @@ void LedManager::ledTask(void* pvParameters) {
             vTaskDelay(pdMS_TO_TICKS(1000));
         } else {
             // Pulsing logic
-            float fraction = ActuatorManager::equipmentPower / _config->equipment_max_power;
+            float fraction = ActuatorManager::equipmentPower / _config->equip1_max_power;
             if (fraction > 1.0) fraction = 1.0;
 
             // Base color is White to Green interpolation

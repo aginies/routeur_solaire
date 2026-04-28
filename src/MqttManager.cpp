@@ -135,8 +135,8 @@ void MqttManager::sendDiscovery() {
     };
 
     publishSensor("Puissance Réseau", "power", "W", "power", "measurement", "grid_power");
-    publishSensor(_config->equipment_name + " Puissance Redirigée", "equipment_power", "W", "power", "measurement", "equipment_power");
-    publishSensor(_config->equipment_name + " Charge Redirigée", "equipment_percent", "%", "", "measurement", "equipment_percent");
+    publishSensor(_config->equip1_name + " Puissance Redirigée", "equipment_power", "W", "power", "measurement", "equipment_power");
+    publishSensor(_config->equip1_name + " Charge Redirigée", "equipment_percent", "%", "", "measurement", "equipment_percent");
     publishSensor("ESP32 Température", "esp32_temp", "°C", "temperature", "measurement", "esp32_temp");
 
     if (_config->e_ssr_temp) {

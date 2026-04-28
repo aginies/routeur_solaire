@@ -33,7 +33,7 @@ void ActuatorManager::init(const Config& config) {
 
 void ActuatorManager::setDuty(float duty) {
     currentDuty = duty;
-    float actualMaxPower = _config->equipment_max_power * (GridSensorService::currentGridVoltage / 230.0f) * (GridSensorService::currentGridVoltage / 230.0f);
+    float actualMaxPower = _config->equip1_max_power * (GridSensorService::currentGridVoltage / 230.0f) * (GridSensorService::currentGridVoltage / 230.0f);
     equipmentPower = currentDuty * actualMaxPower;
 }
 

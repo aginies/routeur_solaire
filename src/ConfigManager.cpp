@@ -78,6 +78,7 @@ Config ConfigManager::load() {
 
     // Shelly
     if (doc.containsKey("shelly_em_ip")) config.shelly_em_ip = doc["shelly_em_ip"].as<String>();
+    if (doc.containsKey("shelly_em_index")) config.shelly_em_index = doc["shelly_em_index"];
     if (doc.containsKey("e_shelly_mqtt")) config.e_shelly_mqtt = doc["e_shelly_mqtt"];
     if (doc.containsKey("shelly_mqtt_topic")) config.shelly_mqtt_topic = doc["shelly_mqtt_topic"].as<String>();
     if (doc.containsKey("fake_shelly")) config.fake_shelly = doc["fake_shelly"];
@@ -85,15 +86,23 @@ Config ConfigManager::load() {
     if (doc.containsKey("shelly_timeout")) config.shelly_timeout = doc["shelly_timeout"];
     if (doc.containsKey("safety_timeout")) config.safety_timeout = doc["safety_timeout"];
 
-    // Equipment
-    if (doc.containsKey("equipment_name")) config.equipment_name = doc["equipment_name"].as<String>();
-    if (doc.containsKey("equipment_max_power")) config.equipment_max_power = doc["equipment_max_power"];
+    // Equipment 1
+    if (doc.containsKey("equip1_name")) config.equip1_name = doc["equip1_name"].as<String>();
+    else if (doc.containsKey("equipment_name")) config.equip1_name = doc["equipment_name"].as<String>();
+
+    if (doc.containsKey("equip1_max_power")) config.equip1_max_power = doc["equip1_max_power"];
+    else if (doc.containsKey("equipment_max_power")) config.equip1_max_power = doc["equipment_max_power"];
+    
     if (doc.containsKey("export_setpoint")) config.export_setpoint = doc["export_setpoint"];
+    if (doc.containsKey("e_equip1")) config.e_equip1 = doc["e_equip1"];
+    if (doc.containsKey("equip1_shelly_ip")) config.equip1_shelly_ip = doc["equip1_shelly_ip"].as<String>();
+    if (doc.containsKey("equip1_shelly_index")) config.equip1_shelly_index = doc["equip1_shelly_index"];
 
     // Equipment 2
     if (doc.containsKey("e_equip2")) config.e_equip2 = doc["e_equip2"];
     if (doc.containsKey("equip2_name")) config.equip2_name = doc["equip2_name"].as<String>();
     if (doc.containsKey("equip2_shelly_ip")) config.equip2_shelly_ip = doc["equip2_shelly_ip"].as<String>();
+    if (doc.containsKey("equip2_shelly_index")) config.equip2_shelly_index = doc["equip2_shelly_index"];
     if (doc.containsKey("equip2_max_power")) config.equip2_max_power = doc["equip2_max_power"];
     if (doc.containsKey("equip2_priority")) config.equip2_priority = doc["equip2_priority"];
     if (doc.containsKey("equip2_min_on_time")) config.equip2_min_on_time = doc["equip2_min_on_time"];
@@ -194,20 +203,25 @@ bool ConfigManager::save(const Config& config) {
     doc["fan_pin"] = config.fan_pin;
     doc["zx_pin"] = config.zx_pin;
     doc["shelly_em_ip"] = config.shelly_em_ip;
+    doc["shelly_em_index"] = config.shelly_em_index;
     doc["e_shelly_mqtt"] = config.e_shelly_mqtt;
     doc["shelly_mqtt_topic"] = config.shelly_mqtt_topic;
     doc["fake_shelly"] = config.fake_shelly;
     doc["poll_interval"] = config.poll_interval;
     doc["shelly_timeout"] = config.shelly_timeout;
     doc["safety_timeout"] = config.safety_timeout;
-    doc["equipment_name"] = config.equipment_name;
-    doc["equipment_max_power"] = config.equipment_max_power;
+    doc["equip1_name"] = config.equip1_name;
+    doc["equip1_max_power"] = config.equip1_max_power;
     doc["export_setpoint"] = config.export_setpoint;
+    doc["e_equip1"] = config.e_equip1;
+    doc["equip1_shelly_ip"] = config.equip1_shelly_ip;
+    doc["equip1_shelly_index"] = config.equip1_shelly_index;
 
     // Equipment 2
     doc["e_equip2"] = config.e_equip2;
     doc["equip2_name"] = config.equip2_name;
     doc["equip2_shelly_ip"] = config.equip2_shelly_ip;
+    doc["equip2_shelly_index"] = config.equip2_shelly_index;
     doc["equip2_max_power"] = config.equip2_max_power;
     doc["equip2_priority"] = config.equip2_priority;
     doc["equip2_min_on_time"] = config.equip2_min_on_time;

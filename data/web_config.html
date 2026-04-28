@@ -197,6 +197,13 @@
                         <input type="text" id="SHELLY_EM_IP" name="SHELLY_EM_IP" value="%SHELLY_EM_IP%" pattern="^(\d{1,3}\.){3}\d{1,3}$" placeholder="ex: 192.168.1.50">
                     </div>
                     <div class="form-group">
+                        <label for="SHELLY_EM_INDEX">Pince Shelly EM (Canal):</label>
+                        <select id="SHELLY_EM_INDEX" name="SHELLY_EM_INDEX">
+                            <option value="0" %SHELLY_EM_INDEX_0%>Pince 1 (Index 0)</option>
+                            <option value="1" %SHELLY_EM_INDEX_1%>Pince 2 (Index 1)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
                         <label for="E_SHELLY_MQTT">Mode MQTT (plus rapide):</label>
                         <select id="E_SHELLY_MQTT" name="E_SHELLY_MQTT">
                             <option value="True"  %SHELLY_MQTT_YES%>Activé (reçoit les données via MQTT)</option>
@@ -206,6 +213,7 @@
                     <div class="form-group">
                         <label for="SHELLY_MQTT_TOPIC">Topic MQTT Shelly:</label>
                         <input type="text" id="SHELLY_MQTT_TOPIC" name="SHELLY_MQTT_TOPIC" value="%SHELLY_MQTT_TOPIC%">
+                        <p style="font-size: 0.8em; color: #888; margin-top: 4px;">Utiliser le même index que la Pince Shelly EM (0 ou 1) dans le topic.</p>
                     </div>
                     <div class="form-group">
                         <label for="POLL_INTERVAL">Intervalle de lecture HTTP (secondes):</label>
@@ -260,16 +268,34 @@
                 <div class="section-content">
                     <h3>Paramètres Diverteur (Eq 1)</h3>
                     <div class="form-group">
-                        <label for="EQUIPMENT_NAME">Nom de l'équipement:</label>
-                        <input type="text" id="EQUIPMENT_NAME" name="EQUIPMENT_NAME" value="%EQUIPMENT_NAME%">
+                        <label for="EQUIP1_NAME">Nom de l'équipement:</label>
+                        <input type="text" id="EQUIP1_NAME" name="EQUIP1_NAME" value="%EQUIP1_NAME%">
                     </div>
                     <div class="form-group">
-                        <label for="EQUIPMENT_MAX_POWER">Puissance max équipement (W):</label>
-                        <input type="number" min="1" max="3000" id="EQUIPMENT_MAX_POWER" name="EQUIPMENT_MAX_POWER" value="%EQUIPMENT_MAX_POWER%">
+                        <label for="EQUIP1_MAX_POWER">Puissance max équipement (W):</label>
+                        <input type="number" min="1" max="3000" id="EQUIP1_MAX_POWER" name="EQUIP1_MAX_POWER" value="%EQUIP1_MAX_POWER%">
                     </div>
                     <div class="form-group">
                         <label for="MAX_DUTY_PERCENT">Puissance max redirigee (100 = pas de limite):</label>
                         <input type="number" step="1" min="0" max="100" id="MAX_DUTY_PERCENT" name="MAX_DUTY_PERCENT" value="%MAX_DUTY_PERCENT%">
+                    </div>
+                    <div class="form-group">
+                        <label for="E_EQUIP1">Utiliser un Shelly 1PM pour mesurer Eq 1:</label>
+                        <select id="E_EQUIP1" name="E_EQUIP1">
+                            <option value="True"  %EQUIP1_SHELLY_YES%>Oui (Utiliser un Shelly pour le retour de puissance)</option>
+                            <option value="False" %EQUIP1_SHELLY_NO%>Non (Calculer la puissance via le Duty Cycle)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="EQUIP1_SHELLY_IP">IP du Shelly 1PM (Mesure Eq 1):</label>
+                        <input type="text" id="EQUIP1_SHELLY_IP" name="EQUIP1_SHELLY_IP" value="%EQUIP1_SHELLY_IP%" pattern="^(\d{1,3}\.){3}\d{1,3}$" placeholder="ex: 192.168.1.61">
+                    </div>
+                    <div class="form-group">
+                        <label for="EQUIP1_SHELLY_INDEX">Pince/Canal Shelly (Eq 1):</label>
+                        <select id="EQUIP1_SHELLY_INDEX" name="EQUIP1_SHELLY_INDEX">
+                            <option value="0" %EQUIP1_SHELLY_INDEX_0%>Index 0 (Normal / Pince 1)</option>
+                            <option value="1" %EQUIP1_SHELLY_INDEX_1%>Index 1 (Pince 2)</option>
+                        </select>
                     </div>
 
                     <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
@@ -290,6 +316,13 @@
                     <div class="form-group">
                         <label for="EQUIP2_IP">IP du Shelly 1PM (Gestion Marche/Arrêt Eq 2):</label>
                         <input type="text" id="EQUIP2_IP" name="EQUIP2_IP" value="%EQUIP2_IP%" pattern="^(\d{1,3}\.){3}\d{1,3}$" placeholder="ex: 192.168.1.60">
+                    </div>
+                    <div class="form-group">
+                        <label for="EQUIP2_SHELLY_INDEX">Pince/Canal Shelly (Eq 2):</label>
+                        <select id="EQUIP2_SHELLY_INDEX" name="EQUIP2_SHELLY_INDEX">
+                            <option value="0" %EQUIP2_SHELLY_INDEX_0%>Index 0 (Normal / Pince 1)</option>
+                            <option value="1" %EQUIP2_SHELLY_INDEX_1%>Index 1 (Pince 2)</option>
+                        </select>
                     </div>
                     <div class="form-group">
                         <label for="EQUIP2_POWER">Puissance nominale Eq 2 (W):</label>
