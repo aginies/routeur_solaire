@@ -226,25 +226,38 @@ void WebManager::setupRoutes() {
 
     _server.on("/download_logs", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
-        Logger::flushAll(); // Ensure all buffered entries are on disk before serving
-        if (LittleFS.exists("/log.txt")) {
-            AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/log.txt", "text/plain");
-            response->addHeader("Content-Disposition", "attachment; filename=solar_log.txt");
-            request->send(response);
+        
+        // Prevent concurrent write/rotate while sending
+        if (Logger::getMutex() && xSemaphoreTakeRecursive(Logger::getMutex(), pdMS_TO_TICKS(2000)) == pdTRUE) {
+            Logger::flushAll(); // Ensure all buffered entries are on disk
+            if (LittleFS.exists("/log.txt")) {
+                AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/log.txt", "text/plain");
+                response->addHeader("Content-Disposition", "attachment; filename=solar_log.txt");
+                request->send(response);
+            } else {
+                request->send(404, "text/plain", "Log file not found");
+            }
+            xSemaphoreGiveRecursive(Logger::getMutex());
         } else {
-            request->send(404, "text/plain", "Log file not found");
+            request->send(503, "text/plain", "System busy, try again later");
         }
     });
 
     _server.on("/download_data", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
-        Logger::flushAll(); // Ensure all buffered entries are on disk before serving
-        if (LittleFS.exists("/solar_data.txt")) {
-            AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/solar_data.txt", "text/plain");
-            response->addHeader("Content-Disposition", "attachment; filename=solar_data.txt");
-            request->send(response);
+
+        if (Logger::getMutex() && xSemaphoreTakeRecursive(Logger::getMutex(), pdMS_TO_TICKS(2000)) == pdTRUE) {
+            Logger::flushAll();
+            if (LittleFS.exists("/solar_data.txt")) {
+                AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/solar_data.txt", "text/plain");
+                response->addHeader("Content-Disposition", "attachment; filename=solar_data.txt");
+                request->send(response);
+            } else {
+                request->send(404, "text/plain", "Data file not found");
+            }
+            xSemaphoreGiveRecursive(Logger::getMutex());
         } else {
-            request->send(404, "text/plain", "Data file not found");
+            request->send(503, "text/plain", "System busy, try again later");
         }
     });
 
@@ -257,6 +270,7 @@ void WebManager::setupRoutes() {
     });
 
     _server.serveStatic("/chart.min.js", LittleFS, "/chart.min.js");
+    _server.serveStatic("/icons", LittleFS, "/icons");
 
 #ifndef DISABLE_STATS
     _server.serveStatic("/web_stats.html", LittleFS, "/web_stats.html");
@@ -557,6 +571,8 @@ String WebManager::getStatusJson() {
         doc["weather_clouds_mid"] = WeatherManager::getCloudCoverMid();
         doc["weather_clouds_high"] = WeatherManager::getCloudCoverHigh();
         doc["weather_temp"] = WeatherManager::getTemperature();
+        doc["weather_rain"] = WeatherManager::getRain();
+        doc["weather_snow"] = WeatherManager::getSnow();
         doc["weather_age"] = millis() - WeatherManager::getLastUpdate();
         doc["weather_icon"] = WeatherManager::getWeatherIcon();
         doc["weather_too_cloudy"] = WeatherManager::isTooCloudy();

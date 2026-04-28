@@ -9,6 +9,8 @@
 #include "StatsManager.h"
 #include "Equipment2Manager.h"
 #include "Shelly1PMManager.h"
+#include "NetworkManager.h"
+#include "WebManager.h"
 #include "Logger.h"
 #include "Utils.h"
 #include <esp_task_wdt.h>
@@ -204,6 +206,11 @@ void SolarMonitor::monitorTask(void* pvParameters) {
                 ActuatorManager::fanPercent
             );
         }
+
+        // 6. Maintenance Loops (Moved from main loop for core isolation)
+        NetworkManager::loop();
+        WebManager::loop();
+        MqttManager::loop();
 
         vTaskDelay(pdMS_TO_TICKS(110)); 
     }

@@ -14,6 +14,8 @@ public:
     static int getCloudCoverMid() { return _cloudCoverMid; }
     static int getCloudCoverHigh() { return _cloudCoverHigh; }
     static float getTemperature() { return _temperature; }
+    static float getRain() { return _rain; }
+    static float getSnow() { return _snow; }
     static String getWeatherIcon() { return _weatherIcon; }
     static uint32_t getLastUpdate() { return _lastUpdate; }
     static bool isTooCloudy();
@@ -28,6 +30,8 @@ private:
     static int _cloudCoverMid;
     static int _cloudCoverHigh;
     static float _temperature;
+    static float _rain;
+    static float _snow;
     static String _weatherIcon;
     static uint32_t _lastUpdate;
 };

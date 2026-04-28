@@ -61,7 +61,10 @@ void StatsManager::init() {
     }
 
     File file = LittleFS.open("/stats.json", "r");
-    if (!file) return;
+    if (!file) {
+        prefs.end();
+        return;
+    }
 
     #ifndef MAX_STATS_DAYS
     #define MAX_STATS_DAYS 30
@@ -77,6 +80,7 @@ void StatsManager::init() {
              LittleFS.remove("/stats.json");
              Logger::error("stats.json too large. File deleted.", true);
         }
+        prefs.end();
         return;
     }
 
@@ -105,6 +109,14 @@ void StatsManager::init() {
         }
         _history[p.key().c_str()] = ds;
     }
+
+    // Ensure today's entry exists in _history and matches NVS values
+    DailyStats& todayDs = _history[today];
+    todayDs.import = totalImportToday;
+    todayDs.redirect = totalRedirectToday;
+    todayDs.export_wh = totalExportToday;
+    
+    prefs.end();
 #endif
 }
 
@@ -121,13 +133,6 @@ void StatsManager::update(float gridPower, float equipmentPower, uint32_t interv
     float energyImport = 0;
     float energyExport = 0;
     
-    // Logic: 
-    // 1. If it's night, there's no solar surplus. Any power sent to equipment is NOT redirection.
-    // 2. If it's day (not night), redirection is:
-    //    - If exporting (grid < 0): full equipment power is considered redirected.
-    //    - If importing (grid > 0): only the part of equipment power that prevents more export is redirected.
-    //      (Basically: redir = equipmentPower - (gridPower > 0 ? gridPower : 0), but clamped to [0, equipmentPower])
-    
     float solarRedirPower = 0;
     if (!isNight) {
         solarRedirPower = (gridPower > 0) ? ((equipmentPower > gridPower) ? (equipmentPower - gridPower) : 0) : equipmentPower;
@@ -137,7 +142,14 @@ void StatsManager::update(float gridPower, float equipmentPower, uint32_t interv
 
 #ifndef NATIVE_TEST
     if (_statsMutex && xSemaphoreTake(_statsMutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
-#endif
+        if (_history.find(key) == _history.end()) {
+            DailyStats ds;
+            ds.import = totalImportToday;
+            ds.redirect = totalRedirectToday;
+            ds.export_wh = totalExportToday;
+            _history[key] = ds;
+        }
+
         DailyStats& ds = _history[key];
         if (gridPower > 0) {
             energyImport = gridPower * intervalHours;
@@ -158,18 +170,19 @@ void StatsManager::update(float gridPower, float equipmentPower, uint32_t interv
         totalImportToday = ds.import;
         totalRedirectToday = ds.redirect;
         totalExportToday = ds.export_wh;
-#ifndef NATIVE_TEST
+
         xSemaphoreGive(_statsMutex);
     }
-#endif
 
-#ifndef NATIVE_TEST
     static uint32_t lastNvsSave = 0;
     if (millis() - lastNvsSave > 60000) {
-        prefs.putFloat("import", totalImportToday);
-        prefs.putFloat("redirect", totalRedirectToday);
-        prefs.putFloat("export", totalExportToday);
-        prefs.putString("last_day", key);
+        if (prefs.begin("solar_stats", false)) {
+            prefs.putFloat("import", totalImportToday);
+            prefs.putFloat("redirect", totalRedirectToday);
+            prefs.putFloat("export", totalExportToday);
+            prefs.putString("last_day", key);
+            prefs.end();
+        }
         lastNvsSave = millis();
     }
 
@@ -201,14 +214,12 @@ void StatsManager::statsTask(void* pvParameters) {
 void StatsManager::save() {
 #ifndef NATIVE_TEST
     JsonDocument doc;
-    esp_task_wdt_add(NULL);
 
     #ifndef MAX_STATS_DAYS
     #define MAX_STATS_DAYS 30
     #endif
 
     if (_statsMutex == nullptr || xSemaphoreTake(_statsMutex, pdMS_TO_TICKS(2000)) != pdTRUE) {
-        esp_task_wdt_delete(NULL);
         return;
     }
     
@@ -237,7 +248,6 @@ void StatsManager::save() {
 
     File file = LittleFS.open("/stats.json", "w");
     if (file) { serializeJson(doc, file); file.close(); }
-    esp_task_wdt_delete(NULL);
 #endif
 }
 

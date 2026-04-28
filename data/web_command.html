@@ -59,13 +59,17 @@
         }
 
         .mqtt-badge {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 0.7em;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2px 12px;
+            border-radius: 8px;
+            font-size: 0.75em;
             font-weight: bold;
             margin-top: 8px;
             text-transform: uppercase;
+            min-height: 44px;
+            border: 1px solid rgba(255,255,255,0.1);
         }
         .mqtt-ok { background: #27ae60; color: #fff; }
         .mqtt-err { background: #e74c3c; color: #fff; }
@@ -96,7 +100,7 @@
             border-radius: 12px;
             padding: 16px;
             max-width: 1000px;
-            height: 360px;
+            height: 320px;
             margin: 0 auto 24px auto;
             box-shadow: 0 4px 12px rgba(0,0,0,0.2);
             border: 1px solid var(--border-color);
@@ -257,14 +261,29 @@
     </style>
 </head>
 <body>
+    <!-- Inject Weather Sprite -->
+    <div id="weatherSpriteContainer" style="display: none;"></div>
+    <script>
+        fetch('/icons/animated/weather-sprite.svg')
+            .then(response => response.text())
+            .then(data => {
+                document.getElementById('weatherSpriteContainer').innerHTML = data;
+            });
+    </script>
+
     <div class="header">
         <h1>Gestion Solaire</h1>
         <div id="dateTime">--/--/---- --:--</div>
         <button id="themeToggle" onclick="toggleTheme()">☀️ Mode</button>
-        <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
-            <div id="weatherBadge" class="mqtt-badge" style="display: none; background: #3498db; color: white;">
-                <img id="weatherIcon" src="" style="height: 16px; vertical-align: middle; margin-right: 4px; display: none;">
-                <span id="weatherText">--%% nuages</span>
+        <div style="display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap;">
+            <div id="weatherBadge" class="mqtt-badge" style="display: none; background: #3498db; color: white; gap: 8px;">
+                <svg id="weatherSvgIcon" style="width: 40px; height: 40px; fill: white;">
+                    <use xlink:href="#day"></use>
+                </svg>
+                <div style="display: flex; flex-direction: column; align-items: flex-start; line-height: 1.1;">
+                    <span id="weatherText" style="font-size: 0.95em; opacity: 0.95;">--%% nuages</span>
+                    <span id="weatherPrecip" style="font-size: 0.8em; opacity: 0.8; display: none;"></span>
+                </div>
             </div>
             <div id="shellyStatus" class="mqtt-badge mqtt-off">SHELLY: --</div>
             <div id="mqttStatus" class="mqtt-badge mqtt-off" style="display: none;">MQTT: --</div>
@@ -377,8 +396,7 @@
         <a href="/RESET_device" onclick="return confirm('Redémarrer le device ?')">Reset</a>
     </div>
     <div style="text-align: center; font-size: 0.7em; color: #aaa; margin-top: 15px;">
-        <a href="https://github.com/aginies/domotique/tree/main/solar" target="_blank" style="background:none; color:inherit; padding:0;">Version %VERSION%</a>
-        <div style="margin-top: 4px; font-size: 0.9em; opacity: 0.7;">Build: %BUILD_TIME%</div>
+        <a href="https://github.com/aginies/domotique/tree/main/solar_cpp" target="_blank" style="background:none; color:inherit; padding:0;">Version %VERSION%</a> | Build: %BUILD_TIME%
     </div>
 
     <script>
@@ -500,25 +518,35 @@
                 const wb = document.getElementById('weatherBadge');
                 if (wb) {
                     if (d.e_weather) {
-                        wb.style.display = 'inline-block';
-                        const wt = document.getElementById('weatherText');
-                        if (wt) {
-                            const details = `(L:${d.weather_clouds_low}%% M:${d.weather_clouds_mid}%% H:${d.weather_clouds_high}%%)`;
-                            let remainMs = 900000 - (d.weather_age || 0);
-                            if (remainMs < 0) remainMs = 0;
-                            
-                            // Arrondir au palier de 30 secondes inférieur pour un affichage plus calme
-                            remainMs = Math.ceil(remainMs / 30000) * 30000;
-                            
-                            const rm = Math.floor(remainMs / 60000);
-                            const rs = Math.floor((remainMs %% 60000) / 1000).toString().padStart(2, '0');
-                            wt.textContent = d.weather_clouds + '%% nuages ' + details + ' (Maj dans ' + rm + ':' + rs + ')';
-                        }
-                        const wi = document.getElementById('weatherIcon');
+                        wb.style.display = 'inline-flex';
+                        
+                        // Icon
+                        const wi = document.getElementById('weatherSvgIcon');
                         if (wi && d.weather_icon) {
-                            wi.src = 'http://openweathermap.org/img/wn/' + d.weather_icon + '.png';
-                            wi.style.display = 'inline-block';
+                            wi.querySelector('use').setAttribute('xlink:href', '#' + d.weather_icon);
                         }
+
+                        // Clouds
+                        const wtText = document.getElementById('weatherText');
+                        if (wtText) {
+                            const details = `(L:${d.weather_clouds_low}%% M:${d.weather_clouds_mid}%% H:${d.weather_clouds_high}%%)`;
+                            wtText.textContent = d.weather_clouds + '%% nuages ' + details;
+                        }
+
+                        // Precip
+                        const wtPrecip = document.getElementById('weatherPrecip');
+                        if (wtPrecip) {
+                            let precipStr = '';
+                            if (d.weather_rain > 0) precipStr += '☔ ' + num(d.weather_rain) + 'mm';
+                            if (d.weather_snow > 0) precipStr += (precipStr ? ' ' : '') + '❄ ' + num(d.weather_snow) + 'cm';
+                            if (precipStr) {
+                                wtPrecip.textContent = precipStr;
+                                wtPrecip.style.display = 'block';
+                            } else {
+                                wtPrecip.style.display = 'none';
+                            }
+                        }
+
                         if (d.weather_too_cloudy) {
                             wb.style.background = '#7f8c8d'; // Grey if too cloudy
                         } else {
@@ -532,7 +560,7 @@
                 const shEl = document.getElementById('shellyStatus');
                 if (shEl) {
                     if (d.shelly_mqtt_enabled) {
-                        shEl.style.display = "inline-block";
+                        shEl.style.display = "inline-flex";
                         shEl.textContent = d.shelly_link ? "Shelly MQTT: OK" : "Shelly MQTT: ERR";
                         shEl.className = d.shelly_link ? "mqtt-badge mqtt-ok" : "mqtt-badge mqtt-err";
                     } else { shEl.style.display = "none"; }
@@ -541,7 +569,7 @@
                 const mqEl = document.getElementById('mqttStatus');
                 if (mqEl) {
                     if (d.mqtt_enabled) {
-                        mqEl.style.display = "inline-block";
+                        mqEl.style.display = "inline-flex";
                         mqEl.textContent = d.mqtt_status ? "EMETTEUR MQTT: OK" : "EMETTEUR MQTT: ERR";
                         mqEl.className = d.mqtt_status ? "mqtt-badge mqtt-ok" : "mqtt-badge mqtt-err";
                     } else { mqEl.style.display = "none"; }

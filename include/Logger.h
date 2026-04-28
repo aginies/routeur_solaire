@@ -37,6 +37,7 @@ public:
 #endif
     static void loop();
     static void flushAll();
+    static SemaphoreHandle_t getMutex() { return _mutex; }
     static String getLogs();
     static String getDataLogs();
 #ifndef NATIVE_TEST

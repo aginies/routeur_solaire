@@ -77,9 +77,5 @@ void setup() {
 
 void loop() {
     esp_task_wdt_reset(); // Feed TWDT
-    NetworkManager::loop();
-    WebManager::loop();
-    MqttManager::loop();
     vTaskDelay(pdMS_TO_TICKS(100));
-    esp_task_wdt_reset(); // Safety reset at end of loop
 }
