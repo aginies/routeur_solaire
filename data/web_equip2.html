@@ -50,7 +50,7 @@
         }
         .slot:hover { border-color: var(--primary-color); color: #fff; }
 
-        .btn { background: var(--primary-color); color: #1a1a2e; padding: 12px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; font-size: 1em; margin-top: 20px;}
+        .btn { background: var(--primary-color); color: #1a1a2e; padding: 12px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%%; font-size: 1em; margin-top: 20px;}
         .btn:hover { background: #d4a800; }
         .back-link { display: inline-block; margin-bottom: 20px; color: var(--primary-color); text-decoration: none; }
     </style>
@@ -94,7 +94,7 @@
             grid.innerHTML = '';
             for (let i = 0; i < 48; i++) {
                 const h = Math.floor(i / 2);
-                const m = (i % 2) * 30;
+                const m = (i %% 2) * 30;
                 const timeStr = h.toString().padStart(2, '0') + ':' + (m === 0 ? '00' : '30');
                 
                 const slot = document.createElement('div');
@@ -140,7 +140,7 @@
                 if (d.min_time > 0) {
                     mt.style.display = 'block';
                     const mins = Math.floor(d.min_time / 60);
-                    const secs = d.min_time % 60;
+                    const secs = d.min_time %% 60;
                     document.getElementById('eq2MinTime').textContent = mins + ':' + secs.toString().padStart(2, '0');
                 } else {
                     mt.style.display = 'none';

@@ -35,8 +35,16 @@
     "equipment_max_power": 2300.0,
     "export_setpoint": 0.0,
 
+    "e_equip2": false,
+    "equip2_name": "Piscine",
+    "equip2_shelly_ip": "",
+    "equip2_max_power": 1900.0,
+    "equip2_priority": 1,
+    "equip2_min_on_time": 15,
+    "equip2_schedule": 0,
+
     "delta": 100.0,
-    "deltaneg": -75,
+    "deltaneg": -75.0,
     "compensation": 50.0,
 
     "burst_period": 0.5,
@@ -63,8 +71,8 @@
 
     "e_jsy": false,
     "jsy_uart_id": 2,
-    "jsy_tx": 17,
-    "jsy_rx": 16,
+    "jsy_tx": 15,
+    "jsy_rx": 18,
 
     "control_mode": "trame",
     "half_period_us": 9900,
@@ -84,5 +92,9 @@
     "mqtt_report_interval": 10,
 
     "web_user": "",
-    "web_password": ""
+    "web_password": "",
+    "e_weather": false,
+    "weather_lat": "",
+    "weather_lon": "",
+    "weather_cloud_threshold": 60
 }
