@@ -304,14 +304,14 @@
         <div class="card" style="flex: 1 1 180px;">
             <!-- Équipement 1 -->
             <div style="margin-bottom: 8px;">
-                <div class="label"><span>%EQUIPMENT_NAME%</span></div>
+                <div class="label"><span>Redirigé vers %EQUIPMENT_NAME%</span></div>
                 <div class="value" id="equipmentPower">—<span class="unit">W</span></div>
             </div>
             <!-- Équipement 2 -->
             <div id="eq2Row" style="display: none; border-top: 1px solid var(--border-color); padding-top: 10px; margin-top: 4px; position: relative;">
                 <div class="label"><a href="%EQUIP2_URL%" id="eq2Link" style="color: inherit; text-decoration: none;"><span id="eq2NameLabel">Équipement 2</span></a></div>
+                <div id="eq2BypassBadge" style="display:none; background: #7f8c8d; color: #fff; font-size: 0.65em; padding: 2px 8px; border-radius: 4px; font-weight: bold; width: fit-content; margin: 0 auto 4px auto;">NUAGES (PAUSE)</div>
                 <div class="value" id="equip2Power">—<span class="unit">W</span></div>
-                <div id="eq2BypassBadge" style="display:none; position: absolute; top: 10px; right: 0; background: #7f8c8d; color: #fff; font-size: 0.6em; padding: 2px 6px; border-radius: 4px; font-weight: bold;">NUAGES (PAUSE)</div>
             </div>
         </div>
         <div class="card" id="ssrTempCard">
@@ -534,7 +534,7 @@
                             ? 'Confiance solaire indisponible: les donnees meteo ne sont pas encore disponibles.'
                             : 'Confiance solaire ' + Math.round(confidence) + '%%: estimation du potentiel solaire actuel. ' +
                               Math.round(100 - confidence) + '%% de lumiere utile est estimee perdue par rapport a un ciel clair. ' +
-                              'Calcul base surtout sur le rayonnement solaire mesure par Open-Meteo, avec les couches nuageuses en stabilisation.';
+                              'Calcul base sur le rayonnement solaire Open-Meteo compare a un ciel clair realiste au sol, avec les couches nuageuses en stabilisation.';
                         wb.title = tooltip;
                         if (wtText) {
                             wtText.textContent = confidence === null ? 'Confiance solaire: --%%' : 'Confiance solaire: ' + Math.round(confidence) + '%%';
