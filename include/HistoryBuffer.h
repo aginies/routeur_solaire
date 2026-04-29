@@ -10,6 +10,7 @@ class HistoryBuffer {
 public:
     static void init(const Config& config);
     static void startTask();
+    static void stopTask();
     static void streamHistoryJson(AsyncWebServerRequest *request);
     static String getHistoryJson();
     static void save();
@@ -23,6 +24,7 @@ public:
 private:
     static void historyTask(void* pvParameters);
     static SemaphoreHandle_t _dataMutex;
+    static TaskHandle_t _taskHandle;
 };
 #else
 class HistoryBuffer {

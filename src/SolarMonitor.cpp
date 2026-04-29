@@ -12,6 +12,7 @@
 #include "Shelly1PMManager.h"
 #include "NetworkManager.h"
 #include "WebManager.h"
+#include "LedManager.h"
 #include "Logger.h"
 #include "Utils.h"
 #include <esp_task_wdt.h>
@@ -19,6 +20,7 @@
 const Config* SolarMonitor::_config = nullptr;
 IncrementalController* SolarMonitor::_ctrl = nullptr;
 uint32_t SolarMonitor::_lastGoodPoll = 0;
+TaskHandle_t SolarMonitor::_monitorTaskHandle = nullptr;
 
 void SolarMonitor::init(const Config& config) {
     _config = &config;
@@ -44,17 +46,44 @@ void SolarMonitor::init(const Config& config) {
     _lastGoodPoll = millis();
 }
 
+void SolarMonitor::stopTasks() {
+    if (_monitorTaskHandle != nullptr) {
+        esp_task_wdt_delete(_monitorTaskHandle);
+        vTaskDelete(_monitorTaskHandle);
+        _monitorTaskHandle = nullptr;
+    }
+    
+    TemperatureManager::stopTask();
+    ControlStrategy::stopTasks();
+#ifndef DISABLE_HISTORY
+    HistoryBuffer::stopTask();
+#endif
+#ifndef DISABLE_STATS
+    StatsManager::stopTask();
+#endif
+    LedManager::stopTask();
+    WeatherManager::stopTask();
+}
+
 void SolarMonitor::startTasks() {
-    // Priority 3: Monitoring and logic - Core 0 (System Core)
-    // We move to Core 0 to leave Core 1 for time-critical SSR and loopTask.
-    xTaskCreatePinnedToCore(monitorTask, "monitorTask", 32768, NULL, 3, NULL, 0);
+    stopTasks();
+
+    // Priority 3: Monitoring and logic - Core 1
+    // We move to Core 1 to avoid interference with system tasks (WiFi/BLE/MQTT) on Core 0.
+    // ControlStrategy tasks also run on Core 1 but at higher priority (5).
+    xTaskCreatePinnedToCore(monitorTask, "monitorTask", 8192, NULL, 3, &_monitorTaskHandle, 1);
     
     // Sub-service tasks - Core 0
     TemperatureManager::startTask();
-    ControlStrategy::startTasks(); // These will remain on Core 1 at Priority 5
+    ControlStrategy::startTasks(); 
 #ifndef DISABLE_HISTORY
     HistoryBuffer::startTask();
 #endif
+#ifndef DISABLE_STATS
+    StatsManager::startTask();
+#endif
+    LedManager::startTask();
+    WeatherManager::startTask();
 }
 
 void SolarMonitor::monitorTask(void* pvParameters) {
@@ -142,10 +171,11 @@ void SolarMonitor::monitorTask(void* pvParameters) {
 
                 bool eq2Requested = false;
                 if (_config->e_equip2 && SafetyManager::currentState == SystemState::STATE_NORMAL) {
+                    float maxDuty = _config->max_duty_percent / 100.0f;
                     if (_config->equip2_priority == 1) {
                         // WATER HEATER FIRST
-                        // Turn on Eq2 if Eq1 is at ~100% AND there is still surplus > Eq2 power
-                        if (ActuatorManager::currentDuty >= 0.95f && surplus >= (_config->equip2_max_power + _config->delta)) {
+                        // Turn on Eq2 if Eq1 is at ~95% of its configured maximum AND there is still surplus > Eq2 power
+                        if (ActuatorManager::currentDuty >= (maxDuty * 0.95f) && surplus >= (_config->equip2_max_power + _config->delta)) {
                             eq2Requested = true;
                         }
                     } else {

@@ -2,9 +2,11 @@
 #include "SolarMonitor.h"
 #include "SafetyManager.h"
 #include "ActuatorManager.h"
+#include <esp_task_wdt.h>
 
 Adafruit_NeoPixel LedManager::_pixel(1, 48, NEO_GRB + NEO_KHZ800);
 const Config* LedManager::_config = nullptr;
+TaskHandle_t LedManager::_taskHandle = nullptr;
 
 void LedManager::init(const Config& config) {
     _config = &config;
@@ -12,9 +14,17 @@ void LedManager::init(const Config& config) {
     _pixel.begin();
     _pixel.show();
 }
+void LedManager::stopTask() {
+    if (_taskHandle != nullptr) {
+        esp_task_wdt_delete(_taskHandle);
+        vTaskDelete(_taskHandle);
+        _taskHandle = nullptr;
+    }
+}
 
 void LedManager::startTask() {
-    xTaskCreate(ledTask, "ledTask", 2048, NULL, 1, NULL);
+    stopTask();
+    xTaskCreatePinnedToCore(ledTask, "ledTask", 2048, NULL, 1, &_taskHandle, 0);
 }
 
 void LedManager::setColor(uint8_t r, uint8_t g, uint8_t b) {
@@ -32,7 +42,9 @@ void LedManager::blink(uint8_t r, uint8_t g, uint8_t b, int count, int delayMs) 
 }
 
 void LedManager::ledTask(void* pvParameters) {
+    esp_task_wdt_add(NULL);
     while (true) {
+        esp_task_wdt_reset();
         // 1. Error / Safety Check
         if (SafetyManager::currentState == SystemState::STATE_EMERGENCY_FAULT || 
             SafetyManager::currentState == SystemState::STATE_SAFE_TIMEOUT) {

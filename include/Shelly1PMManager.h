@@ -2,6 +2,8 @@
 #define SHELLY1PMMANAGER_H
 
 #include <Arduino.h>
+#include <WiFiClient.h>
+#include <HTTPClient.h>
 #include "Config.h"
 
 struct Shelly1PMDevice {
@@ -28,6 +30,8 @@ public:
     static void update(); // Refresh both
 
 private:
+    static WiFiClient _client;
+    static HTTPClient _http;
     static const Config* _config;
     static Shelly1PMDevice _dev1; // EQ1
     static Shelly1PMDevice _dev2; // EQ2

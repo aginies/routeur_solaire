@@ -2,12 +2,15 @@
 #define WEATHERMANAGER_H
 
 #include <Arduino.h>
+#include <WiFiClientSecure.h>
+#include <HTTPClient.h>
 #include "Config.h"
 
 class WeatherManager {
 public:
     static void init(const Config& config);
     static void startTask();
+    static void stopTask();
     
     static int getCloudCover() { return _cloudCover; }
     static int getCloudCoverLow() { return _cloudCoverLow; }
@@ -26,12 +29,16 @@ public:
     static String getWeatherIcon() { return _weatherIcon; }
     static uint32_t getLastUpdate() { return _lastUpdate; }
     static bool isTooCloudy();
-    static void forceUpdate() { updateWeather(); }
+    static void forceUpdate() { _updateRequested = true; }
 
 private:
     static void weatherTask(void* pvParameters);
     static void updateWeather();
     static float getCloudLayerIndex();
+
+    static WiFiClientSecure _client;
+    static HTTPClient _http;
+    static TaskHandle_t _taskHandle;
 
     static const Config* _config;
     static int _cloudCover;
@@ -47,6 +54,7 @@ private:
     static String _sunset;
     static String _weatherIcon;
     static uint32_t _lastUpdate;
+    static volatile bool _updateRequested;
 };
 
 #endif

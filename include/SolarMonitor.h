@@ -21,6 +21,7 @@ class SolarMonitor {
 public:
     static void init(const Config& config);
     static void startTasks();
+    static void stopTasks();
     
     // Legacy support or simplified access
     static bool isNight(int currMin);
@@ -31,6 +32,7 @@ private:
     static const Config* _config;
     static IncrementalController* _ctrl;
     static uint32_t _lastGoodPoll;
+    static TaskHandle_t _monitorTaskHandle;
 };
 
 #endif

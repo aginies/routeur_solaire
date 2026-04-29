@@ -32,6 +32,7 @@ public:
     static void init();
     static void update(float gridPower, float equipmentPower, uint32_t intervalMs, bool isNight, bool isMeasured = false);
     static void startTask();
+    static void stopTask();
     static void save();
 #ifndef NATIVE_TEST
     static void streamStatsJson(AsyncWebServerRequest *request);
@@ -45,6 +46,7 @@ public:
     static String getTodayKey();
     static void statsTask(void* pvParameters);
     static volatile bool _saveRequested;
+    static TaskHandle_t _taskHandle;
 
     #ifdef NATIVE_TEST
 public:

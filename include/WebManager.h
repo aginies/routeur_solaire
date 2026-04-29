@@ -2,6 +2,8 @@
 #define WEBMANAGER_H
 
 #include <ESPAsyncWebServer.h>
+#include <WiFiClient.h>
+#include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include "Config.h"
 
@@ -14,8 +16,11 @@ public:
 
 private:
     static void setupRoutes();
+    static void applyRequestParams(AsyncWebServerRequest *request, Config &cfg);
 
     static AsyncWebServer _server;
+    static WiFiClient _client;
+    static HTTPClient _http;
     static const Config* _config;
     static bool _rebootRequested;
 };

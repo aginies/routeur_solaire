@@ -24,6 +24,7 @@ float StatsManager::totalImportToday = 0;
 float StatsManager::totalRedirectToday = 0;
 float StatsManager::totalExportToday = 0;
 volatile bool StatsManager::_saveRequested = false;
+TaskHandle_t StatsManager::_taskHandle = nullptr;
 #ifndef NATIVE_TEST
 SemaphoreHandle_t StatsManager::_statsMutex = nullptr;
 #endif
@@ -136,10 +137,8 @@ void StatsManager::update(float gridPower, float equipmentPower, uint32_t interv
     float solarRedirPower = 0;
     if (!isNight) {
         if (isMeasured) {
-            // If measured by Shelly, we take it as is
             solarRedirPower = equipmentPower;
         } else {
-            // If calculated by duty, we ensure we don't count what's coming from grid
             solarRedirPower = (gridPower > 0) ? ((equipmentPower > gridPower) ? (equipmentPower - gridPower) : 0) : equipmentPower;
         }
     }
@@ -149,11 +148,17 @@ void StatsManager::update(float gridPower, float equipmentPower, uint32_t interv
 #ifndef NATIVE_TEST
     if (_statsMutex && xSemaphoreTake(_statsMutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
         if (_history.find(key) == _history.end()) {
+            // NEW DAY RESET
+            totalImportToday = 0;
+            totalRedirectToday = 0;
+            totalExportToday = 0;
+            
             DailyStats ds;
-            ds.import = totalImportToday;
-            ds.redirect = totalRedirectToday;
-            ds.export_wh = totalExportToday;
+            ds.import = 0;
+            ds.redirect = 0;
+            ds.export_wh = 0;
             _history[key] = ds;
+            Logger::info("New day detected in update: " + key);
         }
 
         DailyStats& ds = _history[key];
@@ -199,15 +204,28 @@ void StatsManager::update(float gridPower, float equipmentPower, uint32_t interv
 #endif
 }
 
+void StatsManager::stopTask() {
+#ifndef NATIVE_TEST
+    if (_taskHandle != nullptr) {
+        esp_task_wdt_delete(_taskHandle);
+        vTaskDelete(_taskHandle);
+        _taskHandle = nullptr;
+    }
+#endif
+}
+
 void StatsManager::startTask() {
 #ifndef NATIVE_TEST
-    xTaskCreate(statsTask, "statsTask", 4096, NULL, 2, NULL); // Priority 2
+    stopTask();
+    xTaskCreatePinnedToCore(statsTask, "statsTask", 4096, NULL, 2, &_taskHandle, 0); // Priority 2, Core 0
 #endif
 }
 
 void StatsManager::statsTask(void* pvParameters) {
 #ifndef NATIVE_TEST
+    esp_task_wdt_add(NULL);
     while (true) {
+        esp_task_wdt_reset();
         if (_saveRequested) {
             save();
             _saveRequested = false;

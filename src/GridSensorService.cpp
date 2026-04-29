@@ -11,9 +11,13 @@ float GridSensorService::currentGridVoltage = 230.0;
 bool GridSensorService::hasFreshData = false;
 const Config* GridSensorService::_config = nullptr;
 HardwareSerial* GridSensorService::_jsySerial = nullptr;
+WiFiClient GridSensorService::_client;
+HTTPClient GridSensorService::_http;
 
 void GridSensorService::init(const Config& config) {
     _config = &config;
+    _http.setConnectTimeout(2000);
+    _http.setTimeout(_config->shelly_timeout * 1000);
 
     if (config.e_jsy) {
         if (config.jsy_uart_id == 1) _jsySerial = &Serial1;
@@ -101,26 +105,14 @@ float GridSensorService::readJSY() {
 
     if (idx < 19) return SENSOR_ERROR_VALUE;
     
-    // Simple CRC check (optional but recommended)
-    // uint16_t crc = calculateCRC(response, 17);
-    // if (response[17] != (crc & 0xFF) || response[18] != (crc >> 8)) return -99999.0;
-
     // Parsing JSY-MK-194 response (Big Endian)
-    // Voltage: 0.1V steps, indices 3,4
-    // Current: 0.01A steps, indices 5,6
-    // Power: 1W steps, indices 7,8 (Active Power)
-    // For MK-194, registers are 16-bit integers
-    
     uint16_t v_raw = (response[3] << 8) | response[4];
     uint16_t p_raw = (response[7] << 8) | response[8];
-    uint16_t p_sign = (response[9] << 8) | response[10]; // Combined with 0x0100 for negative? 
-    // Actually, on many JSY-MK-194, register 0x0003 is signed power or there is a sign bit.
     
     currentGridVoltage = v_raw / 10.0f;
     float power = (float)p_raw;
     
-    // Handle Sign (JSY uses a separate register or MSB for direction depending on model)
-    // Standard MK-194: Register 0x0003 is Power, 0x0004 is Power Direction (0=Import, 1=Export)
+    // Handle Sign
     uint16_t p_dir = (response[9] << 8) | response[10];
     if (p_dir == 1) power = -power; 
 
@@ -155,22 +147,16 @@ float GridSensorService::getShellyPower() {
 
     if (WiFi.status() != WL_CONNECTED) return SENSOR_ERROR_VALUE;
 
-    WiFiClient client;
-    HTTPClient http;
-    http.setConnectTimeout(2000);
-    http.setTimeout(_config->shelly_timeout * 1000);
-    
     char url[80];
     snprintf(url, sizeof(url), "http://%s/emeter/%d", _config->shelly_em_ip.c_str(), _config->shelly_em_index);
-    http.begin(client, url);
+    _http.begin(_client, url);
     
-    int httpCode = http.GET();
+    int httpCode = _http.GET();
     float power = SENSOR_ERROR_VALUE;
 
     if (httpCode == HTTP_CODE_OK) {
-        String payload = http.getString();
         JsonDocument doc;
-        DeserializationError error = deserializeJson(doc, payload);
+        DeserializationError error = deserializeJson(doc, _http.getStream());
         if (!error) {
             power = doc["power"];
             float voltage = doc["voltage"];
@@ -180,6 +166,6 @@ float GridSensorService::getShellyPower() {
         }
     }
     
-    http.end(); 
+    _http.end(); 
     return power;
 }

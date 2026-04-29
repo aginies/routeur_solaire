@@ -29,6 +29,7 @@ class TemperatureManager {
 public:
     static void init(const Config& config);
     static void startTask();
+    static void stopTask();
     static void readTemperatures();
     
     static float currentSsrTemp;
@@ -41,6 +42,7 @@ private:
     static const Config* _config;
     static OneWire* _oneWire;
     static DallasTemperature* _sensors;
+    static TaskHandle_t _taskHandle;
 };
 
 #endif

@@ -54,10 +54,8 @@ void setup() {
 
 #ifndef DISABLE_STATS
     StatsManager::init();
-    StatsManager::startTask();
 #endif
     LedManager::init(config);
-    LedManager::startTask();
 
     NetworkManager::init(config);
     Logger::info("WiFi IP: " + NetworkManager::getIP());
@@ -66,8 +64,6 @@ void setup() {
     WebManager::init(config);
 
     WeatherManager::init(config);
-    WeatherManager::startTask();
-
     SolarMonitor::init(config);
     SolarMonitor::startTasks();
 

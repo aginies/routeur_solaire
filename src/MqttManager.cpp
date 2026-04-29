@@ -6,7 +6,6 @@
 
 espMqttClient MqttManager::_mqttClient;
 const Config* MqttManager::_config = nullptr;
-bool MqttManager::_discoverySent = false;
 String MqttManager::_nodeId = "";
 String MqttManager::_lwtTopic = "";
 float MqttManager::latestMqttGridPower = 0.0;
@@ -49,12 +48,19 @@ void MqttManager::loop() {
 
     _mqttClient.loop();
 
+    uint32_t now = millis();
     if (!_mqttClient.connected() && WiFi.isConnected()) {
-        uint32_t now = millis();
         if (now - _lastReconnectAttempt >= 5000) {
             _lastReconnectAttempt = now;
             connectToMqtt();
         }
+    }
+
+    // Periodic Discovery Refresh (every hour)
+    static uint32_t lastDiscoveryRefresh = 0;
+    if (_mqttClient.connected() && (now - lastDiscoveryRefresh > 3600000 || lastDiscoveryRefresh == 0)) {
+        lastDiscoveryRefresh = now;
+        sendDiscovery();
     }
 }
 
@@ -82,9 +88,8 @@ void MqttManager::onMqttConnect(bool sessionPresent) {
         Logger::info("Subscribed to Eq2 MQTT: " + _config->equip2_mqtt_topic);
     }
 
-    if (!_discoverySent) {
-        sendDiscovery();
-    }
+    // Always send discovery on connect to ensure HA picks it up
+    sendDiscovery();
 }
 
 void MqttManager::onMqttDisconnect(espMqttClientTypes::DisconnectReason reason) {
@@ -185,7 +190,6 @@ void MqttManager::sendDiscovery() {
         publishSensor("SSR Température", "ssr_temp", "°C", "temperature", "measurement", "ssr_temp");
     }
 
-    _discoverySent = true;
     Logger::info("HA Discovery sent");
 }
 

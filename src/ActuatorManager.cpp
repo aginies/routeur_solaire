@@ -13,8 +13,15 @@ int ActuatorManager::ssrPin = -1;
 
 const Config* ActuatorManager::_config = nullptr;
 uint32_t ActuatorManager::_lastOffTime = 0;
+bool ActuatorManager::_initialized = false;
 
 void ActuatorManager::init(const Config& config) {
+    if (_initialized) {
+        // Only update config pointer and pin modes if already initialized
+        _config = &config;
+        return;
+    }
+    
     _config = &config;
     ssrPin = config.ssr_pin;
     
@@ -29,6 +36,8 @@ void ActuatorManager::init(const Config& config) {
         ledcAttachPin(config.fan_pin, 4);
         ledcWrite(4, 0);
     }
+    
+    _initialized = true;
 }
 
 void ActuatorManager::setDuty(float duty) {

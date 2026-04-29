@@ -20,6 +20,7 @@ int TemperatureManager::ssrFaultCount = 0;
 const Config* TemperatureManager::_config = nullptr;
 OneWire* TemperatureManager::_oneWire = nullptr;
 DallasTemperature* TemperatureManager::_sensors = nullptr;
+TaskHandle_t TemperatureManager::_taskHandle = nullptr;
 
 #ifdef NATIVE_TEST
 float DallasTemperature::mockTemp = 25.0f;
@@ -46,9 +47,18 @@ void TemperatureManager::init(const Config& config) {
     }
 }
 
+void TemperatureManager::stopTask() {
+    if (_taskHandle != nullptr) {
+        esp_task_wdt_delete(_taskHandle);
+        vTaskDelete(_taskHandle);
+        _taskHandle = nullptr;
+    }
+}
+
 void TemperatureManager::startTask() {
 #ifndef NATIVE_TEST
-    xTaskCreate(tempTask, "tempTask", 4096, NULL, 1, NULL);
+    stopTask();
+    xTaskCreatePinnedToCore(tempTask, "tempTask", 4096, NULL, 1, &_taskHandle, 0);
 #endif
 }
 void TemperatureManager::readTemperatures() {
@@ -56,25 +66,46 @@ void TemperatureManager::readTemperatures() {
 
     if (_config->e_ssr_temp) {
         float t = _sensors->getTempCByIndex(0);
-        // Valid range for DS18B20 is -55 to +125. 
-        // 85.0 is the power-on reset value (ignore it if it persists).
-        // -127.0 is DEVICE_DISCONNECTED_C.
-        if (t > -55.0 && t < 125.0 && t != 85.0) {
-            currentSsrTemp = t;
-            ssrFaultCount = 0; // Reset counter on success
-        } else {
-            ssrFaultCount++;
-            // Only mark as hard fault after 10 consecutive failures (approx 50 seconds)
-            if (ssrFaultCount >= 10) {
-                currentSsrTemp = -999.0;
+        
+        // DS18B20 HARDWARE VALIDATION:
+        // -127.0: DEVICE_DISCONNECTED_C
+        //  85.0 : Power-On Reset value (often returned if power/wiring is unstable)
+        //  127.0: Sometimes returned on communication errors
+        //  Valid operating range for DS18B20: -55C to +125C
+        bool isHardwareError = (t < -120.0f || t > 126.0f || t == 85.0f);
+        
+        if (!isHardwareError) {
+            // Reading is hardware-valid, but check if it's physically plausible 
+            // (e.g. abrupt jumps could indicate interference)
+            if (ssrFaultCount > 0) {
+                ssrFaultCount--; // Slowly recover confidence
             }
-            Logger::debug("DS18B20 reading failed (count: " + String(ssrFaultCount) + ")");
+            
+            // LATCHING LOGIC:
+            // Only update the shared temperature if we have high confidence (Confidence < 5).
+            // This ensures that if we hit a hard-fault (Confidence >= 10), 
+            // we require multiple consecutive good readings before returning to NORMAL state.
+            if (ssrFaultCount < 5) {
+                currentSsrTemp = t;
+            }
+        } else {
+            // AGGRESSIVE FAULT DETECTION:
+            // We increment by 2 on failure and decrement by 1 on success.
+            // This ensures we latch into safety quickly but recover cautiously.
+            ssrFaultCount += 2;
+            if (ssrFaultCount > 20) ssrFaultCount = 20; // Cap to prevent integer overflow/long recovery
+
+            if (ssrFaultCount >= 10) {
+                currentSsrTemp = -999.0f; // Force SafetyManager into EMERGENCY_FAULT
+            }
+            
+            Logger::warn("DS18B20 invalid reading: " + String(t, 1) + "C (Confidence: " + String(ssrFaultCount) + ")");
         }
 
-        // Request next reading immediately so it's ready for the next call
+        // Request next reading immediately so it's ready for the next task cycle
         _sensors->requestTemperatures();
     } else {
-        currentSsrTemp = -999.0;
+        currentSsrTemp = -999.0f;
     }
 }
 void TemperatureManager::tempTask(void* pvParameters) {

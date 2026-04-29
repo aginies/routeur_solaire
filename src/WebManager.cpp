@@ -17,13 +17,16 @@
 #include <LittleFS.h>
 #include <Update.h>
 #include <ArduinoJson.h>
-
 AsyncWebServer WebManager::_server(80);
+WiFiClient WebManager::_client;
+HTTPClient WebManager::_http;
 const Config* WebManager::_config = nullptr;
 bool WebManager::_rebootRequested = false;
 
 void WebManager::init(const Config& config) {
     _config = &config;
+    _http.setConnectTimeout(1000);
+    _http.setTimeout(2000);
     setupRoutes();
     _server.begin();
     Logger::info("Web Server started");
@@ -44,6 +47,102 @@ void WebManager::loop() {
         delay(1000);
         Utils::reboot();
     }
+}
+
+void WebManager::applyRequestParams(AsyncWebServerRequest *request, Config &cfg) {
+    auto has = [&](const char* name) { return request->hasParam(name, true); };
+    auto get = [&](const char* name) { return request->getParam(name, true)->value(); };
+
+    // System
+    if (has("NAME")) cfg.name = get("NAME");
+    if (has("TIMEZONE")) cfg.timezone = get("TIMEZONE");
+    if (has("CPU_FREQ")) cfg.cpu_freq = get("CPU_FREQ").toInt();
+    if (has("MAX_ESP32_TEMP")) cfg.max_esp32_temp = get("MAX_ESP32_TEMP").toFloat();
+
+    // WiFi
+    if (has("E_WIFI")) cfg.e_wifi = (get("E_WIFI") == "True");
+    if (has("WIFI_SSID")) cfg.wifi_ssid = get("WIFI_SSID");
+    if (has("WIFI_PASSWORD")) cfg.wifi_password = get("WIFI_PASSWORD");
+    if (has("WIFI_STATIC_IP")) cfg.wifi_static_ip = get("WIFI_STATIC_IP");
+    if (has("WIFI_SUBNET")) cfg.wifi_subnet = get("WIFI_SUBNET");
+    if (has("WIFI_GATEWAY")) cfg.wifi_gateway = get("WIFI_GATEWAY");
+    if (has("WIFI_DNS")) cfg.wifi_dns = get("WIFI_DNS");
+
+    // Shelly / Grid
+    if (has("SHELLY_EM_IP")) cfg.shelly_em_ip = get("SHELLY_EM_IP");
+    if (has("SHELLY_EM_INDEX")) cfg.shelly_em_index = get("SHELLY_EM_INDEX").toInt();
+    if (has("E_SHELLY_MQTT")) cfg.e_shelly_mqtt = (get("E_SHELLY_MQTT") == "True");
+    if (has("SHELLY_MQTT_TOPIC")) cfg.shelly_mqtt_topic = get("SHELLY_MQTT_TOPIC");
+    if (has("POLL_INTERVAL")) cfg.poll_interval = get("POLL_INTERVAL").toInt();
+    if (has("SHELLY_TIMEOUT")) cfg.shelly_timeout = get("SHELLY_TIMEOUT").toInt();
+    if (has("SAFETY_TIMEOUT")) cfg.safety_timeout = get("SAFETY_TIMEOUT").toInt();
+    if (has("FAKE_SHELLY")) cfg.fake_shelly = (get("FAKE_SHELLY") == "True");
+
+    // Equipment 1
+    if (has("EQUIP1_NAME")) cfg.equip1_name = get("EQUIP1_NAME");
+    if (has("EQUIP1_MAX_POWER")) cfg.equip1_max_power = get("EQUIP1_MAX_POWER").toFloat();
+    if (has("E_EQUIP1")) cfg.e_equip1 = (get("E_EQUIP1") == "True");
+    if (has("EQUIP1_SHELLY_IP")) cfg.equip1_shelly_ip = get("EQUIP1_SHELLY_IP");
+    if (has("EQUIP1_SHELLY_INDEX")) cfg.equip1_shelly_index = get("EQUIP1_SHELLY_INDEX").toInt();
+    if (has("E_EQUIP1_MQTT")) cfg.e_equip1_mqtt = (get("E_EQUIP1_MQTT") == "True");
+    if (has("EQUIP1_MQTT_TOPIC")) cfg.equip1_mqtt_topic = get("EQUIP1_MQTT_TOPIC");
+
+    // Equipment 2
+    if (has("E_EQUIP2")) cfg.e_equip2 = (get("E_EQUIP2") == "True");
+    if (has("EQUIP2_NAME")) cfg.equip2_name = get("EQUIP2_NAME");
+    if (has("EQUIP2_IP")) cfg.equip2_shelly_ip = get("EQUIP2_IP");
+    if (has("EQUIP2_SHELLY_INDEX")) cfg.equip2_shelly_index = get("EQUIP2_SHELLY_INDEX").toInt();
+    if (has("E_EQUIP2_MQTT")) cfg.e_equip2_mqtt = (get("E_EQUIP2_MQTT") == "True");
+    if (has("EQUIP2_MQTT_TOPIC")) cfg.equip2_mqtt_topic = get("EQUIP2_MQTT_TOPIC");
+    if (has("EQUIP2_POWER")) cfg.equip2_max_power = get("EQUIP2_POWER").toFloat();
+    if (has("EQUIP2_PRIO")) cfg.equip2_priority = get("EQUIP2_PRIO").toInt();
+    if (has("EQUIP2_MIN_TIME")) cfg.equip2_min_on_time = get("EQUIP2_MIN_TIME").toInt();
+
+    // Strategy / PID
+    if (has("DELTA")) cfg.delta = get("DELTA").toFloat();
+    if (has("DELTANEG")) cfg.deltaneg = get("DELTANEG").toFloat();
+    if (has("COMPENSATION")) cfg.compensation = get("COMPENSATION").toFloat();
+    if (has("DYNAMIC_THRESHOLD_W")) cfg.dynamic_threshold_w = get("DYNAMIC_THRESHOLD_W").toFloat();
+    if (has("EXPORT_SETPOINT")) cfg.export_setpoint = get("EXPORT_SETPOINT").toFloat();
+    if (has("MAX_DUTY_PERCENT")) cfg.max_duty_percent = get("MAX_DUTY_PERCENT").toFloat();
+
+    // Hardware
+    if (has("SSR_PIN")) cfg.ssr_pin = get("SSR_PIN").toInt();
+    if (has("RELAY_PIN")) cfg.relay_pin = get("RELAY_PIN").toInt();
+    if (has("DS18B20_PIN")) cfg.ds18b20_pin = get("DS18B20_PIN").toInt();
+    if (has("I_LED_PIN")) cfg.internal_led_pin = get("I_LED_PIN").toInt();
+    if (has("FAN_PIN")) cfg.fan_pin = get("FAN_PIN").toInt();
+    if (has("FAN_TEMP_OFFSET")) cfg.fan_temp_offset = get("FAN_TEMP_OFFSET").toInt();
+    if (has("E_FAN")) cfg.e_fan = (get("E_FAN") == "True");
+    if (has("E_SSR_TEMP")) cfg.e_ssr_temp = (get("E_SSR_TEMP") == "True");
+    if (has("SSR_MAX_TEMP")) cfg.ssr_max_temp = get("SSR_MAX_TEMP").toFloat();
+    if (has("ZX_PIN")) cfg.zx_pin = get("ZX_PIN").toInt();
+    if (has("CONTROL_MODE")) cfg.control_mode = get("CONTROL_MODE");
+
+    // Force / Night
+    if (has("FORCE_EQUIPMENT")) cfg.force_equipment = (get("FORCE_EQUIPMENT") == "True");
+    if (has("E_FORCE_WINDOW")) cfg.e_force_window = (get("E_FORCE_WINDOW") == "True");
+    if (has("FORCE_START")) cfg.force_start = get("FORCE_START");
+    if (has("FORCE_END")) cfg.force_end = get("FORCE_END");
+    if (has("NIGHT_POLL_INTERVAL")) cfg.night_poll_interval = get("NIGHT_POLL_INTERVAL").toInt();
+
+    // MQTT
+    if (has("E_MQTT")) cfg.e_mqtt = (get("E_MQTT") == "True");
+    if (has("MQTT_IP")) cfg.mqtt_ip = get("MQTT_IP");
+    if (has("MQTT_PORT")) cfg.mqtt_port = get("MQTT_PORT").toInt();
+    if (has("MQTT_USER")) cfg.mqtt_user = get("MQTT_USER");
+    if (has("MQTT_PASSWORD")) cfg.mqtt_password = get("MQTT_PASSWORD");
+    if (has("MQTT_NAME")) cfg.mqtt_name = get("MQTT_NAME");
+
+    // Weather
+    if (has("E_WEATHER")) cfg.e_weather = (get("E_WEATHER") == "True");
+    if (has("WEATHER_LAT")) cfg.weather_lat = get("WEATHER_LAT");
+    if (has("WEATHER_LON")) cfg.weather_lon = get("WEATHER_LON");
+    if (has("WEATHER_THRESH")) cfg.weather_cloud_threshold = get("WEATHER_THRESH").toInt();
+
+    // Web
+    if (has("WEB_USER")) cfg.web_user = get("WEB_USER");
+    if (has("WEB_PASSWORD")) cfg.web_password = get("WEB_PASSWORD");
 }
 
 void WebManager::setupRoutes() {
@@ -200,20 +299,8 @@ void WebManager::setupRoutes() {
     _server.on("/save_config_eq2", HTTP_POST, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
         
-        auto getParam = [&](const char* name) -> String {
-            return request->hasParam(name, true) ? request->getParam(name, true)->value() : String();
-        };
-
         Config newCfg = *_config;
-        newCfg.e_equip2 = (getParam("E_EQUIP2") == "True");
-        newCfg.equip2_name = getParam("EQUIP2_NAME");
-        newCfg.equip2_shelly_ip = getParam("EQUIP2_IP");
-        newCfg.equip2_shelly_index = getParam("EQUIP2_SHELLY_INDEX").toInt();
-        newCfg.e_equip2_mqtt = (getParam("E_EQUIP2_MQTT") == "True");
-        newCfg.equip2_mqtt_topic = getParam("EQUIP2_MQTT_TOPIC");
-        newCfg.equip2_max_power = getParam("EQUIP2_POWER").toFloat();
-        newCfg.equip2_min_on_time = getParam("EQUIP2_MIN_TIME").toInt();
-        newCfg.equip2_priority = getParam("EQUIP2_PRIO").toInt();
+        applyRequestParams(request, newCfg);
         
         if (ConfigManager::save(newCfg)) {
             request->send(200, "text/plain", "OK");
@@ -254,94 +341,8 @@ void WebManager::setupRoutes() {
     _server.on("/save_config", HTTP_POST, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
         
-        auto getParam = [&](const char* name) -> String {
-            return request->hasParam(name, true) ? request->getParam(name, true)->value() : String();
-        };
-
         Config newCfg = *_config;
-        newCfg.name = getParam("NAME");
-        newCfg.equip1_name = getParam("EQUIP1_NAME");
-        newCfg.timezone = getParam("TIMEZONE");
-        newCfg.cpu_freq = getParam("CPU_FREQ").toInt();
-        newCfg.wifi_ssid = getParam("WIFI_SSID");
-        newCfg.wifi_password = getParam("WIFI_PASSWORD");
-        newCfg.wifi_static_ip = getParam("WIFI_STATIC_IP");
-        newCfg.wifi_subnet = getParam("WIFI_SUBNET");
-        newCfg.wifi_gateway = getParam("WIFI_GATEWAY");
-        newCfg.wifi_dns = getParam("WIFI_DNS");
-        newCfg.e_wifi = (getParam("E_WIFI") == "True");
-        newCfg.e_equip2 = (getParam("E_EQUIP2") == "True");
-        newCfg.equip2_name = getParam("EQUIP2_NAME");
-        newCfg.equip2_shelly_ip = getParam("EQUIP2_IP");
-        newCfg.equip2_shelly_index = getParam("EQUIP2_SHELLY_INDEX").toInt();
-        newCfg.e_equip2_mqtt = (getParam("E_EQUIP2_MQTT") == "True");
-        newCfg.equip2_mqtt_topic = getParam("EQUIP2_MQTT_TOPIC");
-        newCfg.equip2_max_power = getParam("EQUIP2_POWER").toFloat();
-        newCfg.equip2_priority = getParam("EQUIP2_PRIO").toInt();
-        newCfg.equip2_min_on_time = getParam("EQUIP2_MIN_TIME").toInt();
-        
-        newCfg.shelly_em_ip = getParam("SHELLY_EM_IP");
-        newCfg.shelly_em_index = getParam("SHELLY_EM_INDEX").toInt();
-        newCfg.e_shelly_mqtt = (getParam("E_SHELLY_MQTT") == "True");
-        newCfg.shelly_mqtt_topic = getParam("SHELLY_MQTT_TOPIC");
-        newCfg.poll_interval = getParam("POLL_INTERVAL").toInt();
-        newCfg.shelly_timeout = getParam("SHELLY_TIMEOUT").toInt();
-        newCfg.safety_timeout = getParam("SAFETY_TIMEOUT").toInt();
-        
-        newCfg.mqtt_ip = getParam("MQTT_IP");
-        newCfg.mqtt_port = getParam("MQTT_PORT").toInt();
-        newCfg.mqtt_user = getParam("MQTT_USER");
-        newCfg.mqtt_password = getParam("MQTT_PASSWORD");
-        newCfg.mqtt_name = getParam("MQTT_NAME");
-        newCfg.e_mqtt = (getParam("E_MQTT") == "True");
-
-        newCfg.equip1_name = getParam("EQUIP1_NAME");
-        newCfg.equip1_max_power = getParam("EQUIP1_MAX_POWER").toFloat();
-        newCfg.e_equip1 = (getParam("E_EQUIP1") == "True");
-        newCfg.equip1_shelly_ip = getParam("EQUIP1_SHELLY_IP");
-        newCfg.equip1_shelly_index = getParam("EQUIP1_SHELLY_INDEX").toInt();
-        newCfg.e_equip1_mqtt = (getParam("E_EQUIP1_MQTT") == "True");
-        newCfg.equip1_mqtt_topic = getParam("EQUIP1_MQTT_TOPIC");
-        newCfg.max_duty_percent = getParam("MAX_DUTY_PERCENT").toFloat();
-        newCfg.export_setpoint = getParam("EXPORT_SETPOINT").toFloat();
-        newCfg.delta = getParam("DELTA").toFloat();
-        newCfg.deltaneg = getParam("DELTANEG").toFloat();
-        newCfg.compensation = getParam("COMPENSATION").toFloat();
-        newCfg.dynamic_threshold_w = getParam("DYNAMIC_THRESHOLD_W").toFloat();
-
-        newCfg.ds18b20_pin = getParam("DS18B20_PIN").toInt();
-        newCfg.ssr_pin = getParam("SSR_PIN").toInt();
-        newCfg.relay_pin = getParam("RELAY_PIN").toInt();
-        newCfg.internal_led_pin = getParam("I_LED_PIN").toInt();
-        newCfg.fan_pin = getParam("FAN_PIN").toInt();
-        newCfg.fan_temp_offset = getParam("FAN_TEMP_OFFSET").toInt();
-        newCfg.e_fan = (getParam("E_FAN") == "True");
-        newCfg.e_ssr_temp = (getParam("E_SSR_TEMP") == "True");
-        newCfg.ssr_max_temp = getParam("SSR_MAX_TEMP").toFloat();
-
-        newCfg.force_equipment = (getParam("FORCE_EQUIPMENT") == "True");
-        newCfg.e_force_window = (getParam("E_FORCE_WINDOW") == "True");
-        newCfg.force_start = getParam("FORCE_START");
-        newCfg.force_end = getParam("FORCE_END");
-        
-        newCfg.night_poll_interval = getParam("NIGHT_POLL_INTERVAL").toInt();
-
-        newCfg.e_jsy = (getParam("E_JSY") == "True");
-        newCfg.jsy_uart_id = getParam("JSY_UART_ID").toInt();
-        newCfg.jsy_tx = getParam("JSY_TX").toInt();
-        newCfg.jsy_rx = getParam("JSY_RX").toInt();
-        newCfg.zx_pin = getParam("ZX_PIN").toInt();
-        newCfg.control_mode = getParam("CONTROL_MODE");
-
-        newCfg.fake_shelly = (getParam("FAKE_SHELLY") == "True");
-
-        newCfg.e_weather = (getParam("E_WEATHER") == "True");
-        newCfg.weather_lat = getParam("WEATHER_LAT");
-        newCfg.weather_lon = getParam("WEATHER_LON");
-        newCfg.weather_cloud_threshold = getParam("WEATHER_THRESH").toInt();
-
-        newCfg.web_user = getParam("WEB_USER");
-        newCfg.web_password = getParam("WEB_PASSWORD");
+        applyRequestParams(request, newCfg);
 
         if (ConfigManager::save(newCfg)) {
             request->send(200, "text/plain", "Configuration sauvegardée. Redémarrage...");
@@ -510,19 +511,14 @@ void WebManager::setupRoutes() {
             return;
         }
 
-        WiFiClient client;
-        HTTPClient http;
-        http.setConnectTimeout(1000);
-        http.setTimeout(2000);
-
         String result;
         if (isEM) {
             String url = "http://" + ip + "/emeter/" + String(index);
-            http.begin(client, url);
-            int code = http.GET();
+            _http.begin(_client, url);
+            int code = _http.GET();
             if (code == 200) {
                 JsonDocument doc;
-                if (!deserializeJson(doc, http.getStream())) {
+                if (!deserializeJson(doc, _http.getStream())) {
                     float power = doc["power"] | 0.0f;
                     float voltage = doc["voltage"] | 0.0f;
                     result = "{\"ok\":true,\"power\":" + String(power, 1) + ",\"voltage\":" + String(voltage, 1) + ",\"gen\":\"EM\"}";
@@ -532,29 +528,29 @@ void WebManager::setupRoutes() {
             } else {
                 result = "{\"ok\":false,\"error\":\"HTTP " + String(code) + "\"}";
             }
-            http.end();
+            _http.end();
         } else {
             String url = "http://" + ip + "/rpc/Switch.GetStatus?id=" + String(index);
-            http.begin(client, url);
-            int code = http.GET();
+            _http.begin(_client, url);
+            int code = _http.GET();
             if (code == 200) {
                 JsonDocument doc;
-                if (!deserializeJson(doc, http.getStream())) {
+                if (!deserializeJson(doc, _http.getStream())) {
                     float power = doc["apower"] | 0.0f;
                     bool relay = doc["output"] | false;
                     result = "{\"ok\":true,\"power\":" + String(power, 1) + ",\"gen\":\"Gen2\",\"relay\":" + (relay ? "true" : "false") + "}";
                 } else {
                     result = "{\"ok\":false,\"error\":\"JSON parse error (Gen2)\"}";
                 }
-                http.end();
+                _http.end();
             } else {
-                http.end();
+                _http.end();
                 url = "http://" + ip + "/status";
-                http.begin(client, url);
-                code = http.GET();
+                _http.begin(_client, url);
+                code = _http.GET();
                 if (code == 200) {
                     JsonDocument doc;
-                    if (!deserializeJson(doc, http.getStream())) {
+                    if (!deserializeJson(doc, _http.getStream())) {
                         float power = 0;
                         if (doc.containsKey("meters")) power = doc["meters"][index]["power"] | 0.0f;
                         else if (doc.containsKey("emeters")) power = doc["emeters"][index]["power"] | 0.0f;
@@ -566,7 +562,7 @@ void WebManager::setupRoutes() {
                 } else {
                     result = "{\"ok\":false,\"error\":\"HTTP " + String(code) + " (Gen1+Gen2)\"}";
                 }
-                http.end();
+                _http.end();
             }
         }
         request->send(200, "application/json", result);

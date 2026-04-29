@@ -15,6 +15,7 @@ PowerPoint* HistoryBuffer::powerHistory = nullptr;
 int HistoryBuffer::historyWriteIdx = 0;
 int HistoryBuffer::historyCount = 0;
 SemaphoreHandle_t HistoryBuffer::_dataMutex = nullptr;
+TaskHandle_t HistoryBuffer::_taskHandle = nullptr;
 
 void HistoryBuffer::init(const Config& config) {
     if (powerHistory) {
@@ -89,13 +90,23 @@ void HistoryBuffer::load() {
     }
     xSemaphoreGive(_dataMutex);
 }
+void HistoryBuffer::stopTask() {
+    if (_taskHandle != nullptr) {
+        esp_task_wdt_delete(_taskHandle);
+        vTaskDelete(_taskHandle);
+        _taskHandle = nullptr;
+    }
+}
 
 void HistoryBuffer::startTask() {
-    xTaskCreate(historyTask, "historyTask", 4096, NULL, 1, NULL);
+    stopTask();
+    xTaskCreatePinnedToCore(historyTask, "historyTask", 4096, NULL, 1, &_taskHandle, 0);
 }
 
 void HistoryBuffer::historyTask(void* pvParameters) {
+    esp_task_wdt_add(NULL);
     while (true) {
+        esp_task_wdt_reset();
         time_t now = time(nullptr);
         // Only record if time is synchronized (usually > year 2020)
         if (now > 1600000000 && powerHistory && _dataMutex && xSemaphoreTake(_dataMutex, pdMS_TO_TICKS(100)) == pdTRUE) {

@@ -2,6 +2,7 @@
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
+#include <esp_task_wdt.h>
 #include "Logger.h"
 
 const Config* WeatherManager::_config = nullptr;
@@ -16,16 +17,35 @@ float WeatherManager::_rain = 0.0;
 float WeatherManager::_snow = 0.0;
 String WeatherManager::_sunrise = "";
 String WeatherManager::_sunset = "";
-String WeatherManager::_weatherIcon = "day";
+String WeatherManager::_weatherIcon = "";
 uint32_t WeatherManager::_lastUpdate = 0;
+volatile bool WeatherManager::_updateRequested = false;
+WiFiClientSecure WeatherManager::_client;
+HTTPClient WeatherManager::_http;
+TaskHandle_t WeatherManager::_taskHandle = nullptr;
 
 void WeatherManager::init(const Config& config) {
     _config = &config;
+    _client.setInsecure();
+    _client.setTimeout(15);        // 15s TLS handshake + connect timeout
+    _http.useHTTP10(true);
+    _http.setTimeout(15000);       // 15s HTTP read timeout
+    _http.setConnectTimeout(10000); // 10s TCP connect timeout
+}
+
+void WeatherManager::stopTask() {
+    if (_taskHandle != nullptr) {
+        // Task may be unsubscribed from WDT during HTTPS call — ignore errors
+        esp_task_wdt_delete(_taskHandle);
+        vTaskDelete(_taskHandle);
+        _taskHandle = nullptr;
+    }
 }
 
 void WeatherManager::startTask() {
     if (!_config || !_config->e_weather) return;
-    xTaskCreatePinnedToCore(weatherTask, "weatherTask", 8192, NULL, 1, NULL, 1);
+    stopTask();
+    xTaskCreatePinnedToCore(weatherTask, "weatherTask", 8192, NULL, 1, &_taskHandle, 0);
 }
 
 float WeatherManager::getEffectiveCloudiness() {
@@ -87,36 +107,41 @@ bool WeatherManager::isNight() {
 }
 
 void WeatherManager::weatherTask(void* pvParameters) {
-    // Initial update
+    esp_task_wdt_add(NULL);
+    // Initial update — unsubscribe WDT around HTTPS (TLS can block >60s)
+    esp_task_wdt_delete(NULL);
     updateWeather();
-    
+    esp_task_wdt_add(NULL);
+
     while (true) {
-        // Update every 9 minutes
-        vTaskDelay(pdMS_TO_TICKS(9 * 60 * 1000));
+        esp_task_wdt_reset();
+        // Check every 5s for forced update, full update every 9 minutes
+        for (int i = 0; i < 108 && !_updateRequested; i++) {
+            vTaskDelay(pdMS_TO_TICKS(5000));
+            esp_task_wdt_reset();
+        }
+        _updateRequested = false;
+        esp_task_wdt_delete(NULL);
         updateWeather();
+        esp_task_wdt_add(NULL);
     }
 }
 
 void WeatherManager::updateWeather() {
     if (!_config || !_config->e_weather) return;
 
-    WiFiClientSecure client;
-    client.setInsecure(); // Open-Meteo doesn't need strict cert check for this use case
-    HTTPClient http;
-    http.useHTTP10(true); // Force HTTP 1.0 to avoid chunked encoding when streaming
-    
     // Open-Meteo API: Free & Anonymous
-    String url = "https://api.open-meteo.com/v1/forecast?latitude=" + _config->weather_lat + 
-                 "&longitude=" + _config->weather_lon + 
-                 "&current=temperature_2m,weather_code,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high," 
+    String url = "https://api.open-meteo.com/v1/forecast?latitude=" + _config->weather_lat +
+                 "&longitude=" + _config->weather_lon +
+                 "&current=temperature_2m,weather_code,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,"
                  "shortwave_radiation_instant,terrestrial_radiation_instant,rain,snowfall,is_day"
                  "&daily=sunrise,sunset&timezone=auto&forecast_days=1";
 
-    if (http.begin(client, url)) {
-        int httpCode = http.GET();
+    if (_http.begin(_client, url)) {
+        int httpCode = _http.GET();
         if (httpCode == HTTP_CODE_OK) {
             JsonDocument doc;
-            DeserializationError error = deserializeJson(doc, http.getStream());
+            DeserializationError error = deserializeJson(doc, _http.getStream());
             if (!error) {
                 _cloudCover = doc["current"]["cloud_cover"];
                 _cloudCoverLow = doc["current"]["cloud_cover_low"];
@@ -144,23 +169,19 @@ void WeatherManager::updateWeather() {
                 else if (code <= 67) _weatherIcon = "rainy-7";
                 else if (code <= 75) _weatherIcon = "snowy-6";
                 else if (code <= 77) _weatherIcon = "snowy-4";
-                else if (code <= 82) _weatherIcon = "rainy-1";
-                else if (code <= 86) _weatherIcon = "snowy-1";
-                else _weatherIcon = "thunder";
+                else if (code <= 82) _weatherIcon = "rainy-5";
+                else if (code <= 86) _weatherIcon = "snowy-5";
+                else if (code <= 99) _weatherIcon = "thunder";
                 
                 _lastUpdate = millis();
                 Logger::info("Weather updated: " + String(_temperature, 1) + "C, " + 
-                             String(_cloudCover) + "% clouds, SW: " + String(_shortwaveRadiationInstant, 0) +
-                             "W/m2, TOA: " + String(_terrestrialRadiationInstant, 0) +
-                             "W/m2 (Eff: " + String(getEffectiveCloudiness(), 0) + "%), sun: " +
-                             _sunrise.substring(11, 16) + "-" + _sunset.substring(11, 16) +
-                             ", icon: " + _weatherIcon);
+                             String(_cloudCover) + "% clouds, icon: " + _weatherIcon);
             } else {
-                Logger::error("Weather parse error: " + String(error.c_str()));
+                Logger::warn("Weather JSON error: " + String(error.c_str()));
             }
         } else {
-            Logger::error("Weather HTTP error: " + String(httpCode));
+            Logger::warn("Weather HTTP error: " + String(httpCode));
         }
-        http.end();
+        _http.end();
     }
 }

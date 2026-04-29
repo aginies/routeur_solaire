@@ -10,6 +10,7 @@ class ControlStrategy {
 public:
     static void init(const Config& config);
     static void startTasks();
+    static void stopTasks();
     static void IRAM_ATTR handleZxInterrupt();
 
 private:
@@ -20,7 +21,9 @@ private:
 
     static const Config* _config;
     static volatile uint32_t _zxCounter;
+    static volatile uint32_t _zxTime;
     static EventGroupHandle_t _zxEventGroup;
+    static TaskHandle_t _currentTaskHandle;
 };
 
 #endif

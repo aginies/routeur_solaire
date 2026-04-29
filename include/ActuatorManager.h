@@ -34,6 +34,7 @@ public:
 private:
     static const Config* _config;
     static uint32_t _lastOffTime;
+    static bool _initialized;
 };
 
 #endif
