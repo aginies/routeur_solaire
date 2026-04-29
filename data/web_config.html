@@ -218,8 +218,11 @@
                         <input type="text" id="WIFI_DNS" name="WIFI_DNS" pattern="^(\d{1,3}\.){3}\d{1,3}$" placeholder="ex: 8.8.8.8">
                     </div>
                     <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
-                    
-                    <h3>Shelly EM (mesure de la consommation)</h3>
+
+                    <h3>Mesure de la consommation réseau</h3>
+                    <p style="font-size: 0.85em; color: #888; margin-bottom: 15px;">Choisissez le capteur utilisé pour mesurer la puissance du réseau : Shelly EM (WiFi) ou JSY-MK-194 (câblé UART).</p>
+
+                    <h3>Shelly EM</h3>
                     <div class="form-group">
                         <label for="SHELLY_EM_IP">IP du Shelly EM:</label>
                         <input type="text" id="SHELLY_EM_IP" name="SHELLY_EM_IP" pattern="^(\d{1,3}\.){3}\d{1,3}$" placeholder="ex: 192.168.1.50">
@@ -258,6 +261,28 @@
                         <label for="SAFETY_TIMEOUT">Délai Sécurité sans données (sec):</label>
                         <input type="number" min="2" max="60" id="SAFETY_TIMEOUT" name="SAFETY_TIMEOUT">
                         <p style="font-size: 0.8em; color: #888; margin-top: 4px;">Le système s'arrête si aucune donnée n'est reçue pendant ce délai.</p>
+                    </div>
+                    <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
+
+                    <h3>JSY-MK-194 (mesure câblée UART)</h3>
+                    <div class="form-group">
+                        <label for="E_JSY">Activer JSY (UART):</label>
+                        <select id="E_JSY" name="E_JSY">
+                            <option value="True" >Activé</option>
+                            <option value="False">Désactivé</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="JSY_UART_ID">UART ID:</label>
+                        <input type="number" min="0" max="3" id="JSY_UART_ID" name="JSY_UART_ID">
+                    </div>
+                    <div class="form-group">
+                        <label for="JSY_TX">GPIO Pin TX:</label>
+                        <input type="number" min="0" max="39" id="JSY_TX" name="JSY_TX">
+                    </div>
+                    <div class="form-group">
+                        <label for="JSY_RX">GPIO Pin RX:</label>
+                        <input type="number" min="0" max="39" id="JSY_RX" name="JSY_RX">
                     </div>
                     <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
 
@@ -424,6 +449,23 @@
                         <input type="number" step="1" id="DYNAMIC_THRESHOLD_W" name="DYNAMIC_THRESHOLD_W">
                         <p style="font-size: 0.8em; color: #888; margin-top: 4px;">En dessous de ce seuil, le système attend 2 messages pour stabiliser.</p>
                     </div>
+                    <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
+
+                    <h3>Mode de contrôle SSR</h3>
+                    <div class="form-group">
+                        <label for="ZX_PIN">GPIO Pin ZX (Zero-Crossing):</label>
+                        <input type="number" min="0" max="39" id="ZX_PIN" name="ZX_PIN">
+                    </div>
+                    <div class="form-group">
+                        <label for="CONTROL_MODE">Mode de régulation SSR:</label>
+                        <select id="CONTROL_MODE" name="CONTROL_MODE">
+                            <option value="burst">Burst (Période fixe, ex: 0.5s)</option>
+                            <option value="cycle_stealing">Cycle Stealing (Zero-Crossing, plus fluide)</option>
+                            <option value="trame">Mode Trame (Bresenham, réparti sur 1s)</option>
+                            <option value="phase">Contrôle de Phase (Smooth, Random SSR requis)</option>
+                        </select>
+                        <p style="font-size: 0.8em; color: #888; margin-top: 4px;">Cycle Stealing nécessite un signal Zero-Crossing sur ZX_PIN.</p>
+                    </div>
                 </div>
             </details>
 
@@ -465,44 +507,8 @@
 
             <!-- 5. HARDWARE & PINS -->
             <details>
-                <summary><span class="help-btn" data-section="hardware">?</span>Hardware & Pins</summary>
+                <summary><span class="help-btn" data-section="hardware">?</span>Matériel & Broches</summary>
                 <div class="section-content">
-                    <h3>JSY-MK-194 (Local Wired)</h3>
-                    <div class="form-group">
-                        <label for="E_JSY">Activer JSY (UART):</label>
-                        <select id="E_JSY" name="E_JSY">
-                            <option value="True" >Activé</option>
-                            <option value="False">Désactivé</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="JSY_UART_ID">UART ID:</label>
-                        <input type="number" min="0" max="3900" id="JSY_UART_ID" name="JSY_UART_ID">
-                    </div>
-                    <div class="form-group">
-                        <label for="JSY_TX">GPIO Pin TX:</label>
-                        <input type="number" min="0" max="39" id="JSY_TX" name="JSY_TX">
-                    </div>
-                    <div class="form-group">
-                        <label for="JSY_RX">GPIO Pin RX:</label>
-                        <input type="number" min="0" max="39" id="JSY_RX" name="JSY_RX">
-                    </div>
-                    <div class="form-group">
-                        <label for="ZX_PIN">GPIO Pin ZX (Zero-Crossing):</label>
-                        <input type="number" min="0" max="39" id="ZX_PIN" name="ZX_PIN">
-                    </div>
-                    <div class="form-group">
-                        <label for="CONTROL_MODE">Mode de régulation SSR:</label>
-                        <select id="CONTROL_MODE" name="CONTROL_MODE">
-                            <option value="burst">Burst (Période fixe, ex: 0.5s)</option>
-                            <option value="cycle_stealing">Cycle Stealing (Zero-Crossing, plus fluide)</option>
-                            <option value="trame">Mode Trame (Bresenham, réparti sur 1s)</option>
-                            <option value="phase">Contrôle de Phase (Smooth, Random SSR requis)</option>
-                        </select>
-                        <p style="font-size: 0.8em; color: #888; margin-top: 4px;">Cycle Stealing nécessite un signal Zero-Crossing sur ZX_PIN.</p>
-                    </div>
-                    <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
-
                     <h3>Ventilateur Refroidissement SSR</h3>
                     <div class="form-group">
                         <label for="E_FAN">Activer le ventilateur:</label>
