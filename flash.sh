@@ -5,7 +5,6 @@ set -e
 # Default values
 ENV="s3"
 SKIP_FS=false
-COMPRESS=false
 STATS_DAYS=""
 RUN_TESTS=false
 MONITOR=false
@@ -19,7 +18,6 @@ usage() {
     echo "  -t, --test  Run unit tests on host (native environment)"
     echo "  -m, --monitor Launch serial monitor after flashing"
     echo "  --erase     Full chip erase (clears NVS/Stats) before upload"
-    echo "  --compress  Gzip HTML/JS files before uploading FS"
     echo "  --skip-fs   Skip building and uploading filesystem"
     echo "  -h, --help  Show this help message"
 }
@@ -55,7 +53,6 @@ while [[ "$#" -gt 0 ]]; do
         -t|--test) RUN_TESTS=true ;;
         -m|--monitor) MONITOR=true ;;
         --erase) ERASE=true ;;
-        --compress) COMPRESS=true ;;
         --skip-fs) SKIP_FS=true ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown parameter passed: $1"; usage; exit 1 ;;
@@ -118,11 +115,9 @@ echo "--- 2. Building and Uploading Firmware ($PIO_ENV) ---"
 pio run -e $PIO_ENV -t upload
 
 if [ "$SKIP_FS" = false ]; then
-    if [ "$COMPRESS" = true ]; then
-        echo "--- 3a. Compressing Assets ---"
-        bash data/compress.sh
-    fi
-    echo "--- 3. Building and Uploading Filesystem (LittleFS) ---"
+    echo "--- 3a. Compressing HTML assets ---"
+    bash data/compress.sh
+    echo "--- 3b. Building and Uploading Filesystem (LittleFS) ---"
     pio run -e $PIO_ENV -t uploadfs
 fi
 
