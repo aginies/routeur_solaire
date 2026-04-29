@@ -8,6 +8,7 @@
 #include "Logger.h"
 #include <LittleFS.h>
 #include <ArduinoJson.h>
+#include <esp_task_wdt.h>
 
 int HistoryBuffer::maxHistory = 120;
 PowerPoint* HistoryBuffer::powerHistory = nullptr;
@@ -143,27 +144,28 @@ String HistoryBuffer::getHistoryJson() {
 }
 
 void HistoryBuffer::streamHistoryJson(AsyncWebServerRequest *request) {
-    JsonDocument doc;
-    JsonArray arr = doc.to<JsonArray>();
+    AsyncResponseStream *response = request->beginResponseStream("application/json");
+    response->print("[");
 
-    if (powerHistory && _dataMutex && xSemaphoreTake(_dataMutex, pdMS_TO_TICKS(500)) == pdTRUE) {
+    if (powerHistory && _dataMutex && xSemaphoreTake(_dataMutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+        char buf[128];
         for (int i = 0; i < historyCount; i++) {
+            if (i > 0) response->print(",");
             int idx = (historyWriteIdx - historyCount + i + maxHistory) % maxHistory;
-            PowerPoint p = powerHistory[idx];
-            JsonObject obj = arr.add<JsonObject>();
-            obj["t"] = p.t;
-            obj["g"] = p.g;
-            obj["e"] = p.e;
-            obj["e1r"] = p.e1r;
-            obj["e2"] = p.e2;
-            obj["s"] = p.s;
-            obj["f"] = p.f;
+            const auto& p = powerHistory[idx];
+            snprintf(buf, sizeof(buf), "{\"t\":%u,\"g\":%.1f,\"e\":%.1f,\"e1r\":%.1f,\"e2\":%.1f,\"s\":%.1f,\"f\":%d}",
+                     p.t, p.g, p.e, p.e1r, p.e2, p.s, p.f ? 1 : 0);
+            response->print(buf);
+            
+            // Periodically yield to avoid starving other tasks if history is very large
+            if (i % 50 == 0) {
+                esp_task_wdt_reset();
+            }
         }
         xSemaphoreGive(_dataMutex);
     }
 
-    String output;
-    serializeJson(doc, output);
-    request->send(200, "application/json", output);
+    response->print("]");
+    request->send(response);
 }
 #endif

@@ -9,7 +9,7 @@ class WebManager {
 public:
     static void init(const Config& config);
     static void loop();
-    static String getStatusJson();
+    static void streamStatusJson(AsyncWebServerRequest *request);
     static String getHistoryJson();
 
 private:

@@ -219,71 +219,102 @@ void StatsManager::statsTask(void* pvParameters) {
 
 void StatsManager::save() {
 #ifndef NATIVE_TEST
-    JsonDocument doc;
+    if (_statsMutex == nullptr || xSemaphoreTake(_statsMutex, pdMS_TO_TICKS(2000)) != pdTRUE) {
+        return;
+    }
 
     #ifndef MAX_STATS_DAYS
     #define MAX_STATS_DAYS 30
     #endif
-
-    if (_statsMutex == nullptr || xSemaphoreTake(_statsMutex, pdMS_TO_TICKS(2000)) != pdTRUE) {
-        return;
-    }
     
     while (_history.size() > MAX_STATS_DAYS) _history.erase(_history.begin());
 
+    File file = LittleFS.open("/stats.json", "w");
+    if (!file) {
+        xSemaphoreGive(_statsMutex);
+        return;
+    }
+
+    file.print("{");
+    bool firstDay = true;
     int iCount = 0;
+
     for (auto const& [date, ds] : _history) {
         if (iCount++ % 5 == 0) esp_task_wdt_reset();
-        JsonObject obj = doc[date].to<JsonObject>();
-        obj["import"] = round(ds.import * 10) / 10.0;
-        obj["redirect"] = round(ds.redirect * 10) / 10.0;
-        obj["export"] = round(ds.export_wh * 10) / 10.0;
-        obj["active_time"] = ds.active_time;
-        
-        JsonArray h_imp = obj["h_import"].to<JsonArray>();
-        JsonArray h_red = obj["h_redirect"].to<JsonArray>();
-        JsonArray h_exp = obj["h_export"].to<JsonArray>();
-        for (int i = 0; i < 24; i++) {
-            h_imp.add(round(ds.h_import[i] * 10) / 10.0);
-            h_red.add(round(ds.h_redirect[i] * 10) / 10.0);
-            h_exp.add(round(ds.h_export[i] * 10) / 10.0);
-        }
+        if (!firstDay) file.print(",");
+        firstDay = false;
+
+        file.printf("\"%s\":{\"import\":%.1f,\"redirect\":%.1f,\"export\":%.1f,\"active_time\":%u,",
+                    date.c_str(), 
+                    round(ds.import * 10) / 10.0,
+                    round(ds.redirect * 10) / 10.0,
+                    round(ds.export_wh * 10) / 10.0,
+                    ds.active_time);
+
+        auto printArray = [&](const char* name, const float* arr) {
+            file.printf("\"%s\":[", name);
+            for (int i = 0; i < 24; i++) {
+                file.printf("%.1f%s", round(arr[i] * 10) / 10.0, (i < 23 ? "," : ""));
+            }
+            file.print("]");
+        };
+
+        printArray("h_import", ds.h_import);
+        file.print(",");
+        printArray("h_redirect", ds.h_redirect);
+        file.print(",");
+        printArray("h_export", ds.h_export);
+        file.print("}");
     }
+
+    file.print("}");
+    file.close();
     xSemaphoreGive(_statsMutex);
     esp_task_wdt_reset();
-
-    File file = LittleFS.open("/stats.json", "w");
-    if (file) { serializeJson(doc, file); file.close(); }
 #endif
 }
 
 #ifndef NATIVE_TEST
 void StatsManager::streamStatsJson(AsyncWebServerRequest *request) {
-    String result;
-    result.reserve(4096);
-    result += "{";
-
-    bool first = true;
-    if (_statsMutex && xSemaphoreTake(_statsMutex, pdMS_TO_TICKS(2000)) == pdTRUE) {
-        char buf[64];
-        for (auto const& [key, ds] : _history) {
-            if (!first) result += ",";
-            first = false;
-            snprintf(buf, sizeof(buf), "\"%s\":{\"import\":%.2f,\"redirect\":%.2f,\"export\":%.2f,\"active_time\":%u,",
-                     key.c_str(), ds.import, ds.redirect, ds.export_wh, ds.active_time);
-            result += buf;
-            result += "\"h_import\":[";
-            for (int i = 0; i < 24; i++) { snprintf(buf, sizeof(buf), "%.2f", ds.h_import[i]); result += buf; if (i < 23) result += ","; }
-            result += "],\"h_redirect\":[";
-            for (int i = 0; i < 24; i++) { snprintf(buf, sizeof(buf), "%.2f", ds.h_redirect[i]); result += buf; if (i < 23) result += ","; }
-            result += "],\"h_export\":[";
-            for (int i = 0; i < 24; i++) { snprintf(buf, sizeof(buf), "%.2f", ds.h_export[i]); result += buf; if (i < 23) result += ","; }
-            result += "]}";
-        }
-        xSemaphoreGive(_statsMutex);
+    if (_statsMutex == nullptr || xSemaphoreTake(_statsMutex, pdMS_TO_TICKS(2000)) != pdTRUE) {
+        request->send(503, "text/plain", "System busy");
+        return;
     }
-    result += "}";
-    request->send(200, "application/json", result);
+
+    AsyncResponseStream *response = request->beginResponseStream("application/json");
+    response->print("{");
+
+    bool firstDay = true;
+    char buf[128];
+
+    for (auto const& [key, ds] : _history) {
+        if (!firstDay) response->print(",");
+        firstDay = false;
+
+        snprintf(buf, sizeof(buf), "\"%s\":{\"import\":%.1f,\"redirect\":%.1f,\"export\":%.1f,\"active_time\":%u,",
+                 key.c_str(), ds.import, ds.redirect, ds.export_wh, ds.active_time);
+        response->print(buf);
+
+        auto printArray = [&](const char* name, const float* arr) {
+            response->printf("\"%s\":[", name);
+            for (int i = 0; i < 24; i++) {
+                response->printf("%.2f%s", arr[i], (i < 23 ? "," : ""));
+            }
+            response->print("]");
+        };
+
+        printArray("h_import", ds.h_import);
+        response->print(",");
+        printArray("h_redirect", ds.h_redirect);
+        response->print(",");
+        printArray("h_export", ds.h_export);
+        
+        response->print("}");
+    }
+
+    response->print("}");
+    xSemaphoreGive(_statsMutex);
+    request->send(response);
 }
 #endif
 

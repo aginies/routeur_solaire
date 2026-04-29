@@ -163,24 +163,25 @@ void Logger::streamLogs(AsyncWebServerRequest *request) {
         return;
     }
 
-    String result;
-    result.reserve(4096);
+    AsyncResponseStream *response = request->beginResponseStream("text/plain");
 
     File file = LittleFS.open(_logFile, "r");
     if (file) {
         size_t size = file.size();
-        if (size > 4096) file.seek(size - 4096);
+        if (size > 8192) file.seek(size - 8192); // Increase to 8KB
         while (file.available()) {
-            result += (char)file.read();
+            uint8_t buf[512];
+            size_t len = file.read(buf, sizeof(buf));
+            response->write(buf, len);
         }
         file.close();
     }
     for (const auto& entry : _logBuffer) {
-        result += entry + "\n";
+        response->print(entry);
+        response->print("\n");
     }
     xSemaphoreGiveRecursive(_mutex);
-
-    request->send(200, "text/plain", result);
+    request->send(response);
 }
 
 #ifndef DISABLE_DATA_LOG
@@ -190,24 +191,25 @@ void Logger::streamDataLogs(AsyncWebServerRequest *request) {
         return;
     }
 
-    String result;
-    result.reserve(4096);
+    AsyncResponseStream *response = request->beginResponseStream("text/plain");
 
     File file = LittleFS.open(_dataFile, "r");
     if (file) {
         size_t size = file.size();
-        if (size > 4096) file.seek(size - 4096);
+        if (size > 8192) file.seek(size - 8192); // Increase to 8KB
         while (file.available()) {
-            result += (char)file.read();
+            uint8_t buf[512];
+            size_t len = file.read(buf, sizeof(buf));
+            response->write(buf, len);
         }
         file.close();
     }
     for (const auto& entry : _dataBuffer) {
-        result += entry + "\n";
+        response->print(entry);
+        response->print("\n");
     }
     xSemaphoreGiveRecursive(_mutex);
-
-    request->send(200, "text/plain", result);
+    request->send(response);
 }
 #else
 void Logger::streamDataLogs(AsyncWebServerRequest *request) {

@@ -79,9 +79,10 @@ void SolarMonitor::monitorTask(void* pvParameters) {
             char timeBuf[20];
             strftime(timeBuf, sizeof(timeBuf), "%H:%M:%S", &ti);
 
-            String dataLine = String(timeBuf) + " - G:" + String(GridSensorService::currentGridPower, 1) + 
-                              "W, E:" + String(ActuatorManager::equipmentPower, 1) + "W, T:" + String(TemperatureManager::currentSsrTemp, 1) + "C";
-            Logger::logData(dataLine);
+            char logBuf[128];
+            snprintf(logBuf, sizeof(logBuf), "%s - G:%.1fW, E:%.1fW, T:%.1fC", 
+                     timeBuf, GridSensorService::currentGridPower, ActuatorManager::equipmentPower, TemperatureManager::currentSsrTemp);
+            Logger::logData(logBuf);
         }
 
         // 1. Update Safety (Internal ESP32 temp)

@@ -46,7 +46,7 @@ float WeatherManager::getEffectiveCloudiness() {
 }
 
 float WeatherManager::getSolarConfidence() {
-    if (!_config || !_config->e_weather) return 100.0f;
+    if (!_config || !_config->e_weather) return 0.0f;
     return constrain(100.0f - getEffectiveCloudiness(), 0.0f, 100.0f);
 }
 
@@ -103,6 +103,8 @@ void WeatherManager::updateWeather() {
     WiFiClientSecure client;
     client.setInsecure(); // Open-Meteo doesn't need strict cert check for this use case
     HTTPClient http;
+    http.useHTTP10(true); // Force HTTP 1.0 to avoid chunked encoding when streaming
+    
     // Open-Meteo API: Free & Anonymous
     String url = "https://api.open-meteo.com/v1/forecast?latitude=" + _config->weather_lat + 
                  "&longitude=" + _config->weather_lon + 
@@ -114,7 +116,7 @@ void WeatherManager::updateWeather() {
         int httpCode = http.GET();
         if (httpCode == HTTP_CODE_OK) {
             JsonDocument doc;
-            DeserializationError error = deserializeJson(doc, http.getString());
+            DeserializationError error = deserializeJson(doc, http.getStream());
             if (!error) {
                 _cloudCover = doc["current"]["cloud_cover"];
                 _cloudCoverLow = doc["current"]["cloud_cover_low"];

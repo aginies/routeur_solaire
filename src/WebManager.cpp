@@ -573,7 +573,7 @@ void WebManager::setupRoutes() {
     });
 
     _server.on("/status", HTTP_GET, [](AsyncWebServerRequest *request) {
-        request->send(200, "application/json", getStatusJson());
+        streamStatusJson(request);
     });
 
     _server.on("/history", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -581,7 +581,8 @@ void WebManager::setupRoutes() {
     });
 }
 
-String WebManager::getStatusJson() {
+void WebManager::streamStatusJson(AsyncWebServerRequest *request) {
+    AsyncResponseStream *response = request->beginResponseStream("application/json");
     JsonDocument doc;
     doc["grid_power"] = GridSensorService::currentGridPower;
     doc["equipment_power"] = ActuatorManager::equipmentPower;
@@ -682,14 +683,13 @@ String WebManager::getStatusJson() {
     }
 
     time_t t_now; time(&t_now); struct tm ti; localtime_r(&t_now, &ti);
-    char buf[12]; strftime(buf, sizeof(buf), "%H:%M", &ti);
-    doc["rtc_time"] = String(buf);
-    char buf2[24]; strftime(buf2, sizeof(buf2), "%d/%m/%Y", &ti);
-    doc["rtc_date"] = String(buf2);
+    char tbuf[12]; strftime(tbuf, sizeof(tbuf), "%H:%M", &ti);
+    doc["rtc_time"] = String(tbuf);
+    char tbuf2[24]; strftime(tbuf2, sizeof(tbuf2), "%d/%m/%Y", &ti);
+    doc["rtc_date"] = String(tbuf2);
 
-    String output;
-    serializeJson(doc, output);
-    return output;
+    serializeJson(doc, *response);
+    request->send(response);
 }
 
 String WebManager::getHistoryJson() {
