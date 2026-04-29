@@ -26,6 +26,9 @@ public:
     // Legacy support or simplified access
     static bool isNight(int currMin);
 
+    // Task health accessor (Bug #2)
+    static bool tasksRunning() { return _monitorTaskHandle != nullptr; }
+
 private:
     static void monitorTask(void* pvParameters);
 

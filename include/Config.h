@@ -7,13 +7,21 @@
 #else
 #include <string>
 #include <iostream>
+#include <cstdio>
 class String : public std::string {
 public:
     String() : std::string("") {}
     String(const char* s) : std::string(s) {}
     String(const std::string& s) : std::string(s) {}
     String(int v) : std::string(std::to_string(v)) {}
-    String(float v, int p = 2) : std::string(std::to_string(v)) {} // Simple float stub
+    String(float v, int p = 2) {
+        // Bug #6 (header audit): honour precision arg `p` (was previously ignored,
+        // mismatching real Arduino String's printf-style "%.*f" behaviour and tripping
+        // tests that compare textual float output).
+        char buf[32];
+        snprintf(buf, sizeof(buf), "%.*f", p, v);
+        std::string::assign(buf);
+    }
     String operator+(const String& other) const { return String(std::string(*this) + other); }
     String operator+(const char* other) const { return String(std::string(*this) + std::string(other)); }
     void trim() {}
@@ -83,6 +91,9 @@ struct Config {
     // Equipment 1 (Ballon)
     String equip1_name = "Ballon";
     float equip1_max_power = 2300.0;
+    // Bug #9 (header audit): export_setpoint moved here from the top-level block —
+    // it semantically belongs to Equipment 1's solar-routing setpoint, not a
+    // global system setting. Field name and serialization key are unchanged.
     float export_setpoint = 0.0;
     bool e_equip1 = false;
     String equip1_shelly_ip = "";

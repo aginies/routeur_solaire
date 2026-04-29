@@ -13,6 +13,13 @@ public:
     static bool fetchGridData();
     static bool isJsyActive();
 
+    // Bug #4 (header audit) — REVERTED: marking these `volatile` broke ArduinoJson
+    // template overload resolution (`doc["grid_power"] = currentGridPower` produced
+    // wrong/empty JSON output, hiding grid power on the web UI). The previous
+    // non-volatile pattern is fine in practice: writers live in a single sensor task
+    // and ESP32 word-aligned float/bool reads are atomic at the hardware level. If
+    // strict freshness ever matters, add explicit snapshot accessors instead of
+    // making the storage volatile.
     static float currentGridPower;
     static float currentGridVoltage;
     static bool hasFreshData;

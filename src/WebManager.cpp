@@ -20,6 +20,7 @@
 AsyncWebServer WebManager::_server(80);
 WiFiClient WebManager::_client;
 HTTPClient WebManager::_http;
+SemaphoreHandle_t WebManager::_httpMutex = nullptr;
 const Config* WebManager::_config = nullptr;
 bool WebManager::_rebootRequested = false;
 
@@ -27,6 +28,7 @@ void WebManager::init(const Config& config) {
     _config = &config;
     _http.setConnectTimeout(1000);
     _http.setTimeout(2000);
+    if (!_httpMutex) _httpMutex = xSemaphoreCreateMutex(); // Bug #6
     setupRoutes();
     _server.begin();
     Logger::info("Web Server started");
@@ -53,98 +55,123 @@ void WebManager::applyRequestParams(AsyncWebServerRequest *request, Config &cfg)
     auto has = [&](const char* name) { return request->hasParam(name, true); };
     auto get = [&](const char* name) { return request->getParam(name, true)->value(); };
 
+    // Bug #5: helpers to clamp/validate user-supplied values before persisting them.
+    auto clampInt = [](int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); };
+    auto clampFloat = [](float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); };
+    auto isValidGpio = [](int p) {
+        if (p < 0 || p > 48) return false;
+        // ESP32-S3 strapping / USB / flash pins to avoid
+        switch (p) {
+            case 0: case 19: case 20: case 26: case 27: case 28: case 29:
+            case 30: case 31: case 32: case 45: case 46:
+                return false;
+        }
+        return true;
+    };
+    auto setGpio = [&](int& dest, int v) { if (isValidGpio(v)) dest = v; else Logger::warn("Rejected invalid GPIO " + String(v)); };
+
     // System
-    if (has("NAME")) cfg.name = get("NAME");
-    if (has("TIMEZONE")) cfg.timezone = get("TIMEZONE");
-    if (has("CPU_FREQ")) cfg.cpu_freq = get("CPU_FREQ").toInt();
-    if (has("MAX_ESP32_TEMP")) cfg.max_esp32_temp = get("MAX_ESP32_TEMP").toFloat();
+    if (has("NAME")) cfg.name = get("NAME").substring(0, 64);
+    if (has("TIMEZONE")) cfg.timezone = get("TIMEZONE").substring(0, 64);
+    if (has("CPU_FREQ")) {
+        int f = get("CPU_FREQ").toInt();
+        if (f == 80 || f == 160 || f == 240) cfg.cpu_freq = f;
+        else Logger::warn("Rejected CPU_FREQ " + String(f));
+    }
+    if (has("MAX_ESP32_TEMP")) cfg.max_esp32_temp = clampFloat(get("MAX_ESP32_TEMP").toFloat(), 40.0f, 110.0f);
 
     // WiFi
     if (has("E_WIFI")) cfg.e_wifi = (get("E_WIFI") == "True");
-    if (has("WIFI_SSID")) cfg.wifi_ssid = get("WIFI_SSID");
-    if (has("WIFI_PASSWORD")) cfg.wifi_password = get("WIFI_PASSWORD");
-    if (has("WIFI_STATIC_IP")) cfg.wifi_static_ip = get("WIFI_STATIC_IP");
-    if (has("WIFI_SUBNET")) cfg.wifi_subnet = get("WIFI_SUBNET");
-    if (has("WIFI_GATEWAY")) cfg.wifi_gateway = get("WIFI_GATEWAY");
-    if (has("WIFI_DNS")) cfg.wifi_dns = get("WIFI_DNS");
+    if (has("WIFI_SSID")) cfg.wifi_ssid = get("WIFI_SSID").substring(0, 32);
+    if (has("WIFI_PASSWORD")) cfg.wifi_password = get("WIFI_PASSWORD").substring(0, 64);
+    if (has("WIFI_STATIC_IP")) cfg.wifi_static_ip = get("WIFI_STATIC_IP").substring(0, 45);
+    if (has("WIFI_SUBNET")) cfg.wifi_subnet = get("WIFI_SUBNET").substring(0, 45);
+    if (has("WIFI_GATEWAY")) cfg.wifi_gateway = get("WIFI_GATEWAY").substring(0, 45);
+    if (has("WIFI_DNS")) cfg.wifi_dns = get("WIFI_DNS").substring(0, 45);
 
     // Shelly / Grid
-    if (has("SHELLY_EM_IP")) cfg.shelly_em_ip = get("SHELLY_EM_IP");
-    if (has("SHELLY_EM_INDEX")) cfg.shelly_em_index = get("SHELLY_EM_INDEX").toInt();
+    if (has("SHELLY_EM_IP")) cfg.shelly_em_ip = get("SHELLY_EM_IP").substring(0, 45);
+    if (has("SHELLY_EM_INDEX")) cfg.shelly_em_index = clampInt(get("SHELLY_EM_INDEX").toInt(), 0, 7);
     if (has("E_SHELLY_MQTT")) cfg.e_shelly_mqtt = (get("E_SHELLY_MQTT") == "True");
-    if (has("SHELLY_MQTT_TOPIC")) cfg.shelly_mqtt_topic = get("SHELLY_MQTT_TOPIC");
-    if (has("POLL_INTERVAL")) cfg.poll_interval = get("POLL_INTERVAL").toInt();
-    if (has("SHELLY_TIMEOUT")) cfg.shelly_timeout = get("SHELLY_TIMEOUT").toInt();
-    if (has("SAFETY_TIMEOUT")) cfg.safety_timeout = get("SAFETY_TIMEOUT").toInt();
+    if (has("SHELLY_MQTT_TOPIC")) cfg.shelly_mqtt_topic = get("SHELLY_MQTT_TOPIC").substring(0, 128);
+    // Bug #15: these four fields are in SECONDS (code multiplies by 1000 before
+    // comparing against millis()/setTimeout()). The previous clamp ranges
+    // assumed milliseconds and silently rewrote valid user values on every save
+    // (e.g. shelly_timeout=2 -> 100, meaning a 100-second HTTP timeout!).
+    if (has("POLL_INTERVAL")) cfg.poll_interval = clampInt(get("POLL_INTERVAL").toInt(), 1, 3600);
+    if (has("SHELLY_TIMEOUT")) cfg.shelly_timeout = clampInt(get("SHELLY_TIMEOUT").toInt(), 1, 60);
+    if (has("SAFETY_TIMEOUT")) cfg.safety_timeout = clampInt(get("SAFETY_TIMEOUT").toInt(), 10, 3600);
     if (has("FAKE_SHELLY")) cfg.fake_shelly = (get("FAKE_SHELLY") == "True");
 
     // Equipment 1
-    if (has("EQUIP1_NAME")) cfg.equip1_name = get("EQUIP1_NAME");
-    if (has("EQUIP1_MAX_POWER")) cfg.equip1_max_power = get("EQUIP1_MAX_POWER").toFloat();
+    if (has("EQUIP1_NAME")) cfg.equip1_name = get("EQUIP1_NAME").substring(0, 64);
+    if (has("EQUIP1_MAX_POWER")) cfg.equip1_max_power = clampFloat(get("EQUIP1_MAX_POWER").toFloat(), 0.0f, 20000.0f);
     if (has("E_EQUIP1")) cfg.e_equip1 = (get("E_EQUIP1") == "True");
-    if (has("EQUIP1_SHELLY_IP")) cfg.equip1_shelly_ip = get("EQUIP1_SHELLY_IP");
-    if (has("EQUIP1_SHELLY_INDEX")) cfg.equip1_shelly_index = get("EQUIP1_SHELLY_INDEX").toInt();
+    if (has("EQUIP1_SHELLY_IP")) cfg.equip1_shelly_ip = get("EQUIP1_SHELLY_IP").substring(0, 45);
+    if (has("EQUIP1_SHELLY_INDEX")) cfg.equip1_shelly_index = clampInt(get("EQUIP1_SHELLY_INDEX").toInt(), 0, 7);
     if (has("E_EQUIP1_MQTT")) cfg.e_equip1_mqtt = (get("E_EQUIP1_MQTT") == "True");
-    if (has("EQUIP1_MQTT_TOPIC")) cfg.equip1_mqtt_topic = get("EQUIP1_MQTT_TOPIC");
+    if (has("EQUIP1_MQTT_TOPIC")) cfg.equip1_mqtt_topic = get("EQUIP1_MQTT_TOPIC").substring(0, 128);
 
     // Equipment 2
     if (has("E_EQUIP2")) cfg.e_equip2 = (get("E_EQUIP2") == "True");
-    if (has("EQUIP2_NAME")) cfg.equip2_name = get("EQUIP2_NAME");
-    if (has("EQUIP2_IP")) cfg.equip2_shelly_ip = get("EQUIP2_IP");
-    if (has("EQUIP2_SHELLY_INDEX")) cfg.equip2_shelly_index = get("EQUIP2_SHELLY_INDEX").toInt();
+    if (has("EQUIP2_NAME")) cfg.equip2_name = get("EQUIP2_NAME").substring(0, 64);
+    if (has("EQUIP2_IP")) cfg.equip2_shelly_ip = get("EQUIP2_IP").substring(0, 45);
+    if (has("EQUIP2_SHELLY_INDEX")) cfg.equip2_shelly_index = clampInt(get("EQUIP2_SHELLY_INDEX").toInt(), 0, 7);
     if (has("E_EQUIP2_MQTT")) cfg.e_equip2_mqtt = (get("E_EQUIP2_MQTT") == "True");
-    if (has("EQUIP2_MQTT_TOPIC")) cfg.equip2_mqtt_topic = get("EQUIP2_MQTT_TOPIC");
-    if (has("EQUIP2_POWER")) cfg.equip2_max_power = get("EQUIP2_POWER").toFloat();
-    if (has("EQUIP2_PRIO")) cfg.equip2_priority = get("EQUIP2_PRIO").toInt();
-    if (has("EQUIP2_MIN_TIME")) cfg.equip2_min_on_time = get("EQUIP2_MIN_TIME").toInt();
+    if (has("EQUIP2_MQTT_TOPIC")) cfg.equip2_mqtt_topic = get("EQUIP2_MQTT_TOPIC").substring(0, 128);
+    if (has("EQUIP2_POWER")) cfg.equip2_max_power = clampFloat(get("EQUIP2_POWER").toFloat(), 0.0f, 20000.0f);
+    if (has("EQUIP2_PRIO")) cfg.equip2_priority = clampInt(get("EQUIP2_PRIO").toInt(), 0, 10);
+    if (has("EQUIP2_MIN_TIME")) cfg.equip2_min_on_time = clampInt(get("EQUIP2_MIN_TIME").toInt(), 0, 86400);
 
     // Strategy / PID
-    if (has("DELTA")) cfg.delta = get("DELTA").toFloat();
-    if (has("DELTANEG")) cfg.deltaneg = get("DELTANEG").toFloat();
-    if (has("COMPENSATION")) cfg.compensation = get("COMPENSATION").toFloat();
-    if (has("DYNAMIC_THRESHOLD_W")) cfg.dynamic_threshold_w = get("DYNAMIC_THRESHOLD_W").toFloat();
-    if (has("EXPORT_SETPOINT")) cfg.export_setpoint = get("EXPORT_SETPOINT").toFloat();
-    if (has("MAX_DUTY_PERCENT")) cfg.max_duty_percent = get("MAX_DUTY_PERCENT").toFloat();
+    if (has("DELTA")) cfg.delta = clampFloat(get("DELTA").toFloat(), 0.0f, 5000.0f);
+    if (has("DELTANEG")) cfg.deltaneg = clampFloat(get("DELTANEG").toFloat(), -5000.0f, 5000.0f);
+    // Bug #15b: compensation is used as a percentage (default 50). Old upper
+    // bound 10 silently clipped any sensible value down to 10.
+    if (has("COMPENSATION")) cfg.compensation = clampFloat(get("COMPENSATION").toFloat(), 1.0f, 100.0f);
+    if (has("DYNAMIC_THRESHOLD_W")) cfg.dynamic_threshold_w = clampFloat(get("DYNAMIC_THRESHOLD_W").toFloat(), 0.0f, 5000.0f);
+    if (has("EXPORT_SETPOINT")) cfg.export_setpoint = clampFloat(get("EXPORT_SETPOINT").toFloat(), -5000.0f, 5000.0f);
+    if (has("MAX_DUTY_PERCENT")) cfg.max_duty_percent = clampFloat(get("MAX_DUTY_PERCENT").toFloat(), 0.0f, 100.0f);
 
     // Hardware
-    if (has("SSR_PIN")) cfg.ssr_pin = get("SSR_PIN").toInt();
-    if (has("RELAY_PIN")) cfg.relay_pin = get("RELAY_PIN").toInt();
-    if (has("DS18B20_PIN")) cfg.ds18b20_pin = get("DS18B20_PIN").toInt();
-    if (has("I_LED_PIN")) cfg.internal_led_pin = get("I_LED_PIN").toInt();
-    if (has("FAN_PIN")) cfg.fan_pin = get("FAN_PIN").toInt();
-    if (has("FAN_TEMP_OFFSET")) cfg.fan_temp_offset = get("FAN_TEMP_OFFSET").toInt();
+    if (has("SSR_PIN")) setGpio(cfg.ssr_pin, get("SSR_PIN").toInt());
+    if (has("RELAY_PIN")) setGpio(cfg.relay_pin, get("RELAY_PIN").toInt());
+    if (has("DS18B20_PIN")) setGpio(cfg.ds18b20_pin, get("DS18B20_PIN").toInt());
+    if (has("I_LED_PIN")) setGpio(cfg.internal_led_pin, get("I_LED_PIN").toInt());
+    if (has("FAN_PIN")) setGpio(cfg.fan_pin, get("FAN_PIN").toInt());
+    if (has("FAN_TEMP_OFFSET")) cfg.fan_temp_offset = clampInt(get("FAN_TEMP_OFFSET").toInt(), -50, 50);
     if (has("E_FAN")) cfg.e_fan = (get("E_FAN") == "True");
     if (has("E_SSR_TEMP")) cfg.e_ssr_temp = (get("E_SSR_TEMP") == "True");
-    if (has("SSR_MAX_TEMP")) cfg.ssr_max_temp = get("SSR_MAX_TEMP").toFloat();
-    if (has("ZX_PIN")) cfg.zx_pin = get("ZX_PIN").toInt();
-    if (has("CONTROL_MODE")) cfg.control_mode = get("CONTROL_MODE");
+    if (has("SSR_MAX_TEMP")) cfg.ssr_max_temp = clampFloat(get("SSR_MAX_TEMP").toFloat(), 30.0f, 150.0f);
+    if (has("ZX_PIN")) setGpio(cfg.zx_pin, get("ZX_PIN").toInt());
+    if (has("CONTROL_MODE")) cfg.control_mode = get("CONTROL_MODE").substring(0, 32);
 
     // Force / Night
     if (has("FORCE_EQUIPMENT")) cfg.force_equipment = (get("FORCE_EQUIPMENT") == "True");
     if (has("E_FORCE_WINDOW")) cfg.e_force_window = (get("E_FORCE_WINDOW") == "True");
-    if (has("FORCE_START")) cfg.force_start = get("FORCE_START");
-    if (has("FORCE_END")) cfg.force_end = get("FORCE_END");
-    if (has("NIGHT_POLL_INTERVAL")) cfg.night_poll_interval = get("NIGHT_POLL_INTERVAL").toInt();
+    if (has("FORCE_START")) cfg.force_start = get("FORCE_START").substring(0, 8);
+    if (has("FORCE_END")) cfg.force_end = get("FORCE_END").substring(0, 8);
+    if (has("NIGHT_POLL_INTERVAL")) cfg.night_poll_interval = clampInt(get("NIGHT_POLL_INTERVAL").toInt(), 10, 3600);
 
     // MQTT
     if (has("E_MQTT")) cfg.e_mqtt = (get("E_MQTT") == "True");
-    if (has("MQTT_IP")) cfg.mqtt_ip = get("MQTT_IP");
-    if (has("MQTT_PORT")) cfg.mqtt_port = get("MQTT_PORT").toInt();
-    if (has("MQTT_USER")) cfg.mqtt_user = get("MQTT_USER");
-    if (has("MQTT_PASSWORD")) cfg.mqtt_password = get("MQTT_PASSWORD");
-    if (has("MQTT_NAME")) cfg.mqtt_name = get("MQTT_NAME");
+    if (has("MQTT_IP")) cfg.mqtt_ip = get("MQTT_IP").substring(0, 64);
+    if (has("MQTT_PORT")) cfg.mqtt_port = clampInt(get("MQTT_PORT").toInt(), 1, 65535);
+    if (has("MQTT_USER")) cfg.mqtt_user = get("MQTT_USER").substring(0, 64);
+    if (has("MQTT_PASSWORD")) cfg.mqtt_password = get("MQTT_PASSWORD").substring(0, 128);
+    if (has("MQTT_NAME")) cfg.mqtt_name = get("MQTT_NAME").substring(0, 64);
 
     // Weather
     if (has("E_WEATHER")) cfg.e_weather = (get("E_WEATHER") == "True");
-    if (has("WEATHER_LAT")) cfg.weather_lat = get("WEATHER_LAT");
-    if (has("WEATHER_LON")) cfg.weather_lon = get("WEATHER_LON");
-    if (has("WEATHER_THRESH")) cfg.weather_cloud_threshold = get("WEATHER_THRESH").toInt();
-    if (has("SOLAR_PANEL_POWER")) cfg.solar_panel_power = get("SOLAR_PANEL_POWER").toInt();
-    if (has("SOLAR_PANEL_AZIMUTH")) cfg.solar_panel_azimuth = get("SOLAR_PANEL_AZIMUTH").toInt();
+    if (has("WEATHER_LAT")) cfg.weather_lat = get("WEATHER_LAT").substring(0, 16);
+    if (has("WEATHER_LON")) cfg.weather_lon = get("WEATHER_LON").substring(0, 16);
+    if (has("WEATHER_THRESH")) cfg.weather_cloud_threshold = clampInt(get("WEATHER_THRESH").toInt(), 0, 100);
+    if (has("SOLAR_PANEL_POWER")) cfg.solar_panel_power = clampInt(get("SOLAR_PANEL_POWER").toInt(), 0, 100000);
+    if (has("SOLAR_PANEL_AZIMUTH")) cfg.solar_panel_azimuth = clampInt(get("SOLAR_PANEL_AZIMUTH").toInt(), 0, 360);
 
     // Web
-    if (has("WEB_USER")) cfg.web_user = get("WEB_USER");
-    if (has("WEB_PASSWORD")) cfg.web_password = get("WEB_PASSWORD");
+    if (has("WEB_USER")) cfg.web_user = get("WEB_USER").substring(0, 64);
+    if (has("WEB_PASSWORD")) cfg.web_password = get("WEB_PASSWORD").substring(0, 64);
 }
 
 void WebManager::setupRoutes() {
@@ -258,33 +285,88 @@ void WebManager::setupRoutes() {
 
     _server.on("/import_stats", HTTP_POST, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
-        request->send(200, "text/plain", "Importation réussie. Redémarrage...");
-        _rebootRequested = true;
+        // Bug #4: report actual upload outcome via status code stored in _tempObject
+        // (heap-allocated int* so AsyncWebServer can free() it).
+        int status = request->_tempObject ? *(int*)request->_tempObject : -1;
+        switch (status) {
+            case 0: // ok
+                request->send(200, "text/plain", "Importation réussie. Redémarrage...");
+                _rebootRequested = true;
+                break;
+            case 1: // too large
+                request->send(413, "text/plain", "Fichier trop volumineux");
+                break;
+            case 2: // write/open failed
+                request->send(500, "text/plain", "Erreur d'écriture");
+                break;
+            default:
+                request->send(400, "text/plain", "Aucun fichier reçu");
+        }
     }, [authRequired](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
         if (!authRequired(request)) return;
+        // Bug #3: state is static (AsyncWebServer serializes upload chunks per server instance)
+        // but we now write to a tmp file and atomically rename only on success, so a
+        // partial/aborted upload no longer corrupts the existing stats.json.
         static File uploadFile;
         static size_t uploadedBytes = 0;
+        static int uploadStatus = -1; // -1 unknown, 0 ok, 1 toolarge, 2 writefail
         static constexpr size_t MAX_STATS_UPLOAD_BYTES = 200 * 1024;
-        
+
+        // Helper to publish status to the request (for the outer handler).
+        auto setStatus = [&](int s) {
+            uploadStatus = s;
+            if (!request->_tempObject) {
+                request->_tempObject = malloc(sizeof(int));
+            }
+            if (request->_tempObject) *(int*)request->_tempObject = s;
+        };
+
         if (!index) {
             uploadedBytes = 0;
+            uploadStatus = -1;
             if (uploadFile) uploadFile.close();
             Logger::info("Importing stats: " + filename);
-            uploadFile = LittleFS.open("/stats.json", "w");
-        }
-        
-        if (uploadFile) {
-            uploadedBytes += len;
-            if (uploadedBytes > MAX_STATS_UPLOAD_BYTES) {
-                uploadFile.close();
-                LittleFS.remove("/stats.json");
-                Logger::error("Stats upload rejected: file too large");
+            uploadFile = LittleFS.open("/stats.json.tmp", "w");
+            if (!uploadFile) {
+                Logger::error("Stats upload: cannot open /stats.json.tmp");
+                setStatus(2);
                 return;
             }
-            if (len) uploadFile.write(data, len);
-            if (final) {
+        }
+
+        if (!uploadFile || uploadStatus == 1 || uploadStatus == 2) return; // failed earlier, drop
+
+        uploadedBytes += len;
+        if (uploadedBytes > MAX_STATS_UPLOAD_BYTES) {
+            uploadFile.close();
+            LittleFS.remove("/stats.json.tmp");
+            Logger::error("Stats upload rejected: file too large");
+            setStatus(1);
+            return;
+        }
+
+        if (len) {
+            size_t written = uploadFile.write(data, len);
+            if (written != len) {
                 uploadFile.close();
+                LittleFS.remove("/stats.json.tmp");
+                Logger::error("Stats upload write failed");
+                setStatus(2);
+                return;
+            }
+        }
+
+        if (final) {
+            uploadFile.close();
+            // Atomic replace of stats.json
+            LittleFS.remove("/stats.json");
+            if (LittleFS.rename("/stats.json.tmp", "/stats.json")) {
                 Logger::info("Stats upload complete (" + String(uploadedBytes) + " bytes)");
+                setStatus(0);
+            } else {
+                Logger::error("Stats upload: rename failed");
+                LittleFS.remove("/stats.json.tmp");
+                setStatus(2);
             }
         }
     });
@@ -322,8 +404,13 @@ void WebManager::setupRoutes() {
             String schedStr = request->getParam("schedule", true)->value();
             if (schedStr.length() == 0) schedStr = "0";
             newCfg.equip2_schedule = strtoull(schedStr.c_str(), NULL, 10);
-            if (ConfigManager::save(newCfg)) request->send(200);
-            else request->send(500);
+            if (ConfigManager::save(newCfg)) {
+                // Bug #16: schedule is loaded once at boot; reboot so the change takes effect
+                request->send(200, "text/plain", "OK");
+                _rebootRequested = true;
+            } else {
+                request->send(500);
+            }
         } else {
             request->send(400, "text/plain", "Missing schedule parameter");
         }
@@ -443,13 +530,21 @@ void WebManager::setupRoutes() {
         request->send(200, "application/json", out);
     });
 
-    _server.on("/update", HTTP_POST, [](AsyncWebServerRequest *request) {
-        bool shouldReboot = !Update.hasError();
-        AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", shouldReboot ? "OK" : "FAIL");
+    _server.on("/update", HTTP_POST, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
+        // Bug #2: report actual outcome (begin failed, write failed, end failed all surface as hasError)
+        bool ok = !Update.hasError();
+        AsyncWebServerResponse *response = request->beginResponse(200, "text/plain",
+            ok ? "OK" : (String("FAIL: ") + Update.errorString()));
         response->addHeader("Connection", "close");
         request->send(response);
-        if (shouldReboot) _rebootRequested = true;
-    }, [](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+        if (ok) _rebootRequested = true;
+    }, [authRequired](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+        if (!authRequired(request)) {
+            // Abort any in-progress flash if an unauthenticated upload reaches the data handler
+            if (Update.isRunning()) Update.abort();
+            return;
+        }
         if (!index) {
             int command = (filename.indexOf("spiffs") > -1 || filename.indexOf("littlefs") > -1) ? U_SPIFFS : U_FLASH;
             if (!Update.begin(UPDATE_SIZE_UNKNOWN, command)) {
@@ -457,8 +552,24 @@ void WebManager::setupRoutes() {
                 return;
             }
         }
-        if (Update.isRunning() && len) Update.write(data, len);
-        if (Update.isRunning() && final) Update.end(true);
+        // Bug #17: validate write count and abort on partial write
+        if (Update.isRunning() && len) {
+            size_t written = Update.write(data, len);
+            if (written != len) {
+                Logger::error("OTA write failed: " + String(Update.errorString()));
+                Update.abort();
+                return;
+            }
+        }
+        // Bug #2: validate Update.end() result; do NOT reboot on failure
+        if (Update.isRunning() && final) {
+            if (!Update.end(true)) {
+                Logger::error("OTA end failed: " + String(Update.errorString()));
+                // Update.hasError() will be true so outer handler returns FAIL.
+            } else {
+                Logger::info("OTA upload complete: " + String(index + len) + " bytes");
+            }
+        }
     });
 
     _server.on("/RESET_device", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
@@ -496,6 +607,13 @@ void WebManager::setupRoutes() {
     });
 
     _server.on("/test_shelly", HTTP_POST, [](AsyncWebServerRequest *request) {
+        // Bug #6/#7: serialize concurrent uses of the shared _http object and reject
+        // overlapping requests immediately instead of stalling the async event loop.
+        if (!_httpMutex || xSemaphoreTake(_httpMutex, 0) != pdTRUE) {
+            request->send(503, "application/json", "{\"ok\":false,\"error\":\"Test déjà en cours\"}");
+            return;
+        }
+
         String target = request->hasParam("target", true) ? request->getParam("target", true)->value() : "";
         String ip;
         int index = 0;
@@ -512,11 +630,13 @@ void WebManager::setupRoutes() {
             ip = _config->equip2_shelly_ip;
             index = _config->equip2_shelly_index;
         } else {
+            xSemaphoreGive(_httpMutex);
             request->send(400, "application/json", "{\"ok\":false,\"error\":\"Invalid target\"}");
             return;
         }
 
         if (ip.length() == 0) {
+            xSemaphoreGive(_httpMutex);
             request->send(200, "application/json", "{\"ok\":false,\"error\":\"IP non configurée\"}");
             return;
         }
@@ -562,8 +682,9 @@ void WebManager::setupRoutes() {
                     JsonDocument doc;
                     if (!deserializeJson(doc, _http.getStream())) {
                         float power = 0;
-                        if (doc.containsKey("meters")) power = doc["meters"][index]["power"] | 0.0f;
-                        else if (doc.containsKey("emeters")) power = doc["emeters"][index]["power"] | 0.0f;
+                        // Bug #15: ArduinoJson v7 deprecates containsKey()
+                        if (doc["meters"].is<JsonArray>()) power = doc["meters"][index]["power"] | 0.0f;
+                        else if (doc["emeters"].is<JsonArray>()) power = doc["emeters"][index]["power"] | 0.0f;
                         bool relay = doc["relays"][0]["ison"] | false;
                         result = "{\"ok\":true,\"power\":" + String(power, 1) + ",\"gen\":\"Gen1\",\"relay\":" + (relay ? "true" : "false") + "}";
                     } else {
@@ -575,6 +696,7 @@ void WebManager::setupRoutes() {
                 _http.end();
             }
         }
+        xSemaphoreGive(_httpMutex);
         request->send(200, "application/json", result);
     });
 
@@ -598,7 +720,12 @@ void WebManager::streamStatusJson(AsyncWebServerRequest *request) {
     doc["force_mode"] = (SafetyManager::currentState == SystemState::STATE_BOOST);
     doc["emergency_mode"] = (SafetyManager::currentState == SystemState::STATE_EMERGENCY_FAULT);
     doc["emergency_reason"] = SafetyManager::emergencyReason;
-    doc["ssr_temp"] = (TemperatureManager::currentSsrTemp > -100.0) ? (float)TemperatureManager::currentSsrTemp : JsonVariant();
+    // Bug #14: ternary mixing float and JsonVariant is ill-formed; assign explicitly.
+    if (TemperatureManager::currentSsrTemp > -100.0) {
+        doc["ssr_temp"] = (float)TemperatureManager::currentSsrTemp;
+    } else {
+        doc["ssr_temp"] = nullptr; // emit JSON null
+    }
     doc["fan_active"] = ActuatorManager::fanActive;
     doc["fan_percent"] = ActuatorManager::fanPercent;
 #ifndef DISABLE_STATS

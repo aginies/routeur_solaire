@@ -11,7 +11,9 @@ public:
     static void startTask();
     static void stopTask();
     static void setColor(uint8_t r, uint8_t g, uint8_t b);
-    static void blink(uint8_t r, uint8_t g, uint8_t b, int count, int delayMs);
+    // Bug #7 (header audit): blink() removed — was declared+defined but never called.
+    // If you need a blink helper later, prefer queuing a request to ledTask rather than
+    // re-introducing a synchronous blocking helper.
 
 private:
     static void ledTask(void* pvParameters);

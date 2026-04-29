@@ -34,13 +34,22 @@ void SolarMonitor::init(const Config& config) {
     HistoryBuffer::init(config);
     Equipment2Manager::init(config);
 
+    // Bug #1: stop any running tasks before swapping the controller pointer to avoid
+    // a use-after-free in monitorTask between delete and new.
+    if (_monitorTaskHandle != nullptr) {
+        Logger::warn("SolarMonitor::init called with running task; stopping first");
+        stopTasks();
+    }
+
     // Initialize PID Controller — delete previous instance if re-initializing
     delete _ctrl;
     _ctrl = new IncrementalController(
-        (int32_t)(config.delta * 1000.0f),
-        (int32_t)(config.deltaneg * 1000.0f),
-        (int32_t)config.compensation,
-        (int32_t)(config.equip1_max_power * 1000.0f)
+        (int32_t)lroundf(config.delta * 1000.0f),
+        (int32_t)lroundf(config.deltaneg * 1000.0f),
+        // Bug #23: round instead of truncate to preserve user-entered precision (compensation
+        // is a float in config but the controller takes int32_t)
+        (int32_t)lroundf(config.compensation),
+        (int32_t)lroundf(config.equip1_max_power * 1000.0f)
     );
     
     _lastGoodPoll = millis();
@@ -92,6 +101,8 @@ void SolarMonitor::monitorTask(void* pvParameters) {
     uint32_t lastStatsUpdate = millis();
     uint32_t lastSolarDataLog = 0;
     uint32_t lastPoll = 0;
+    // Bug #3: hoisted so we can reset it on poll failure or non-NORMAL state from any branch.
+    static int freshDataCounter = 0;
 
     while (true) {
         esp_task_wdt_reset();
@@ -132,8 +143,13 @@ void SolarMonitor::monitorTask(void* pvParameters) {
             nightActive = ntpSynced ? isNight(currMin) : false;
         }
         bool forcedWindow = ActuatorManager::inForceWindow();
-        bool boostActive = (millis() / 1000) < ActuatorManager::boostEndTime;
-        int currentPollInterval = nightActive ? _config->night_poll_interval : _config->poll_interval;
+        // Bug #4: signed-difference comparison is wrap-safe across the 49.7-day millis() rollover
+        // (the unsigned subtraction wraps correctly, then the signed cast yields the right sign).
+        uint32_t nowSec = millis() / 1000;
+        bool boostActive = ((int32_t)(nowSec - ActuatorManager::boostEndTime) < 0);
+        // Bug #5: cast to uint32_t BEFORE multiplying by 1000 to avoid int overflow
+        // (a poll_interval > 32 seconds would otherwise overflow a signed int).
+        uint32_t currentPollInterval = (uint32_t)(nightActive ? _config->night_poll_interval : _config->poll_interval);
 
         // 3. Keep safety timer alive if MQTT data is flowing
         if (_config->e_shelly_mqtt && MqttManager::hasLatestMqttGridPower) {
@@ -152,9 +168,10 @@ void SolarMonitor::monitorTask(void* pvParameters) {
         SafetyManager::applyState(newState);
 
         // 5. Grid Power Retrieval & Control Math
-        if (now - lastPoll >= (uint32_t)(currentPollInterval * 1000)) {
+        if (now - lastPoll >= currentPollInterval * 1000UL) {
             lastPoll = now;
-            if (GridSensorService::fetchGridData()) {
+            bool pollOk = GridSensorService::fetchGridData();
+            if (pollOk) {
                 _lastGoodPoll = now;
                 
                 if (SafetyManager::currentState == SystemState::STATE_SAFE_TIMEOUT) {
@@ -172,27 +189,34 @@ void SolarMonitor::monitorTask(void* pvParameters) {
                 bool eq2Requested = false;
                 if (_config->e_equip2 && SafetyManager::currentState == SystemState::STATE_NORMAL) {
                     float maxDuty = _config->max_duty_percent / 100.0f;
+                    // Bugs #7/#8: hysteresis — use a higher ON threshold and lower OFF threshold so the
+                    // relay does not chatter around the setpoint. When already ON, only turn off if
+                    // surplus drops below (max_power - delta); when OFF, only turn on if surplus
+                    // exceeds (max_power + delta).
+                    bool eq2On = Equipment2Manager::isCurrentlyOn();
+                    float onThreshold  = _config->equip2_max_power + _config->delta;
+                    float offThreshold = _config->equip2_max_power - _config->delta;
                     if (_config->equip2_priority == 1) {
-                        // WATER HEATER FIRST
-                        // Turn on Eq2 if Eq1 is at ~95% of its configured maximum AND there is still surplus > Eq2 power
-                        if (ActuatorManager::currentDuty >= (maxDuty * 0.95f) && surplus >= (_config->equip2_max_power + _config->delta)) {
-                            eq2Requested = true;
+                        // WATER HEATER FIRST: only turn on Eq2 if Eq1 is ~95% saturated.
+                        if (eq2On) {
+                            eq2Requested = (surplus >= offThreshold) && (ActuatorManager::currentDuty >= (maxDuty * 0.95f));
+                        } else {
+                            eq2Requested = (surplus >= onThreshold) && (ActuatorManager::currentDuty >= (maxDuty * 0.95f));
                         }
                     } else {
                         // PAC FIRST
-                        // Turn on Eq2 if available surplus > Eq2 power
-                        if (surplus >= (_config->equip2_max_power + _config->delta)) {
-                            eq2Requested = true;
+                        if (eq2On) {
+                            eq2Requested = (surplus >= offThreshold);
+                        } else {
+                            eq2Requested = (surplus >= onThreshold);
                         }
                     }
                 }
                 Equipment2Manager::requestPower(eq2Requested);
-                Equipment2Manager::loop(); // Run Eq2 state machine
                 esp_task_wdt_reset();
 
                 // RUN PID CONTROL for Eq1: only if in NORMAL state
                 if (SafetyManager::currentState == SystemState::STATE_NORMAL) {
-                    static int freshDataCounter = 0;
                     float effectiveGrid = GridSensorService::currentGridPower - _config->export_setpoint;
                     
                     // DYNAMIC SENSOR LAG PROTECTION:
@@ -208,8 +232,8 @@ void SolarMonitor::monitorTask(void* pvParameters) {
                     
                     if (freshDataCounter >= requiredMessages) {
                         freshDataCounter = 0;
-                        int32_t currentDutyMilli = (int32_t)(ActuatorManager::currentDuty * 1000.0f);
-                        int32_t gridPowerMw = (int32_t)(effectiveGrid * 1000.0f);
+                        int32_t currentDutyMilli = (int32_t)lroundf(ActuatorManager::currentDuty * 1000.0f);
+                        int32_t gridPowerMw = (int32_t)lroundf(effectiveGrid * 1000.0f);
                         
                         int32_t newDutyMilli = _ctrl->update(currentDutyMilli, gridPowerMw);
                         float newDuty = (float)newDutyMilli / 1000.0f;
@@ -218,16 +242,27 @@ void SolarMonitor::monitorTask(void* pvParameters) {
                         if (newDuty > maxDuty) newDuty = maxDuty;
                         
                         ActuatorManager::setDuty(newDuty);
-                        Serial.printf("Ctrl: Grid=%.1fW, Setpoint=%.0fW, Duty=%.1f%%\n", 
+                        // Bug #20: route through Logger so it respects log level / sinks instead of
+                        // unconditionally spamming Serial.
+                        char ctrlBuf[96];
+                        snprintf(ctrlBuf, sizeof(ctrlBuf), "Ctrl: Grid=%.1fW, Setpoint=%.0fW, Duty=%.1f%%",
                             GridSensorService::currentGridPower, _config->export_setpoint, ActuatorManager::currentDuty * 100.0);
+                        Logger::debug(ctrlBuf);
                     }
+                } else {
+                    // Bug #3: reset the fresh-data debounce counter whenever we leave NORMAL so we
+                    // don't immediately fire a stale control update upon recovery.
+                    freshDataCounter = 0;
                 }
                 GridSensorService::hasFreshData = false;
             } else {
-                // Timeout Check
-                // The SafetyManager handles the STATE_SAFE_TIMEOUT automatically
-                // via the lastGoodPoll variable passed to evaluateState().
+                // Bug #3: reset the debounce counter on poll failure too.
+                // (The SafetyManager handles STATE_SAFE_TIMEOUT via _lastGoodPoll.)
+                freshDataCounter = 0;
             }
+            // Bug #9: run the Eq2 state machine on every poll cycle, even when the grid sensor
+            // failed — otherwise an OFF transition / safety release can hang while Shelly is down.
+            Equipment2Manager::loop();
             esp_task_wdt_reset();
         }
 
@@ -238,7 +273,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
         lastStatsUpdate = now;
         esp_task_wdt_reset();
 
-        if (_config->e_mqtt && (now - lastMqttReport >= (_config->mqtt_report_interval * 1000))) {
+        if (_config->e_mqtt && (now - lastMqttReport >= ((uint32_t)_config->mqtt_report_interval * 1000UL))) {
             lastMqttReport = now;
             esp_task_wdt_reset();
             MqttManager::publishStatus(
@@ -263,10 +298,17 @@ void SolarMonitor::monitorTask(void* pvParameters) {
         MqttManager::loop();
 
         // 7. Measured Power Update (Shelly 1PM)
-        Shelly1PMManager::update();
-        esp_task_wdt_reset();
-        if (_config->e_equip1 && Shelly1PMManager::hasValidEq1Data()) {
-            ActuatorManager::equipmentPower = Shelly1PMManager::getPowerEq1();
+        // Bug #14: rate-limit Shelly1PM polling to ~once per 2 s. The outer task loops at ~110 ms
+        // (~9 Hz), and Shelly1PMManager::update() does a blocking HTTP call each time, which
+        // saturates the device and adds tens-of-ms jitter to the control loop.
+        static uint32_t lastShelly1PMUpdate = 0;
+        if (now - lastShelly1PMUpdate >= 2000) {
+            lastShelly1PMUpdate = now;
+            Shelly1PMManager::update();
+            esp_task_wdt_reset();
+            if (_config->e_equip1 && Shelly1PMManager::hasValidEq1Data()) {
+                ActuatorManager::equipmentPower = Shelly1PMManager::getPowerEq1();
+            }
         }
 
         vTaskDelay(pdMS_TO_TICKS(110)); 

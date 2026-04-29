@@ -17,12 +17,15 @@ int HistoryBuffer::historyCount = 0;
 SemaphoreHandle_t HistoryBuffer::_dataMutex = nullptr;
 TaskHandle_t HistoryBuffer::_taskHandle = nullptr;
 
+// Bug #3: cap on getHistoryJson() to avoid OOM on large PSRAM buffers
+static const int HISTORY_JSON_MAX_POINTS = 200;
+
 void HistoryBuffer::init(const Config& config) {
     if (powerHistory) {
         free(powerHistory);
         powerHistory = nullptr;
     }
-    
+
 #ifdef BOARD_HAS_PSRAM
     maxHistory = 1440; // 2 hours at 5s interval
     powerHistory = (PowerPoint*)ps_malloc(sizeof(PowerPoint) * maxHistory);
@@ -32,10 +35,16 @@ void HistoryBuffer::init(const Config& config) {
 #endif
 
     if (!powerHistory) {
+        // Bug #5: log the fallback so silent capacity loss isn't invisible.
+        Logger::warn("HistoryBuffer: primary alloc failed; falling back to 60 entries");
         maxHistory = 60;
         powerHistory = (PowerPoint*)malloc(sizeof(PowerPoint) * maxHistory);
+        if (!powerHistory) {
+            Logger::error("HistoryBuffer: fallback alloc also failed; history disabled");
+            maxHistory = 0;
+        }
     }
-    
+
     historyWriteIdx = 0;
     historyCount = 0;
     if (!_dataMutex) _dataMutex = xSemaphoreCreateMutex();
@@ -47,19 +56,49 @@ void HistoryBuffer::save() {
     if (!powerHistory || !_dataMutex) return;
     if (xSemaphoreTake(_dataMutex, pdMS_TO_TICKS(1000)) != pdTRUE) return;
 
-    File file = LittleFS.open("/history.bin", "w");
+    // Bug #1: atomic write — write to .tmp, then remove old + rename so a
+    // power loss mid-write can't corrupt /history.bin.
+    const char* tmpPath = "/history.bin.tmp";
+    const char* finalPath = "/history.bin";
+
+    File file = LittleFS.open(tmpPath, "w");
+    bool ok = false;
     if (file) {
-        file.write((uint8_t*)&maxHistory, sizeof(int));
-        file.write((uint8_t*)&historyWriteIdx, sizeof(int));
-        file.write((uint8_t*)&historyCount, sizeof(int));
+        // Bug #9: use int32_t for portable header layout (in practice int==int32_t
+        // on Xtensa, but explicit avoids future surprises). Cast on the wire only.
+        int32_t hMax = (int32_t)maxHistory;
+        int32_t hIdx = (int32_t)historyWriteIdx;
+        int32_t hCnt = (int32_t)historyCount;
+        size_t w1 = file.write((uint8_t*)&hMax, sizeof(int32_t));
+        size_t w2 = file.write((uint8_t*)&hIdx, sizeof(int32_t));
+        size_t w3 = file.write((uint8_t*)&hCnt, sizeof(int32_t));
+        ok = (w1 == sizeof(int32_t) && w2 == sizeof(int32_t) && w3 == sizeof(int32_t));
+
         // Write only the filled entries in chronological order to save flash space
-        for (int i = 0; i < historyCount; i++) {
+        for (int i = 0; ok && i < historyCount; i++) {
             int idx = (historyWriteIdx - historyCount + i + maxHistory) % maxHistory;
-            file.write((uint8_t*)&powerHistory[idx], sizeof(PowerPoint));
+            size_t w = file.write((uint8_t*)&powerHistory[idx], sizeof(PowerPoint));
+            if (w != sizeof(PowerPoint)) ok = false;
         }
         file.close();
-        Logger::info("HistoryBuffer: State saved (" + String(sizeof(PowerPoint) * historyCount) + " bytes, " + String(historyCount) + " points)");
     }
+
+    if (ok) {
+        LittleFS.remove(finalPath);
+        if (LittleFS.rename(tmpPath, finalPath)) {
+            char buf[96];
+            snprintf(buf, sizeof(buf), "HistoryBuffer: State saved (%u bytes, %d points)",
+                     (unsigned)(sizeof(PowerPoint) * historyCount), historyCount);
+            Logger::info(String(buf)); // Bug #7
+        } else {
+            Logger::warn("HistoryBuffer: rename failed");
+            LittleFS.remove(tmpPath);
+        }
+    } else {
+        Logger::warn("HistoryBuffer: write failed");
+        LittleFS.remove(tmpPath);
+    }
+
     xSemaphoreGive(_dataMutex);
 }
 
@@ -68,24 +107,34 @@ void HistoryBuffer::load() {
     if (xSemaphoreTake(_dataMutex, pdMS_TO_TICKS(1000)) != pdTRUE) return;
 
     File file = LittleFS.open("/history.bin", "r");
+    bool headerOk = false;
     if (file) {
-        int savedMax, savedIdx, savedCount;
-        if (file.read((uint8_t*)&savedMax, sizeof(int)) == sizeof(int) &&
-            file.read((uint8_t*)&savedIdx, sizeof(int)) == sizeof(int) &&
-            file.read((uint8_t*)&savedCount, sizeof(int)) == sizeof(int)) {
-            
+        int32_t savedMax, savedIdx, savedCount;
+        if (file.read((uint8_t*)&savedMax,   sizeof(int32_t)) == sizeof(int32_t) &&
+            file.read((uint8_t*)&savedIdx,   sizeof(int32_t)) == sizeof(int32_t) &&
+            file.read((uint8_t*)&savedCount, sizeof(int32_t)) == sizeof(int32_t)) {
+            headerOk = true;
+
             if (savedMax == maxHistory && savedCount >= 0 && savedCount <= maxHistory
                 && savedIdx >= 0 && savedIdx < maxHistory) {
                 // Records were saved in chronological order; read them back into the start of the buffer
                 file.read((uint8_t*)powerHistory, sizeof(PowerPoint) * savedCount);
                 historyCount = savedCount;
+                // Bug #10: writeIdx wraps to 0 once buffer is full (savedCount==maxHistory)
                 historyWriteIdx = savedCount % maxHistory;
-                Logger::info("HistoryBuffer: Restored " + String(historyCount) + " points");
+                char buf[64];
+                snprintf(buf, sizeof(buf), "HistoryBuffer: Restored %d points", historyCount);
+                Logger::info(String(buf)); // Bug #7
             } else {
                 Logger::warn("HistoryBuffer: Saved state incompatible, ignoring");
             }
         }
         file.close();
+
+        // Bug #6: if header could not be read at all, log it before deleting.
+        if (!headerOk) {
+            Logger::warn("HistoryBuffer: history.bin header truncated; discarding");
+        }
         LittleFS.remove("/history.bin");
     }
     xSemaphoreGive(_dataMutex);
@@ -125,6 +174,9 @@ void HistoryBuffer::historyTask(void* pvParameters) {
             if (historyCount < maxHistory) historyCount++;
             xSemaphoreGive(_dataMutex);
         }
+        // Bug #4: reset WDT immediately before the long delay so the WDT
+        // window starts at "now" rather than at the start of the loop iteration.
+        esp_task_wdt_reset();
         vTaskDelay(pdMS_TO_TICKS(5000));
     }
 }
@@ -132,9 +184,16 @@ void HistoryBuffer::historyTask(void* pvParameters) {
 String HistoryBuffer::getHistoryJson() {
     JsonDocument doc;
     JsonArray arr = doc.to<JsonArray>();
-    
+
     if (powerHistory && _dataMutex && xSemaphoreTake(_dataMutex, pdMS_TO_TICKS(500)) == pdTRUE) {
-        for (int i = 0; i < historyCount; i++) {
+        // Bug #3: cap output to HISTORY_JSON_MAX_POINTS most-recent points so a
+        // 1440-point PSRAM buffer can't OOM the heap building one giant String.
+        int total = historyCount;
+        int start = 0;
+        if (total > HISTORY_JSON_MAX_POINTS) {
+            start = total - HISTORY_JSON_MAX_POINTS;
+        }
+        for (int i = start; i < total; i++) {
             int idx = (historyWriteIdx - historyCount + i + maxHistory) % maxHistory;
             const auto& p = powerHistory[idx];
             JsonObject obj = arr.add<JsonObject>();
@@ -148,7 +207,7 @@ String HistoryBuffer::getHistoryJson() {
         }
         xSemaphoreGive(_dataMutex);
     }
-    
+
     String output;
     serializeJson(doc, output);
     return output;
@@ -167,10 +226,14 @@ void HistoryBuffer::streamHistoryJson(AsyncWebServerRequest *request) {
             snprintf(buf, sizeof(buf), "{\"t\":%u,\"g\":%.1f,\"e\":%.1f,\"e1r\":%.1f,\"e2\":%.1f,\"s\":%.1f,\"f\":%d}",
                      p.t, p.g, p.e, p.e1r, p.e2, p.s, p.f ? 1 : 0);
             response->print(buf);
-            
-            // Periodically yield to avoid starving other tasks if history is very large
+
+            // Bug #2: only reset WDT if the calling task is actually subscribed.
+            // AsyncWebServer handler tasks are NOT registered with the WDT;
+            // calling esp_task_wdt_reset() would return ESP_ERR_NOT_FOUND.
             if (i % 50 == 0) {
-                esp_task_wdt_reset();
+                if (esp_task_wdt_status(NULL) == ESP_OK) {
+                    esp_task_wdt_reset();
+                }
             }
         }
         xSemaphoreGive(_dataMutex);

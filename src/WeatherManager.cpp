@@ -3,6 +3,8 @@
 #include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 #include <esp_task_wdt.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 #include "Logger.h"
 
 const Config* WeatherManager::_config = nullptr;
@@ -24,13 +26,35 @@ WiFiClientSecure WeatherManager::_client;
 HTTPClient WeatherManager::_http;
 TaskHandle_t WeatherManager::_taskHandle = nullptr;
 
+// Bug #4: serialize String access (sunrise/sunset/weatherIcon) between
+// the weather task (writer) and reader contexts (web handlers, monitor task).
+// String assignment is not atomic — the heap pointer can be torn.
+static SemaphoreHandle_t _weatherStringMutex = nullptr;
+
+// Bug #6: minimum interval between actual HTTP fetches even on forceUpdate()
+static const uint32_t WEATHER_MIN_REFRESH_MS = 60UL * 1000UL;
+static uint32_t _lastFetchAttemptMs = 0;
+
 void WeatherManager::init(const Config& config) {
     _config = &config;
+
+    // Bug #8: warn (don't fatal) if lat/lon empty — task will skip fetch
+    if (config.weather_lat.length() == 0 || config.weather_lon.length() == 0) {
+        Logger::warn("Weather: lat/lon not configured; updates will be skipped");
+    }
+
+    if (_weatherStringMutex == nullptr) {
+        _weatherStringMutex = xSemaphoreCreateMutex();
+    }
+
     _client.setInsecure();
+    // Bug #2: setInsecure() disables TLS cert verification. Acceptable for the
+    // public Open-Meteo endpoint over read-only data, but documented here so
+    // future contributors don't ship private data over this client.
     _client.setTimeout(15);        // 15s TLS handshake + connect timeout
     _http.useHTTP10(true);
-    _http.setTimeout(15000);       // 15s HTTP read timeout
-    _http.setConnectTimeout(10000); // 10s TCP connect timeout
+    _http.setTimeout(15000);
+    _http.setConnectTimeout(10000);
 }
 
 void WeatherManager::stopTask() {
@@ -91,12 +115,75 @@ bool WeatherManager::isTooCloudy() {
     return getSolarConfidence() < _config->weather_cloud_threshold;
 }
 
-float WeatherManager::getTimeFactor() {
-    if (!_config || !_config->e_weather || _sunrise.length() < 16 || _sunset.length() < 16)
-        return 0.0f;
+// Bug #4 helper: copy sunrise/sunset via the public getters, which themselves
+// take _weatherStringMutex (Bug #1, header-audit). Calling them here is safe
+// (they grab+release the lock for each call); we MUST NOT take the mutex
+// ourselves first, that would deadlock the now-locking getters.
+static void snapshotSunTimes(String& sunriseOut, String& sunsetOut) {
+    sunriseOut = WeatherManager::getSunrise();
+    sunsetOut  = WeatherManager::getSunset();
+}
 
-    int sunriseMin = _sunrise.substring(11, 13).toInt() * 60 + _sunrise.substring(14, 16).toInt();
-    int sunsetMin  = _sunset.substring(11, 13).toInt() * 60 + _sunset.substring(14, 16).toInt();
+// Bug #1 (header audit): out-of-line definitions for sunrise/sunset/icon
+// getters. Take _weatherStringMutex while copying the static String to a
+// local, returned by value. Falls back to a lock-free copy if the mutex
+// isn't initialized yet (init() hasn't run) or can't be acquired in time —
+// in that boot/contention edge case we accept the residual race rather than
+// returning empty data, matching the prior best-effort semantics.
+String WeatherManager::getSunrise() {
+    if (_weatherStringMutex && xSemaphoreTake(_weatherStringMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+        String copy = _sunrise;
+        xSemaphoreGive(_weatherStringMutex);
+        return copy;
+    }
+    return _sunrise;
+}
+
+String WeatherManager::getSunset() {
+    if (_weatherStringMutex && xSemaphoreTake(_weatherStringMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+        String copy = _sunset;
+        xSemaphoreGive(_weatherStringMutex);
+        return copy;
+    }
+    return _sunset;
+}
+
+String WeatherManager::getWeatherIcon() {
+    if (_weatherStringMutex && xSemaphoreTake(_weatherStringMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+        String copy = _weatherIcon;
+        xSemaphoreGive(_weatherStringMutex);
+        return copy;
+    }
+    return _weatherIcon;
+}
+
+// Bug #7: parse "YYYY-MM-DDTHH:MM" robustly. Returns -1 on malformed input.
+static int parseHourMinute(const String& iso) {
+    if (iso.length() < 16) return -1;
+    if (iso.charAt(13) != ':') return -1;
+    int h = iso.substring(11, 13).toInt();
+    int m = iso.substring(14, 16).toInt();
+    // toInt() returns 0 on failure; reject obviously-wrong combos
+    if (h < 0 || h > 23 || m < 0 || m > 59) return -1;
+    // distinguish "00:00" valid from parse-failure: substring "00" -> 0 is valid
+    // but if the chars aren't digits, toInt() also returns 0. Verify chars.
+    auto isDigit = [&](int idx) {
+        char c = iso.charAt(idx);
+        return c >= '0' && c <= '9';
+    };
+    if (!isDigit(11) || !isDigit(12) || !isDigit(14) || !isDigit(15)) return -1;
+    return h * 60 + m;
+}
+
+float WeatherManager::getTimeFactor() {
+    if (!_config || !_config->e_weather) return 0.0f;
+
+    String sr, ss;
+    snapshotSunTimes(sr, ss); // Bug #4
+
+    int sunriseMin = parseHourMinute(sr); // Bug #7
+    int sunsetMin  = parseHourMinute(ss);
+    if (sunriseMin < 0 || sunsetMin < 0) return 0.0f;
     if (sunsetMin <= sunriseMin) return 0.0f;
 
     time_t now;
@@ -126,10 +213,13 @@ float WeatherManager::getExpectedSolarPower() {
 }
 
 bool WeatherManager::isNight() {
-    if (!_config || !_config->e_weather || _sunrise.length() < 16 || _sunset.length() < 16) return false;
+    if (!_config || !_config->e_weather) return false;
 
-    int sunriseMin = _sunrise.substring(11, 13).toInt() * 60 + _sunrise.substring(14, 16).toInt();
-    int sunsetMin = _sunset.substring(11, 13).toInt() * 60 + _sunset.substring(14, 16).toInt();
+    String sr, ss;
+    snapshotSunTimes(sr, ss); // Bug #4
+    int sunriseMin = parseHourMinute(sr); // Bug #7
+    int sunsetMin  = parseHourMinute(ss);
+    if (sunriseMin < 0 || sunsetMin < 0) return false;
 
     time_t now;
     time(&now);
@@ -164,6 +254,18 @@ void WeatherManager::weatherTask(void* pvParameters) {
 void WeatherManager::updateWeather() {
     if (!_config || !_config->e_weather) return;
 
+    // Bug #8: don't fire HTTP request without coordinates
+    if (_config->weather_lat.length() == 0 || _config->weather_lon.length() == 0) {
+        return;
+    }
+
+    // Bug #6: rate-limit so forceUpdate() spam can't hammer the API.
+    uint32_t now = millis();
+    if (_lastFetchAttemptMs != 0 && (now - _lastFetchAttemptMs) < WEATHER_MIN_REFRESH_MS) {
+        return;
+    }
+    _lastFetchAttemptMs = now;
+
     // Open-Meteo API: Free & Anonymous
     String url = "https://api.open-meteo.com/v1/forecast?latitude=" + _config->weather_lat +
                  "&longitude=" + _config->weather_lon +
@@ -177,45 +279,77 @@ void WeatherManager::updateWeather() {
             JsonDocument doc;
             DeserializationError error = deserializeJson(doc, _http.getStream());
             if (!error) {
-                _cloudCover = doc["current"]["cloud_cover"];
-                _cloudCoverLow = doc["current"]["cloud_cover_low"];
-                _cloudCoverMid = doc["current"]["cloud_cover_mid"];
-                _cloudCoverHigh = doc["current"]["cloud_cover_high"];
-                _shortwaveRadiationInstant = doc["current"]["shortwave_radiation_instant"] | 0.0f;
-                _terrestrialRadiationInstant = doc["current"]["terrestrial_radiation_instant"] | 0.0f;
-                _temperature = doc["current"]["temperature_2m"];
-                _rain = doc["current"]["rain"];
-                _snow = doc["current"]["snowfall"];
-                _sunrise = doc["daily"]["sunrise"][0] | "";
-                _sunset = doc["daily"]["sunset"][0] | "";
-                bool isDay = doc["current"]["is_day"] | true;
-                
+                JsonVariant cur = doc["current"];
+
+                // Bug #3: typed checks; only update on valid numeric values, otherwise
+                // keep the previous reading.
+                if (cur["cloud_cover"].is<int>())      _cloudCover     = cur["cloud_cover"].as<int>();
+                if (cur["cloud_cover_low"].is<int>())  _cloudCoverLow  = cur["cloud_cover_low"].as<int>();
+                if (cur["cloud_cover_mid"].is<int>())  _cloudCoverMid  = cur["cloud_cover_mid"].as<int>();
+                if (cur["cloud_cover_high"].is<int>()) _cloudCoverHigh = cur["cloud_cover_high"].as<int>();
+                _shortwaveRadiationInstant   = cur["shortwave_radiation_instant"]   | _shortwaveRadiationInstant;
+                _terrestrialRadiationInstant = cur["terrestrial_radiation_instant"] | _terrestrialRadiationInstant;
+                if (cur["temperature_2m"].is<float>() || cur["temperature_2m"].is<int>())
+                    _temperature = cur["temperature_2m"].as<float>();
+                if (cur["rain"].is<float>() || cur["rain"].is<int>())
+                    _rain = cur["rain"].as<float>();
+                if (cur["snowfall"].is<float>() || cur["snowfall"].is<int>())
+                    _snow = cur["snowfall"].as<float>();
+
+                bool isDay = cur["is_day"] | true;
+
                 // Map Open-Meteo weather codes to weather-sprite.svg IDs
-                int code = doc["current"]["weather_code"];
-                if (code == 0) _weatherIcon = isDay ? "day" : "night";
-                else if (code == 1) _weatherIcon = isDay ? "cloudy-day-1" : "cloudy-night-1";
-                else if (code == 2) _weatherIcon = isDay ? "cloudy-day-2" : "cloudy-night-2";
-                else if (code == 3) _weatherIcon = isDay ? "cloudy-day-3" : "cloudy-night-3";
-                else if (code <= 48) _weatherIcon = "cloudy";
-                else if (code <= 55) _weatherIcon = "rainy-4";
-                else if (code <= 57) _weatherIcon = "rainy-7";
-                else if (code <= 65) _weatherIcon = "rainy-6";
-                else if (code <= 67) _weatherIcon = "rainy-7";
-                else if (code <= 75) _weatherIcon = "snowy-6";
-                else if (code <= 77) _weatherIcon = "snowy-4";
-                else if (code <= 82) _weatherIcon = "rainy-5";
-                else if (code <= 86) _weatherIcon = "snowy-5";
-                else if (code <= 99) _weatherIcon = "thunder";
-                
+                int code = cur["weather_code"] | 0;
+                String iconBuf;
+                if (code == 0) iconBuf = isDay ? "day" : "night";
+                else if (code == 1) iconBuf = isDay ? "cloudy-day-1" : "cloudy-night-1";
+                else if (code == 2) iconBuf = isDay ? "cloudy-day-2" : "cloudy-night-2";
+                else if (code == 3) iconBuf = isDay ? "cloudy-day-3" : "cloudy-night-3";
+                else if (code <= 48) iconBuf = "cloudy";
+                else if (code <= 55) iconBuf = "rainy-4";
+                else if (code <= 57) iconBuf = "rainy-7";
+                else if (code <= 65) iconBuf = "rainy-6";
+                else if (code <= 67) iconBuf = "rainy-7";
+                else if (code <= 75) iconBuf = "snowy-6";
+                else if (code <= 77) iconBuf = "snowy-4";
+                else if (code <= 82) iconBuf = "rainy-5";
+                else if (code <= 86) iconBuf = "snowy-5";
+                else if (code <= 99) iconBuf = "thunder";
+
+                // Bug #4: assign String fields under the mutex
+                String newSunrise = doc["daily"]["sunrise"][0] | "";
+                String newSunset  = doc["daily"]["sunset"][0]  | "";
+                if (_weatherStringMutex && xSemaphoreTake(_weatherStringMutex, pdMS_TO_TICKS(500)) == pdTRUE) {
+                    _sunrise     = newSunrise;
+                    _sunset      = newSunset;
+                    if (iconBuf.length() > 0) _weatherIcon = iconBuf;
+                    xSemaphoreGive(_weatherStringMutex);
+                }
+
                 _lastUpdate = millis();
-                Logger::info("Weather updated: " + String(_temperature, 1) + "C, " + 
-                             String(_cloudCover) + "% clouds, icon: " + _weatherIcon);
+
+                // Bug #12: snprintf instead of String concatenation
+                char logBuf[160];
+                snprintf(logBuf, sizeof(logBuf),
+                         "Weather updated: %.1fC, %d%% clouds, icon: %s",
+                         _temperature, _cloudCover, _weatherIcon.c_str());
+                Logger::info(String(logBuf));
             } else {
-                Logger::warn("Weather JSON error: " + String(error.c_str()));
+                char buf[80];
+                snprintf(buf, sizeof(buf), "Weather JSON error: %s", error.c_str()); // Bug #12
+                Logger::warn(String(buf));
             }
         } else {
-            Logger::warn("Weather HTTP error: " + String(httpCode));
+            char buf[60];
+            snprintf(buf, sizeof(buf), "Weather HTTP error: %d", httpCode); // Bug #12
+            Logger::warn(String(buf));
         }
         _http.end();
     }
 }
+
+// Bug #14: documented behavior — _weatherIcon defaults to "" until first
+// successful update; UI must handle the empty string (e.g. show generic icon).
+// Bug #13: when weather is disabled, getEffectiveCloudiness/getSolarConfidence
+// return 0/100 respectively (i.e. "perfectly clear"). Callers that need a
+// distinct "unknown" state must check _config->e_weather themselves.

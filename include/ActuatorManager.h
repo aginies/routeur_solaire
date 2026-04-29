@@ -19,7 +19,7 @@ public:
     static void startBoost(int minutes = -1);
     static void cancelBoost();
     static bool inForceWindow();
-    static int timeToMinutes(String hhmm);
+    static int timeToMinutes(const String& hhmm); // Bug #6: pass by const ref
 
     static float currentDuty;
     static float equipmentPower;

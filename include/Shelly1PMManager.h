@@ -11,7 +11,7 @@ struct Shelly1PMDevice {
     float currentPower = 0.0f;
     uint32_t lastUpdate = 0;
     uint32_t lastAttempt = 0;
-    bool online = true;
+    bool online = false; // Bug #3 (header audit): default offline; flipped true only after first successful HTTP/MQTT update — prevents falsely reporting healthy at boot before any contact
     uint32_t lastErrorLog = 0;
 };
 

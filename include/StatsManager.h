@@ -64,7 +64,7 @@ class StatsManager {
 public:
     static void init() {}
     static void startTask() {}
-    static void update(float, float, uint32_t, bool) {}
+    static void update(float, float, uint32_t, bool, bool = false) {} // Bug #2 (header audit): match real 5-arg signature so DISABLE_STATS builds compile when callers pass isMeasured
     static void save() {}
     static constexpr float totalImportToday = 0;
     static constexpr float totalRedirectToday = 0;

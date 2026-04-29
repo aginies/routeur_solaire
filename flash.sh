@@ -9,6 +9,7 @@ STATS_DAYS=""
 RUN_TESTS=false
 MONITOR=false
 ERASE=false
+USB_CDC=false
 
 usage() {
     echo "Usage: $0 [options]"
@@ -17,6 +18,8 @@ usage() {
     echo "  -d <days>   Override MAX_STATS_DAYS (history limit)"
     echo "  -t, --test  Run unit tests on host (native environment)"
     echo "  -m, --monitor Launch serial monitor after flashing"
+    echo "  -u, --usb   Build with native USB-CDC Serial (faster flash, native USB-OTG port);"
+    echo "              default uses UART0 / USB-to-serial bridge (/dev/ttyUSB0)"
     echo "  --erase     Full chip erase (clears NVS/Stats) before upload"
     echo "  --skip-fs   Skip building and uploading filesystem"
     echo "  -h, --help  Show this help message"
@@ -52,6 +55,7 @@ while [[ "$#" -gt 0 ]]; do
             ;;
         -t|--test) RUN_TESTS=true ;;
         -m|--monitor) MONITOR=true ;;
+        -u|--usb) USB_CDC=true ;;
         --erase) ERASE=true ;;
         --skip-fs) SKIP_FS=true ;;
         -h|--help) usage; exit 0 ;;
@@ -101,6 +105,18 @@ fi
 if [ -n "$STATS_DAYS" ]; then
     export PLATFORMIO_BUILD_FLAGS="${PLATFORMIO_BUILD_FLAGS} -D MAX_STATS_DAYS=$STATS_DAYS"
     echo "--- OVERRIDE: MAX_STATS_DAYS=$STATS_DAYS ---"
+fi
+
+# Handle USB-CDC override (only meaningful for s3 — wroom has no native USB)
+if [ "$USB_CDC" = true ]; then
+    if [ "$ENV" != "s3" ]; then
+        echo "Warning: --usb only applies to ESP32-S3; ignoring for env '$ENV'."
+    else
+        # Drop the CDC=0 from platformio.ini and re-add CDC=1. PIO honors these env vars.
+        export PLATFORMIO_BUILD_UNFLAGS="${PLATFORMIO_BUILD_UNFLAGS} -DARDUINO_USB_CDC_ON_BOOT=0"
+        export PLATFORMIO_BUILD_FLAGS="${PLATFORMIO_BUILD_FLAGS} -DARDUINO_USB_CDC_ON_BOOT=1"
+        echo "--- OVERRIDE: USB-CDC Serial ENABLED (use the native USB-OTG port, /dev/ttyACMx) ---"
+    fi
 fi
 
 echo "--- 1. Cleaning project ---"

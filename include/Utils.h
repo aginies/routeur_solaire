@@ -7,8 +7,10 @@
 #include <esp_heap_caps.h>
 
 namespace Utils {
-    inline void setCpuFrequency(int mhz) {
-        setCpuFrequencyMhz(mhz);
+    // Bug #3 (main): forward the return value of setCpuFrequencyMhz() so callers can
+    // detect rejection of an unsupported frequency at runtime.
+    inline bool setCpuFrequency(int mhz) {
+        return setCpuFrequencyMhz(mhz);
     }
 
     inline size_t getFreeHeap() {

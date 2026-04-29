@@ -32,6 +32,12 @@ public:
     static void stopTask();
     static void readTemperatures();
     
+    // Bug #5 (header audit) — REVERTED: `volatile` qualifier broke ArduinoJson template
+    // overload resolution in WebManager (`doc["ssr_temp"] = currentSsrTemp` produced
+    // wrong/empty JSON output). Single-writer (tempTask) / multi-reader pattern is
+    // safe in practice on ESP32 (word-aligned reads/writes are atomic at the hardware
+    // level). If you ever need explicit ordering, add snapshot accessor functions
+    // rather than re-introducing `volatile`.
     static float currentSsrTemp;
     static float lastEspTemp;
     static int ssrFaultCount;

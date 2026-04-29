@@ -41,6 +41,8 @@ void MqttManager::init(const Config& config) {
     _mqttClient.setWill(_lwtTopic.c_str(), 0, true, "offline");
 
     connectToMqtt();
+    // Bug #13: prevent loop() from issuing a second connect() before the first completes
+    _lastReconnectAttempt = millis();
 }
 
 void MqttManager::loop() {
@@ -56,19 +58,23 @@ void MqttManager::loop() {
         }
     }
 
-    // Periodic Discovery Refresh (every hour)
+    // Periodic Discovery Refresh (every hour). onMqttConnect already triggers an
+    // initial discovery, so no need for a sentinel value here (Bug #11).
     static uint32_t lastDiscoveryRefresh = 0;
-    if (_mqttClient.connected() && (now - lastDiscoveryRefresh > 3600000 || lastDiscoveryRefresh == 0)) {
+    if (_mqttClient.connected() && (now - lastDiscoveryRefresh > 3600000)) {
         lastDiscoveryRefresh = now;
         sendDiscovery();
     }
 }
 
 void MqttManager::connectToMqtt() {
+    // Bug #12: log connect attempts so the user has visibility when the broker is unreachable
+    Logger::info("MQTT: connecting to " + _config->mqtt_ip + ":" + String(_config->mqtt_port));
     _mqttClient.connect();
 }
 
 void MqttManager::onMqttConnect(bool sessionPresent) {
+    if (!_config) return; // Bug #6: defensive null guard
     Logger::info("Connected to MQTT broker");
     _mqttClient.publish((_config->mqtt_name + "/status").c_str(), 0, true, "online");
 
@@ -99,29 +105,43 @@ void MqttManager::onMqttDisconnect(espMqttClientTypes::DisconnectReason reason) 
 void MqttManager::onMqttMessage(const espMqttClientTypes::MessageProperties& properties,
                                  const char* topic, const uint8_t* payload,
                                  size_t len, size_t index, size_t total) {
+    // Bugs #1 & #2: drop fragmented messages. Shelly payloads are small (<256B) and
+    // should always arrive as a single chunk. Processing only the first fragment
+    // would feed garbage to atof()/deserializeJson().
+    if (index != 0 || len != total) {
+        Logger::warn("MQTT: ignoring fragmented message on " + String(topic));
+        return;
+    }
+
+    if (!_config) return;
+
     size_t cplen = (len > 31) ? 31 : len;
     char buffer[32];
     memcpy(buffer, payload, cplen);
     buffer[cplen] = '\0';
 
-    if (strcmp(topic, _config->shelly_mqtt_topic.c_str()) == 0) {
-        latestMqttGridPower = atof(buffer);
-        hasLatestMqttGridPower = true;
-        return;
-    }
-
-    static String cachedVoltageTopic;
-    static String lastPowerTopic;
-    if (lastPowerTopic != _config->shelly_mqtt_topic) {
-        lastPowerTopic = _config->shelly_mqtt_topic;
-        cachedVoltageTopic = _config->shelly_mqtt_topic.substring(0, _config->shelly_mqtt_topic.lastIndexOf('/')) + "/voltage";
-    }
-    if (strcmp(topic, cachedVoltageTopic.c_str()) == 0) {
-        float v = atof(buffer);
-        if (v > 100.0 && v < 300.0) {
-            latestMqttGridVoltage = v;
+    // Bug #4: only handle Shelly topics when Shelly MQTT is enabled
+    if (_config->e_shelly_mqtt && _config->shelly_mqtt_topic.length() > 0) {
+        if (strcmp(topic, _config->shelly_mqtt_topic.c_str()) == 0) {
+            latestMqttGridPower = atof(buffer);
+            hasLatestMqttGridPower = true;
+            return;
         }
-        return;
+
+        static String cachedVoltageTopic;
+        static String lastPowerTopic;
+        if (lastPowerTopic != _config->shelly_mqtt_topic) {
+            lastPowerTopic = _config->shelly_mqtt_topic;
+            cachedVoltageTopic = _config->shelly_mqtt_topic.substring(0, _config->shelly_mqtt_topic.lastIndexOf('/')) + "/voltage";
+        }
+        if (strcmp(topic, cachedVoltageTopic.c_str()) == 0) {
+            float v = atof(buffer);
+            // Bug #7: widen accepted range to cover 100V regions and brown-out edges
+            if (v >= 90.0 && v <= 280.0) {
+                latestMqttGridVoltage = v;
+            }
+            return;
+        }
     }
 
     if (_config->e_equip1_mqtt && _config->equip1_mqtt_topic.length() > 0 && strcmp(topic, _config->equip1_mqtt_topic.c_str()) == 0) {
@@ -140,7 +160,11 @@ void MqttManager::onMqttMessage(const espMqttClientTypes::MessageProperties& pro
 float MqttManager::parseShellySwitchPower(const uint8_t* payload, size_t len) {
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, payload, len);
-    if (!err && doc.containsKey("apower")) {
+    // Bug #10: ArduinoJson v7 deprecates containsKey(); use is<T>() instead.
+    // Bug #10b (followup): in v7 `is<float>()` is strict and returns false for
+    // integer JSON tokens (e.g. `apower: 0` with no decimal). Accept both
+    // float and int — matches the pattern used in Shelly1PMManager / GridSensorService.
+    if (!err && (doc["apower"].is<float>() || doc["apower"].is<int>())) {
         return doc["apower"].as<float>();
     }
     // Fallback: plain float value (Gen1)
@@ -231,13 +255,26 @@ void MqttManager::publishStatus(float gridPower, float equipmentPower, bool equi
     }
 
     char payload[256];
-    snprintf(payload, sizeof(payload),
-        "{\"grid_power\":%.0f,\"equipment_power\":%.0f,\"equipment_active\":%s,"
-        "\"force_mode\":%s,\"equipment_percent\":%.1f,\"ssr_temp\":%.1f,"
-        "\"esp32_temp\":%.1f,\"fan_active\":%s,\"fan_percent\":%d}",
-        gridPower, equipmentPower, equipmentActive ? "true" : "false",
-        forceMode ? "true" : "false", round(equipmentPercent * 10) / 10.0,
-        ssrTemp, esp32Temp, fanActive ? "true" : "false", fanPercent);
+    // Bug #8: omit ssr_temp from JSON when sensor is invalid/disconnected
+    // Bug #9: drop redundant round() — %.1f already rounds to one decimal
+    bool ssrValid = (ssrTemp > -100.0);
+    if (ssrValid) {
+        snprintf(payload, sizeof(payload),
+            "{\"grid_power\":%.0f,\"equipment_power\":%.0f,\"equipment_active\":%s,"
+            "\"force_mode\":%s,\"equipment_percent\":%.1f,\"ssr_temp\":%.1f,"
+            "\"esp32_temp\":%.1f,\"fan_active\":%s,\"fan_percent\":%d}",
+            gridPower, equipmentPower, equipmentActive ? "true" : "false",
+            forceMode ? "true" : "false", equipmentPercent,
+            ssrTemp, esp32Temp, fanActive ? "true" : "false", fanPercent);
+    } else {
+        snprintf(payload, sizeof(payload),
+            "{\"grid_power\":%.0f,\"equipment_power\":%.0f,\"equipment_active\":%s,"
+            "\"force_mode\":%s,\"equipment_percent\":%.1f,"
+            "\"esp32_temp\":%.1f,\"fan_active\":%s,\"fan_percent\":%d}",
+            gridPower, equipmentPower, equipmentActive ? "true" : "false",
+            forceMode ? "true" : "false", equipmentPercent,
+            esp32Temp, fanActive ? "true" : "false", fanPercent);
+    }
     _mqttClient.publish(tStatusJson.c_str(), 0, retain, payload);
     Logger::debug("MQTT: Data published");
 }

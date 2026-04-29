@@ -24,10 +24,16 @@ void ControlStrategy::stopTasks() {
         vTaskDelete(_currentTaskHandle);
         _currentTaskHandle = nullptr;
     }
-    
-    // Safety: ensure SSR is off when changing strategies
-    digitalWrite(ActuatorManager::ssrPin, LOW);
-    
+
+    // Bug #1: guard against writing to invalid GPIO if ActuatorManager::init()
+    // never ran (ssrPin defaults to -1).
+    if (ActuatorManager::ssrPin >= 0) {
+        digitalWrite(ActuatorManager::ssrPin, LOW);
+    }
+    // Bug #6: clear stale equipmentActive so a freshly-started strategy doesn't
+    // inherit "on" state.
+    ActuatorManager::equipmentActive = false;
+
     if (_config) {
         detachInterrupt(digitalPinToInterrupt(_config->zx_pin));
     }
@@ -35,7 +41,13 @@ void ControlStrategy::stopTasks() {
 
 void ControlStrategy::startTasks() {
     if (!_config) return;
-    
+
+    // Bug #5: validate critical params before starting any task.
+    if (_config->zx_pin < 0 || _config->zx_pin > 48) {
+        Logger::error("ControlStrategy: invalid zx_pin " + String(_config->zx_pin) + " - tasks not started");
+        return;
+    }
+
     stopTasks();
 
     if (_config->control_mode == "burst") {
@@ -52,10 +64,15 @@ void ControlStrategy::startTasks() {
         pinMode(_config->zx_pin, INPUT_PULLUP);
         attachInterrupt(digitalPinToInterrupt(_config->zx_pin), handleZxInterrupt, RISING);
         xTaskCreatePinnedToCore(phaseControlTask, "phaseTask", 4096, NULL, 5, &_currentTaskHandle, 1);
+    } else {
+        // Bug #8: unrecognized control_mode silently leaves SSR dead. Warn loudly.
+        Logger::warn("ControlStrategy: unknown control_mode '" + _config->control_mode + "' - SSR will remain OFF");
     }
 }
 
 void IRAM_ATTR ControlStrategy::handleZxInterrupt() {
+    // Bug #4: guard against ISR firing before init() created the event group.
+    if (!_zxEventGroup) return;
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     _zxTime = micros();
     _zxCounter++;
@@ -68,14 +85,24 @@ void IRAM_ATTR ControlStrategy::handleZxInterrupt() {
 void ControlStrategy::burstControlTask(void* pvParameters) {
     if (!_config) { vTaskDelete(NULL); return; }
     esp_task_wdt_add(NULL);
-    
+
     uint32_t burstStart = millis();
     bool ssrState = false;
 
+    // Bug #5: defensive minimum burst_period to avoid div-by-zero / always-on.
+    float burstPeriod = _config->burst_period;
+    if (burstPeriod < 0.1f) burstPeriod = 1.0f;
+
     while (true) {
         esp_task_wdt_reset();
+
+        // Bug #3: clamp duty to [0,1] before any uint32_t cast.
         float duty = ActuatorManager::currentDuty;
-        uint32_t periodMs = (uint32_t)(_config->burst_period * 1000.0f);
+        if (duty < 0.0f) duty = 0.0f;
+        if (duty > 1.0f) duty = 1.0f;
+
+        uint32_t periodMs = (uint32_t)(burstPeriod * 1000.0f);
+        if (periodMs == 0) periodMs = 1000;
         uint32_t now = millis();
         uint32_t elapsed = now - burstStart;
 
@@ -84,7 +111,7 @@ void ControlStrategy::burstControlTask(void* pvParameters) {
             elapsed = 0;
         }
 
-        uint32_t onTime = (uint32_t)(duty * periodMs);
+        uint32_t onTime = (uint32_t)(duty * (float)periodMs);
         bool shouldBeOn = (elapsed < onTime);
 
         if (shouldBeOn != ssrState) {
@@ -100,23 +127,39 @@ void ControlStrategy::burstControlTask(void* pvParameters) {
 void ControlStrategy::cycleStealingTask(void* pvParameters) {
     if (!_config) { vTaskDelete(NULL); return; }
     esp_task_wdt_add(NULL);
-    
+
     uint32_t localZxCount = _zxCounter;
     float accumulator = 0;
-    
-    Logger::info("Cycle Stealing Task Started on pin " + String(_config->zx_pin));
+
+    // Bug #12: avoid heap-fragmenting String concatenation; use snprintf.
+    {
+        char buf[64];
+        snprintf(buf, sizeof(buf), "Cycle Stealing Task Started on pin %d", _config->zx_pin);
+        Logger::info(String(buf));
+    }
+
+    // Bug #7: lastCheck/lastCount were function-static; would persist across task
+    // restarts. Move them into the task's stack so they reset cleanly.
+    uint32_t lastCheck = millis();
+    uint32_t lastCount = localZxCount;
 
     while (true) {
         esp_task_wdt_reset();
         // Wait for Zero-Crossing interrupt bit
         xEventGroupWaitBits(_zxEventGroup, 0x01, pdTRUE, pdFALSE, pdMS_TO_TICKS(100));
-        
-        // Catch up with missed interrupts if any
-        while (localZxCount < _zxCounter) {
+
+        // Bug #2: rollover-safe comparison instead of `localZxCount < _zxCounter`.
+        // Snapshot once to avoid ISR race within the inner loop (Bug #9).
+        uint32_t zxSnap = _zxCounter;
+        while ((int32_t)(zxSnap - localZxCount) > 0) {
             localZxCount++;
             esp_task_wdt_reset();
-            
+
+            // Bug #3: clamp duty defensively
             float duty = ActuatorManager::currentDuty;
+            if (duty < 0.0f) duty = 0.0f;
+            if (duty > 1.0f) duty = 1.0f;
+
             if (duty >= 1.0f) {
                 digitalWrite(ActuatorManager::ssrPin, HIGH);
                 ActuatorManager::equipmentActive = true;
@@ -136,95 +179,63 @@ void ControlStrategy::cycleStealingTask(void* pvParameters) {
                 }
             }
         }
-        
+
         // Safety watchdog: Turn off if no interrupts for 500ms
-        static uint32_t lastCheck = 0;
-        static uint32_t lastCount = 0;
-        if (millis() - lastCheck > 500) {
+        uint32_t nowMs = millis();
+        if ((int32_t)(nowMs - lastCheck) > 500) {
             if (_zxCounter == lastCount) {
                 digitalWrite(ActuatorManager::ssrPin, LOW);
                 ActuatorManager::equipmentActive = false;
             }
             lastCount = _zxCounter;
-            lastCheck = millis();
+            lastCheck = nowMs;
         }
     }
 }
 
 void ControlStrategy::trameControlTask(void* pvParameters) {
-    if (!_config) { vTaskDelete(NULL); return; }
-    esp_task_wdt_add(NULL);
-    uint32_t localZxCount = _zxCounter;
-    float accumulator = 0.0f;
-    
-    Logger::info("Trame (Distributed) Mode Started on pin " + String(_config->zx_pin));
-
-    while (true) {
-        esp_task_wdt_reset();
-        xEventGroupWaitBits(_zxEventGroup, 0x01, pdTRUE, pdFALSE, pdMS_TO_TICKS(100));
-        
-        while (localZxCount < _zxCounter) {
-            localZxCount++;
-            esp_task_wdt_reset();
-            
-            float duty = ActuatorManager::currentDuty;
-            if (duty >= 1.0f) {
-                digitalWrite(ActuatorManager::ssrPin, HIGH);
-                ActuatorManager::equipmentActive = true;
-                accumulator = 0.0f;
-            } else if (duty <= 0.0f) {
-                digitalWrite(ActuatorManager::ssrPin, LOW);
-                ActuatorManager::equipmentActive = false;
-                accumulator = 0.0f;
-            } else {
-                accumulator += duty;
-                if (accumulator >= 1.0f) {
-                    digitalWrite(ActuatorManager::ssrPin, HIGH);
-                    accumulator -= 1.0f;
-                    ActuatorManager::equipmentActive = true;
-                } else {
-                    digitalWrite(ActuatorManager::ssrPin, LOW);
-                    ActuatorManager::equipmentActive = false;
-                }
-            }
-        }
-
-        static uint32_t lastCheck = 0;
-        static uint32_t lastCount = 0;
-        if (millis() - lastCheck > 500) {
-            if (_zxCounter == lastCount) {
-                digitalWrite(ActuatorManager::ssrPin, LOW);
-                ActuatorManager::equipmentActive = false;
-            }
-            lastCount = _zxCounter;
-            lastCheck = millis();
-        }
-    }
+    // Bug #11: implementation is identical to cycleStealingTask. Delegate to
+    // avoid drift / duplicated bug fixes.
+    cycleStealingTask(pvParameters);
 }
 
 void ControlStrategy::phaseControlTask(void* pvParameters) {
     if (!_config) { vTaskDelete(NULL); return; }
     esp_task_wdt_add(NULL);
     uint32_t localZxCount = _zxCounter;
-    const uint32_t halfPeriodUs = 10000; // 10ms for 50Hz
-    
-    Logger::info("Phase Angle Control Mode Started on pin " + String(_config->zx_pin));
+    // Bug #10: 50Hz hardcoded. Could be made configurable; for now leave as a
+    // documented constant (most EU installs are 50Hz).
+    const uint32_t halfPeriodUs = 10000; // 10ms for 50Hz; 8333us for 60Hz
+
+    {
+        char buf[80];
+        snprintf(buf, sizeof(buf), "Phase Angle Control Mode Started on pin %d", _config->zx_pin);
+        Logger::info(String(buf));
+    }
+
+    // Bug #7: hoist out of static
+    uint32_t lastCheck = millis();
+    uint32_t lastCount = localZxCount;
 
     while (true) {
         esp_task_wdt_reset();
         xEventGroupWaitBits(_zxEventGroup, 0x01, pdTRUE, pdFALSE, pdMS_TO_TICKS(100));
-        
-        // Discard missed interrupts to maintain sync
-        if (_zxCounter > localZxCount + 1) {
-            localZxCount = _zxCounter - 1;
+
+        // Bug #2: rollover-safe.  Discard missed interrupts to maintain sync.
+        uint32_t zxSnap = _zxCounter;
+        if ((int32_t)(zxSnap - (localZxCount + 1)) > 0) {
+            localZxCount = zxSnap - 1;
         }
 
-        while (localZxCount < _zxCounter) {
+        while ((int32_t)(zxSnap - localZxCount) > 0) {
             localZxCount++;
             esp_task_wdt_reset();
-            
+
             uint32_t zxRef = _zxTime; // Capture the ISR timestamp
+            // Bug #3: clamp duty
             float duty = ActuatorManager::currentDuty;
+            if (duty < 0.0f) duty = 0.0f;
+            if (duty > 1.0f) duty = 1.0f;
             ActuatorManager::equipmentActive = (duty > 0.01f);
 
             if (duty >= 0.99f) {
@@ -234,11 +245,11 @@ void ControlStrategy::phaseControlTask(void* pvParameters) {
             } else {
                 // Phase angle calculation (waitUs is the delay after ZX)
                 uint32_t waitUs = (uint32_t)((1.0f - duty) * halfPeriodUs);
-                
+
                 // JITTER-AWARE TRIGGERING:
                 // Check how much time already passed since the real interrupt
                 uint32_t elapsed = micros() - zxRef;
-                
+
                 if (elapsed < waitUs) {
                     // We are early enough, wait for the remaining time
                     delayMicroseconds(waitUs - elapsed);
@@ -251,15 +262,15 @@ void ControlStrategy::phaseControlTask(void* pvParameters) {
             }
         }
 
-        static uint32_t lastCheck = 0;
-        static uint32_t lastCount = 0;
-        if (millis() - lastCheck > 500) {
+        // Bug #7: hoisted from static
+        uint32_t nowMs = millis();
+        if ((int32_t)(nowMs - lastCheck) > 500) {
             if (_zxCounter == lastCount) {
                 digitalWrite(ActuatorManager::ssrPin, LOW);
                 ActuatorManager::equipmentActive = false;
             }
             lastCount = _zxCounter;
-            lastCheck = millis();
+            lastCheck = nowMs;
         }
     }
 }

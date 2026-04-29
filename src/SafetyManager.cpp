@@ -5,11 +5,33 @@
 
 SystemState SafetyManager::currentState = SystemState::STATE_NORMAL;
 String SafetyManager::emergencyReason = "";
+EmergencyKind SafetyManager::emergencyKind = EmergencyKind::NONE;
 const Config* SafetyManager::_config = nullptr;
+
+// Bug #5: single source of truth for the human-readable reason, derived from the enum.
+static const char* reasonForKind(EmergencyKind k) {
+    switch (k) {
+        case EmergencyKind::ESP_OVERHEAT:   return "ESP32 Overheat!";
+        case EmergencyKind::EXT_OVERHEAT:   return "External Overheat!";
+        case EmergencyKind::SSR_FAULT:      return "SSR Temp Sensor Fault!";
+        case EmergencyKind::SHELLY_TIMEOUT: return "Shelly Timeout!";
+        case EmergencyKind::NONE:
+        default:                            return "";
+    }
+}
+
+// Bug #6: only touch the heap-backed String when the kind actually changes, to avoid
+// per-tick alloc/free churn (~10 Hz) on the safety hot path.
+static void setEmergency(EmergencyKind k) {
+    if (SafetyManager::emergencyKind == k) return;
+    SafetyManager::emergencyKind = k;
+    SafetyManager::emergencyReason = reasonForKind(k);
+}
 
 void SafetyManager::init(const Config& config) {
     _config = &config;
     currentState = SystemState::STATE_NORMAL;
+    setEmergency(EmergencyKind::NONE);
 }
 
 SystemState SafetyManager::evaluateState(float espTemp, float ssrTemp, uint32_t lastGoodPoll, bool boostActive, bool forcedWindow, bool nightActive) {
@@ -19,64 +41,86 @@ SystemState SafetyManager::evaluateState(float espTemp, float ssrTemp, uint32_t 
     float espHysteresis = _config->max_esp32_temp - 5.0f;
     float ssrHysteresis = _config->ssr_max_temp - 5.0f;
 
+    // Bug #5: hysteresis branches now use the enum, so simultaneous-overheat / reason-flip
+    // edge cases no longer cause asymmetric thresholds.
+    bool inEspFault = (currentState == SystemState::STATE_EMERGENCY_FAULT && emergencyKind == EmergencyKind::ESP_OVERHEAT);
+    bool inSsrFault = (currentState == SystemState::STATE_EMERGENCY_FAULT && emergencyKind == EmergencyKind::EXT_OVERHEAT);
+
     // 0. Priority 0: EMERGENCY FAULT (Overheats & Sensor Fault)
-    // If ALREADY in fault, check hysteresis for recovery
-    bool isEspHot = (currentState == SystemState::STATE_EMERGENCY_FAULT && emergencyReason == "ESP32 Overheat!") ? (espTemp >= espHysteresis) : (espTemp >= _config->max_esp32_temp);
-    bool isSsrHot = (_config->e_ssr_temp && ((currentState == SystemState::STATE_EMERGENCY_FAULT && emergencyReason == "External Overheat!") ? (ssrTemp >= ssrHysteresis) : (ssrTemp >= _config->ssr_max_temp)));
+    bool isEspHot = inEspFault ? (espTemp >= espHysteresis) : (espTemp >= _config->max_esp32_temp);
+    bool isSsrHot = (_config->e_ssr_temp && (inSsrFault ? (ssrTemp >= ssrHysteresis) : (ssrTemp >= _config->ssr_max_temp)));
     bool ssrFault = (_config->e_ssr_temp && ssrTemp < -100.0f);
 
     if (isEspHot || isSsrHot || ssrFault) {
-        if (isEspHot) emergencyReason = "ESP32 Overheat!";
-        else if (isSsrHot) emergencyReason = "External Overheat!";
-        else emergencyReason = "SSR Temp Sensor Fault!";
+        if (isEspHot)      setEmergency(EmergencyKind::ESP_OVERHEAT);
+        else if (isSsrHot) setEmergency(EmergencyKind::EXT_OVERHEAT);
+        else               setEmergency(EmergencyKind::SSR_FAULT);
         return SystemState::STATE_EMERGENCY_FAULT;
     }
 
     // 1. Priority 1: SAFE TIMEOUT (Sensor loss)
+    // Bug #1: cast to uint32_t before * 1000 so safety_timeout > ~32 s does not overflow
+    // a signed int and produce a wrap-around (effectively-zero) timeout.
     uint32_t now = millis();
-    uint32_t timeout = (_config->safety_timeout * 1000);
+    uint32_t timeout = (uint32_t)_config->safety_timeout * 1000UL;
     if (now - lastGoodPoll >= timeout) {
-        emergencyReason = "Shelly Timeout!";
+        setEmergency(EmergencyKind::SHELLY_TIMEOUT);
         return SystemState::STATE_SAFE_TIMEOUT;
     }
 
     // 2. Priority 2: BOOST (Manual / Schedule)
     if (boostActive || forcedWindow) {
-        emergencyReason = "";
+        setEmergency(EmergencyKind::NONE);
         return SystemState::STATE_BOOST;
     }
 
     // 3. Priority 3: NIGHT (Sleep)
     if (nightActive) {
-        emergencyReason = "";
+        setEmergency(EmergencyKind::NONE);
         return SystemState::STATE_NIGHT;
     }
 
     // 4. Default: NORMAL
-    emergencyReason = "";
+    setEmergency(EmergencyKind::NONE);
     return SystemState::STATE_NORMAL;
 }
 
 void SafetyManager::applyState(SystemState newState) {
     if (!_config) return;
-    if (newState != currentState) {
+    bool stateChanged = (newState != currentState);
+    if (stateChanged) {
         logStateChange(currentState, newState);
         currentState = newState;
     }
+
+    // Bug #7: only re-apply outputs on actual state change. EMERGENCY/SAFE_TIMEOUT still
+    // get an immediate enforcement at the moment of transition; the steady-state SSR drive
+    // is owned by ControlStrategy, which will see currentDuty == 0 and stop firing.
+    if (!stateChanged) return;
 
     switch (currentState) {
         case SystemState::STATE_EMERGENCY_FAULT:
         case SystemState::STATE_SAFE_TIMEOUT:
             ActuatorManager::setDuty(0.0);
+            // Immediate hardware silence — ControlStrategy will keep it LOW on subsequent ticks
+            // because currentDuty is now 0.
             digitalWrite(_config->ssr_pin, LOW);
             ActuatorManager::openRelay();
             break;
 
-        case SystemState::STATE_BOOST:
-            ActuatorManager::setDuty(1.0);
-            digitalWrite(_config->ssr_pin, HIGH);
+        case SystemState::STATE_BOOST: {
+            // Bug #3: clamp BOOST to user-configured max_duty_percent so a low hardware-safety
+            // cap is honoured even when the user forces a boost.
+            float maxDuty = _config->max_duty_percent / 100.0f;
+            if (maxDuty < 0.0f) maxDuty = 0.0f;
+            if (maxDuty > 1.0f) maxDuty = 1.0f;
+            ActuatorManager::setDuty(maxDuty);
+            // Bug #2: removed `digitalWrite(ssr_pin, HIGH)` — ControlStrategy reads currentDuty
+            // and bit-bangs the SSR. Forcing HIGH here would race that loop and bypass the
+            // max_duty_percent clamp above for the brief window before ControlStrategy ticks.
             ActuatorManager::closeRelay();
             break;
+        }
 
         case SystemState::STATE_NIGHT:
             ActuatorManager::setDuty(0.0);

@@ -24,9 +24,13 @@ public:
     static float getRain() { return _rain; }
     static float getSnow() { return _snow; }
     static bool isNight();
-    static String getSunrise() { return _sunrise; }
-    static String getSunset() { return _sunset; }
-    static String getWeatherIcon() { return _weatherIcon; }
+    // Bug #1 (header audit): these getters previously returned _sunrise/_sunset/_weatherIcon
+    // by inline copy without holding _weatherStringMutex (defined in WeatherManager.cpp),
+    // racing with updateWeather()'s assignments and risking torn String reads. Now defined
+    // out-of-line in the .cpp where the mutex can serialize the snapshot copy.
+    static String getSunrise();
+    static String getSunset();
+    static String getWeatherIcon();
     static uint32_t getLastUpdate() { return _lastUpdate; }
     static bool isTooCloudy();
     static float getTimeFactor();

@@ -38,8 +38,8 @@ public:
     static void loop();
     static void flushAll();
     static SemaphoreHandle_t getMutex() { return _mutex; }
-    static String getLogs();
-    static String getDataLogs();
+    // Bug #4: getLogs()/getDataLogs() were declared but never defined.
+    // Removed to avoid linker errors if accidentally called. Use streamLogs/streamDataLogs.
 #ifndef NATIVE_TEST
     static void streamLogs(AsyncWebServerRequest *request);
     static void streamDataLogs(AsyncWebServerRequest *request);
