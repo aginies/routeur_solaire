@@ -3,6 +3,7 @@
 #include "Logger.h"
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+#include <esp_task_wdt.h>
 
 const Config* Shelly1PMManager::_config = nullptr;
 Shelly1PMDevice Shelly1PMManager::_dev1;
@@ -84,6 +85,8 @@ void Shelly1PMManager::update() {
         }
     }
 
+    esp_task_wdt_reset();
+
     // Update Eq2
     if (_config->e_equip2) {
         if (_config->e_equip2_mqtt && MqttManager::hasLatestMqttEq2Power) {
@@ -114,6 +117,7 @@ void Shelly1PMManager::updateDevice(Shelly1PMDevice& dev, const String& ip, int 
     }
 
     int code = http.GET();
+    esp_task_wdt_reset();
     bool isGen2 = (code == 200);
 
     if (!isGen2) {
@@ -121,6 +125,7 @@ void Shelly1PMManager::updateDevice(Shelly1PMDevice& dev, const String& ip, int 
         url = "http://" + ip + "/status";
         if (!http.begin(client, url)) return;
         code = http.GET();
+        esp_task_wdt_reset();
         if (code != 200) {
             Logger::warn("Shelly: HTTP " + String(code) + " from " + ip);
             http.end();

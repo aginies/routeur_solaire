@@ -119,7 +119,6 @@ void SolarMonitor::monitorTask(void* pvParameters) {
         if (now - lastPoll >= (uint32_t)(currentPollInterval * 1000)) {
             lastPoll = now;
             if (GridSensorService::fetchGridData()) {
-                esp_task_wdt_reset(); // Feed after slow HTTP call if applicable
                 _lastGoodPoll = now;
                 
                 if (SafetyManager::currentState == SystemState::STATE_SAFE_TIMEOUT) {
@@ -189,9 +188,10 @@ void SolarMonitor::monitorTask(void* pvParameters) {
                 GridSensorService::hasFreshData = false;
             } else {
                 // Timeout Check
-                // The SafetyManager handles the STATE_SAFE_TIMEOUT automatically 
+                // The SafetyManager handles the STATE_SAFE_TIMEOUT automatically
                 // via the lastGoodPoll variable passed to evaluateState().
             }
+            esp_task_wdt_reset();
         }
 
         // 5. Stats & MQTT
