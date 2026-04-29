@@ -5,18 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='20' fill='%23f0c040'/><g stroke='%23f0c040' stroke-width='4' stroke-linecap='round'><line x1='50' y1='10' x2='50' y2='22'/><line x1='50' y1='78' x2='50' y2='90'/><line x1='10' y1='50' x2='22' y2='50'/><line x1='78' y1='50' x2='90' y2='50'/><line x1='22' y1='22' x2='30' y2='30'/><line x1='70' y1='70' x2='78' y2='78'/><line x1='78' y1='22' x2='70' y2='30'/><line x1='30' y1='70' x2='22' y2='78'/></g></svg>">
     <title>Solaire - Statistiques</title>
-    <script>
-        function handleChartJsError() {
-            console.error("Chart.js failed to load");
-            const banner = document.getElementById('cdnErrorBanner');
-            if (banner) banner.style.display = 'block';
-            const bCard = document.getElementById('barCard');
-            if (bCard) bCard.style.display = 'none';
-            const pCard = document.getElementById('pieCard');
-            if (pCard) pCard.style.display = 'none';
-        }
-    </script>
-    <script src="/chart.min.js" onerror="handleChartJsError()"></script>
+    <link rel="stylesheet" href="/uPlot.min.css">
+    <script src="/uPlot.iife.min.js"></script>
     <style>
         :root {
             --bg-color: #1a1a2e;
@@ -204,8 +194,8 @@
         </div>
 
         <div id="cdnErrorBanner" class="cdn-error-banner" style="display:none;">
-            <strong>⚠ Graphiques indisponibles</strong>
-            chart.min.js n'a pas pu être chargé (fichier manquant sur le dispositif ?). Les données ci-dessous restent disponibles.
+            <strong>Graphiques indisponibles</strong>
+            uPlot n'a pas pu être chargé. Les données ci-dessous restent disponibles.
         </div>
 
         <div class="tab-container" style="display:flex; gap:8px; margin-bottom:20px; justify-content:center;">
@@ -259,14 +249,14 @@
 
         <div class="chart-card" id="barCard">
             <div id="barNoData" class="no-data-msg" style="display:none;">Aucune donnée pour cette période</div>
-            <canvas id="barChart" style="height:350px;"></canvas>
+            <div id="barChart" style="width:100%%;"></div>
         </div>
 
         <div class="chart-card" id="pieCard">
-            <h3 style="text-align:center; margin-bottom:15px; color:#aaa; font-size:0.9em;">RÉPARTITION GLOBALE</h3>
+            <h3 style="text-align:center; margin-bottom:15px; color:var(--secondary-text); font-size:0.9em;">RÉPARTITION GLOBALE</h3>
             <div class="pie-container">
                 <div id="pieNoData" class="no-data-msg" style="display:none;">Aucune donnée pour cette période</div>
-                <canvas id="pieChart"></canvas>
+                <canvas id="pieChart" width="320" height="320"></canvas>
             </div>
         </div>
 
@@ -286,8 +276,7 @@
         let currentView = 'day';
         let statsData = {};
         let barChart = null;
-        let pieChart = null;
-        let chartsAvailable = true;
+        let chartsAvailable = (typeof uPlot !== 'undefined');
         let autoRefreshTimer = null;
 
         // Produce a YYYY-MM-DD string from a Date in local time (avoids UTC-midnight off-by-one)
@@ -416,7 +405,12 @@
         }
 
         function renderCharts() {
-            if (!chartsAvailable || typeof Chart === 'undefined') return;
+            if (!chartsAvailable || typeof uPlot === 'undefined') {
+                document.getElementById('cdnErrorBanner').style.display = 'block';
+                document.getElementById('barCard').style.display = 'none';
+                document.getElementById('pieCard').style.display = 'none';
+                return;
+            }
             const selectedDate = document.getElementById('statDate').value;
             const [selYear, selMonth] = selectedDate.split('-');
 
@@ -428,14 +422,12 @@
                 const day = statsData[selectedDate];
                 if (day) {
                     hasData = true;
-                    // Always show 24 hours for daily view if we have hourly data
                     if (day.h_import && day.h_redirect) {
-                        labels       = Array.from({length: 24}, (_, i) => `${i}h`);
+                        labels       = Array.from({length: 24}, (_, i) => String(i) + 'h');
                         importArr   = day.h_import.map(v => v / 1000);
                         redirectArr = day.h_redirect.map(v => v / 1000);
                         exportArr   = day.h_export ? day.h_export.map(v => v / 1000) : Array(24).fill(0);
                     } else {
-                        // Fallback for days without hourly breakdown
                         labels       = [selectedDate.split('-').reverse().join('/')];
                         importArr   = [day.import / 1000];
                         redirectArr = [day.redirect / 1000];
@@ -447,7 +439,6 @@
                 for (let i = 6; i >= 0; i--) {
                     const ds = addDays(selectedDate, -i);
                     const [y, m, d] = ds.split('-').map(Number);
-                    // Use local Date for label — consistent with addDays local arithmetic
                     labels.push(new Date(y, m - 1, d).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' }));
                     if (statsData[ds]) {
                         hasData = true;
@@ -460,7 +451,7 @@
                     }
                 }
             } else if (currentView === 'month') {
-                const prefix = `${selYear}-${selMonth}`;
+                const prefix = selYear + '-' + selMonth;
                 const days = Object.keys(statsData).filter(d => d.startsWith(prefix)).sort();
                 hasData      = days.length > 0;
                 labels       = days.map(d => d.split('-')[2]);
@@ -470,7 +461,6 @@
                 days.forEach(d => { totalActiveSecs += (statsData[d].active_time || 0); });
             } else if (currentView === 'year') {
                 const months = {};
-                // Only aggregate data for the selected year
                 Object.keys(statsData).filter(d => d.startsWith(selYear)).forEach(d => {
                     const mk = d.substring(0, 7);
                     if (!months[mk]) months[mk] = { i: 0, r: 0, e: 0, s: 0 };
@@ -488,7 +478,6 @@
                 labels = mKeys.map(m => m.split('-').reverse().join('/'));
             }
 
-            // Summary boxes
             const tImp  = importArr.reduce((a, b) => a + b, 0);
             const tRed  = redirectArr.reduce((a, b) => a + b, 0);
             const tExp  = exportArr.reduce((a, b) => a + b, 0);
@@ -501,106 +490,113 @@
 
             const hrs  = Math.floor(totalActiveSecs / 3600);
             const mins = Math.floor((totalActiveSecs %% 3600) / 60);
-            document.getElementById('activeTime').textContent = totalActiveSecs > 0 ? `${hrs}h ${mins}m` : '—';
+            document.getElementById('activeTime').textContent = totalActiveSecs > 0 ? hrs + 'h ' + mins + 'm' : '—';
 
-            // No-data state
-            const barCanvas = document.getElementById('barChart');
+            const barEl = document.getElementById('barChart');
             const pieCanvas = document.getElementById('pieChart');
             const barNoData = document.getElementById('barNoData');
             const pieNoData = document.getElementById('pieNoData');
-            barCanvas.style.display = hasData ? 'block' : 'none';
+            barEl.style.display = hasData ? 'block' : 'none';
             pieCanvas.style.display = hasData ? 'block' : 'none';
             barNoData.style.display = hasData ? 'none'  : 'block';
             pieNoData.style.display = hasData ? 'none'  : 'block';
 
             if (!hasData) {
                 if (barChart) { barChart.destroy(); barChart = null; }
-                if (pieChart) { pieChart.destroy(); pieChart = null; }
                 return;
             }
 
-            // Theme-aware colors
             const isLight = document.body.classList.contains('light-mode');
-            const textColor = isLight ? '#2c3e50' : '#eee';
-            const gridColor = isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)';
-            const tickColor = isLight ? '#7f8c8d' : '#999';
-            const secondaryColor = isLight ? '#7f8c8d' : '#aaa';
+            const textColor = isLight ? '#2c3e50' : '#ccc';
+            const gridColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)';
 
-            // Bar chart
+            // Bar chart with uPlot
             if (barChart) barChart.destroy();
-            const ctxBar = barCanvas.getContext('2d');
+            barEl.innerHTML = '';
 
-            const gradImport   = ctxBar.createLinearGradient(0, 0, 0, 400);
-            gradImport.addColorStop(0, '#e74c3c'); gradImport.addColorStop(1, 'rgba(231,76,60,0.3)');
-            const gradRedirect = ctxBar.createLinearGradient(0, 0, 0, 400);
-            gradRedirect.addColorStop(0, '#2ecc71'); gradRedirect.addColorStop(1, 'rgba(46,204,113,0.3)');
-            const gradExport   = ctxBar.createLinearGradient(0, 0, 0, 400);
-            gradExport.addColorStop(0, '#f1c40f'); gradExport.addColorStop(1, 'rgba(241,196,15,0.3)');
+            const xData = labels.map((_, i) => i);
+            const barData = [xData, importArr, redirectArr, exportArr];
 
-            barChart = new Chart(ctxBar, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        { label: 'Réseau (Import) (kWh)', data: importArr,   backgroundColor: gradImport,   borderColor: '#e74c3c', borderWidth: 1, borderRadius: 6 },
-                        { label: 'Solaire redirigé (kWh)', data: redirectArr, backgroundColor: gradRedirect, borderColor: '#2ecc71', borderWidth: 1, borderRadius: 6 },
-                        { label: 'Injecté (Export) (kWh)', data: exportArr,  backgroundColor: gradExport,   borderColor: '#f1c40f', borderWidth: 1, borderRadius: 6 }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: tickColor } },
-                        x: { grid: { display: false }, ticks: { color: tickColor } }
-                    },
-                    plugins: { legend: { labels: { color: textColor, font: { weight: 'bold' } } } }
-                }
+            const barsPlugin = uPlot.paths.bars({size: [0.6, 100], gap: 2, radius: 3});
+
+            const barOpts = {
+                width: barEl.parentElement.clientWidth - 48,
+                height: 350,
+                scales: { x: { time: false } },
+                axes: [
+                    { stroke: textColor, grid: { show: false },
+                      values: (u, vals) => vals.map(v => { const i = Math.round(v); return i >= 0 && i < labels.length ? labels[i] : ''; }),
+                      ticks: { stroke: gridColor }, rotate: labels.length > 12 ? -45 : 0 },
+                    { stroke: textColor, grid: { stroke: gridColor }, ticks: { stroke: gridColor }, label: 'kWh', labelSize: 20 }
+                ],
+                series: [
+                    {},
+                    { label: 'Réseau (Import)', stroke: '#e74c3c', fill: 'rgba(231,76,60,0.7)', width: 0, paths: barsPlugin },
+                    { label: 'Solaire redirigé', stroke: '#2ecc71', fill: 'rgba(46,204,113,0.7)', width: 0, paths: barsPlugin },
+                    { label: 'Injecté (Export)', stroke: '#f1c40f', fill: 'rgba(241,196,15,0.7)', width: 0, paths: barsPlugin },
+                ],
+            };
+            barChart = new uPlot(barOpts, barData, barEl);
+
+            // Doughnut chart with raw canvas
+            drawDoughnut(pieCanvas, tImp, tRed, tExp, rate, isLight);
+        }
+
+        function drawDoughnut(canvas, tImp, tRed, tExp, rate, isLight) {
+            const dpr = window.devicePixelRatio || 1;
+            const size = Math.min(canvas.parentElement.clientWidth, 320);
+            canvas.width = size * dpr;
+            canvas.height = size * dpr;
+            canvas.style.width = size + 'px';
+            canvas.style.height = size + 'px';
+
+            const ctx = canvas.getContext('2d');
+            ctx.scale(dpr, dpr);
+            ctx.clearRect(0, 0, size, size);
+
+            const cx = size / 2, cy = size / 2;
+            const outerR = size / 2 - 10, innerR = outerR * 0.72;
+            const total = tImp + tRed + tExp;
+            if (total <= 0) return;
+
+            const slices = [
+                { val: tImp, color: '#e74c3c', label: 'Réseau' },
+                { val: tRed, color: '#2ecc71', label: 'Redirigé' },
+                { val: tExp, color: '#f1c40f', label: 'Injecté' },
+            ];
+
+            let startAngle = -Math.PI / 2;
+            slices.forEach(s => {
+                const sweep = (s.val / total) * Math.PI * 2;
+                ctx.beginPath();
+                ctx.arc(cx, cy, outerR, startAngle, startAngle + sweep);
+                ctx.arc(cx, cy, innerR, startAngle + sweep, startAngle, true);
+                ctx.closePath();
+                ctx.fillStyle = s.color;
+                ctx.fill();
+                startAngle += sweep;
             });
 
-            // Pie chart — three slices: import / redirected / exported
-            if (pieChart) pieChart.destroy();
-            const ctxPie = pieCanvas.getContext('2d');
-            const capturedRate = rate; // explicit capture — avoids stale closure if Chart.js defers afterDraw
+            ctx.font = 'bold 1.8em Arial';
+            ctx.fillStyle = '#2ecc71';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(rate.toFixed(1) + '%%', cx, cy - 8);
+            ctx.font = '0.75em Arial';
+            ctx.fillStyle = isLight ? '#7f8c8d' : '#aaa';
+            ctx.fillText('CAPTURE', cx, cy + 18);
 
-            pieChart = new Chart(ctxPie, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Réseau (Import)', 'Solaire redirigé', 'Injecté (Export)'],
-                    datasets: [{
-                        data: [tImp, tRed, tExp],
-                        backgroundColor: ['#e74c3c', '#2ecc71', '#f1c40f'],
-                        borderWidth: 0,
-                        hoverOffset: 10
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    circumference: 180,
-                    rotation: -90,
-                    cutout: '75%%',
-                    plugins: {
-                        legend: { position: 'bottom', labels: { color: textColor, padding: 10 } },
-                        tooltip: { callbacks: { label: item => ` ${item.label}: ${item.raw.toFixed(2)} kWh` } }
-                    }
-                },
-                plugins: [{
-                    id: 'centerText',
-                    afterDraw: (chart) => {
-                        const { ctx, chartArea: { bottom, left, width } } = chart;
-                        ctx.save();
-                        ctx.font = 'bold 2em Arial';
-                        ctx.fillStyle = '#2ecc71';
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'middle';
-                        ctx.fillText(capturedRate.toFixed(1) + '%%', width / 2 + left, bottom - 10);
-                        ctx.font = '0.8em Arial';
-                        ctx.fillStyle = secondaryColor;
-                        ctx.fillText('CAPTURE', width / 2 + left, bottom - 45);
-                        ctx.restore();
-                    }
-                }]
+            // Legend
+            const legendY = cy + outerR - 5;
+            ctx.font = '0.7em Arial';
+            const lw = 70;
+            slices.forEach((s, i) => {
+                const lx = cx - lw + (i * lw);
+                ctx.fillStyle = s.color;
+                ctx.fillRect(lx - 8, legendY - 4, 8, 8);
+                ctx.fillStyle = isLight ? '#2c3e50' : '#ccc';
+                ctx.textAlign = 'left';
+                ctx.fillText(s.label, lx + 3, legendY);
             });
         }
 
@@ -618,6 +614,13 @@
             document.body.classList.add('light-mode');
             document.getElementById('themeToggle').textContent = '🌙';
         }
+
+        window.addEventListener('resize', function() {
+            if (barChart) {
+                var el = document.getElementById('barChart');
+                barChart.setSize({ width: el.parentElement.clientWidth - 48, height: 350 });
+            }
+        });
 
         refreshView();
     </script>
