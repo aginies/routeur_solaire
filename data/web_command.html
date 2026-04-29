@@ -359,7 +359,7 @@
         </div>
     </div>
 
-    <div id="todaySummary" style="font-size: 1em; color: #666; text-align: center; margin: 15px auto 0 auto; letter-spacing: 0.10em; opacity: 0.8; max-width: 1000px;">
+    <div id="todaySummary" style="display: none; font-size: 1em; color: #666; text-align: center; margin: 15px auto 0 auto; letter-spacing: 0.10em; opacity: 0.8; max-width: 1000px;">
         Aujourd'hui : <span id="sumImport" style="color:#e74c3c">—</span> réseau | 
         <span id="sumRedirect" style="color:#2ecc71">—</span> redirigé | 
         <span id="sumExport" style="color:#f1c40f">—</span> injecté
@@ -665,6 +665,8 @@
                 if (fb && d.build_time) fb.textContent = d.build_time;
                 var sl = document.getElementById('statsLink');
                 if (sl && d.stats_enabled) sl.style.display = '';
+                var ts = document.getElementById('todaySummary');
+                if (ts) ts.style.display = d.stats_enabled ? 'block' : 'none';
                 if (!d.history_enabled) { var cc2 = document.getElementById('chartCard'); if (cc2) cc2.style.display = 'none'; }
                 if (!d.data_log_enabled) { var td = document.getElementById('tabData'); if (td) td.style.display = 'none'; }
 

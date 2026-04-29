@@ -112,23 +112,29 @@ void Logger::flushAll() {
 void Logger::flushFile(const char* filename, std::vector<String>& buffer) {
     if (buffer.empty()) return;
 
-    rotate(filename);
-
-    if (!LittleFS.exists(filename)) {
-        File f = LittleFS.open(filename, "w");
-        if (f) f.close();
+    // Check disk space (Need at least 4KB free to risk a write)
+    if (LittleFS.totalBytes() - LittleFS.usedBytes() < 4096) {
+        Serial.println("[ERROR] Logger: Disk full, clearing buffer without writing");
+        buffer.clear();
+        return;
     }
 
+    rotate(filename);
+
     File file = LittleFS.open(filename, "a");
-    if (!file) file = LittleFS.open(filename, "w");
+    if (!file) {
+        file = LittleFS.open(filename, "w");
+    }
 
     if (file) {
         for (const auto& entry : buffer) {
             file.println(entry);
         }
         file.close();
+    } else {
+        Serial.printf("[ERROR] Logger: Failed to open %s for writing\n", filename);
     }
-    // Always clear buffer to prevent OOM if file write fails
+    
     buffer.clear();
     esp_task_wdt_reset();
 }
@@ -149,10 +155,25 @@ void Logger::rotate(const char* filename) {
     String rotated1 = base + ".1";
     String rotated2 = base + ".2";
 
-    if (LittleFS.exists(rotated2)) LittleFS.remove(rotated2);
-    if (LittleFS.exists(rotated1)) LittleFS.rename(rotated1, rotated2);
-    LittleFS.rename(base, rotated1);
-    // Use Serial directly to avoid re-entering the mutex from within flushAll() -> rotate()
+    // Standard rotation: .1 -> .2, base -> .1
+    if (LittleFS.exists(rotated2)) {
+        if (!LittleFS.remove(rotated2)) {
+            Serial.println("[ERROR] Logger: Failed to remove " + rotated2);
+        }
+    }
+    
+    if (LittleFS.exists(rotated1)) {
+        if (!LittleFS.rename(rotated1, rotated2)) {
+            Serial.println("[ERROR] Logger: Failed to rename .1 to .2");
+        }
+    }
+    
+    if (!LittleFS.rename(base, rotated1)) {
+        Serial.println("[ERROR] Logger: Failed to rename base to .1");
+        // If rename failed, try to just delete the base to at least clear space
+        LittleFS.remove(base);
+    }
+    
     Serial.printf("[INFO] Logger: Log file rotated (%zu bytes)\n", size);
 }
 

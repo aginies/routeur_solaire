@@ -11,6 +11,8 @@ struct Shelly1PMDevice {
     float currentPower = 0.0f;
     uint32_t lastUpdate = 0;
     uint32_t lastAttempt = 0;
+    bool online = true;
+    uint32_t lastErrorLog = 0;
 };
 
 class Shelly1PMManager {

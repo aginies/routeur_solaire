@@ -254,30 +254,36 @@ void WebManager::setupRoutes() {
         StatsManager::streamStatsJson(request);
     });
 
-    static File uploadFile;
     _server.on("/import_stats", HTTP_POST, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
         request->send(200, "text/plain", "Importation réussie. Redémarrage...");
         _rebootRequested = true;
     }, [authRequired](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
         if (!authRequired(request)) return;
+        static File uploadFile;
         static size_t uploadedBytes = 0;
-        static constexpr size_t MAX_STATS_UPLOAD_BYTES = 200 * 1024; // 200 KB hard limit
+        static constexpr size_t MAX_STATS_UPLOAD_BYTES = 200 * 1024;
+        
         if (!index) {
             uploadedBytes = 0;
-            Logger::info("Importation des stats : " + filename);
+            if (uploadFile) uploadFile.close();
+            Logger::info("Importing stats: " + filename);
             uploadFile = LittleFS.open("/stats.json", "w");
         }
-        uploadedBytes += len;
-        if (uploadedBytes > MAX_STATS_UPLOAD_BYTES) {
-            if (uploadFile) { uploadFile.close(); }
-            LittleFS.remove("/stats.json");
-            Logger::error("Stats upload rejected: file too large (" + String(uploadedBytes) + " bytes)");
-            return;
-        }
+        
         if (uploadFile) {
+            uploadedBytes += len;
+            if (uploadedBytes > MAX_STATS_UPLOAD_BYTES) {
+                uploadFile.close();
+                LittleFS.remove("/stats.json");
+                Logger::error("Stats upload rejected: file too large");
+                return;
+            }
             if (len) uploadFile.write(data, len);
-            if (final) uploadFile.close();
+            if (final) {
+                uploadFile.close();
+                Logger::info("Stats upload complete (" + String(uploadedBytes) + " bytes)");
+            }
         }
     });
 #endif
