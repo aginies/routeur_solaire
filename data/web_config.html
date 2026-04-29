@@ -181,6 +181,23 @@
                 <p style="font-size: 0.8em; color: #888; margin-top: 4px;">Utilisé pour la synchronisation de l'heure (NTP) et les logs.</p>
             </div>
 
+            <!-- INSTALLATION SOLAIRE -->
+            <details>
+                <summary>☀️ Installation solaire</summary>
+                <div class="section-content">
+                    <div class="form-group">
+                        <label for="SOLAR_PANEL_POWER">Puissance panneaux solaires (W):</label>
+                        <input type="number" min="0" max="50000" id="SOLAR_PANEL_POWER" name="SOLAR_PANEL_POWER">
+                        <p style="font-size: 0.8em; color: #888; margin-top: 4px;">Puissance crête de votre installation solaire (ex: 3000 pour 3kWc). Le système estime la production attendue selon l'heure et la météo pour décider du démarrage de l'équipement 2. Mettre 0 pour utiliser le seuil de confiance classique.</p>
+                    </div>
+                    <div class="form-group">
+                        <label for="SOLAR_PANEL_AZIMUTH">Azimut des panneaux (°):</label>
+                        <input type="number" min="0" max="360" id="SOLAR_PANEL_AZIMUTH" name="SOLAR_PANEL_AZIMUTH">
+                        <p style="font-size: 0.8em; color: #888; margin-top: 4px;">Orientation des panneaux : 0=Nord, 90=Est, 180=Sud, 270=Ouest. Décale la courbe de production estimée selon l'orientation réelle.</p>
+                    </div>
+                </div>
+            </details>
+
             <!-- 1. PARTIE CONNECTIVITÉ -->
             <details>
                 <summary><span class="help-btn" data-section="connectivity">?</span>Connectivité (WiFi, Shelly, MQTT)</summary>
@@ -603,7 +620,7 @@
                     <div class="form-group">
                         <label for="WEATHER_THRESH">Confiance solaire minimum pour démarrer l'équipement 2 (%):</label>
                         <input type="number" min="0" max="100" id="WEATHER_THRESH" name="WEATHER_THRESH">
-                        <p style="font-size: 0.8em; color: #888; margin-top: 4px;">L'équipement 2 peut démarrer si la confiance solaire est au moins égale à ce seuil. Exemple: 40 signifie démarrage possible à partir de 40% de potentiel solaire estimé.</p>
+                        <p style="font-size: 0.8em; color: #888; margin-top: 4px;">L'équipement 2 peut démarrer si la confiance solaire est au moins égale à ce seuil. Exemple: 40 signifie démarrage possible à partir de 40% de potentiel solaire estimé. Ignoré si la puissance panneaux est renseignée.</p>
                     </div>
                 </div>
             </details>
@@ -799,6 +816,8 @@
             setVal('WEATHER_LAT',c.weather_lat);
             setVal('WEATHER_LON',c.weather_lon);
             setVal('WEATHER_THRESH',c.weather_cloud_threshold);
+            setVal('SOLAR_PANEL_POWER',c.solar_panel_power);
+            setVal('SOLAR_PANEL_AZIMUTH',c.solar_panel_azimuth);
             setBool('FAKE_SHELLY',c.fake_shelly);
             setVal('WEB_USER',c.web_user);
             setVal('WEB_PASSWORD',c.web_password);

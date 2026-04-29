@@ -117,6 +117,8 @@ Config ConfigManager::load() {
     if (doc.containsKey("weather_lat")) config.weather_lat = doc["weather_lat"].as<String>();
     if (doc.containsKey("weather_lon")) config.weather_lon = doc["weather_lon"].as<String>();
     if (doc.containsKey("weather_cloud_threshold")) config.weather_cloud_threshold = doc["weather_cloud_threshold"];
+    if (doc.containsKey("solar_panel_power")) config.solar_panel_power = doc["solar_panel_power"];
+    if (doc.containsKey("solar_panel_azimuth")) config.solar_panel_azimuth = doc["solar_panel_azimuth"];
 
     // Incremental Controller
     if (doc.containsKey("delta")) config.delta = doc["delta"];
@@ -240,6 +242,8 @@ bool ConfigManager::save(const Config& config) {
     doc["weather_lat"] = config.weather_lat;
     doc["weather_lon"] = config.weather_lon;
     doc["weather_cloud_threshold"] = config.weather_cloud_threshold;
+    doc["solar_panel_power"] = config.solar_panel_power;
+    doc["solar_panel_azimuth"] = config.solar_panel_azimuth;
 
     doc["delta"] = config.delta;
     doc["deltaneg"] = config.deltaneg;

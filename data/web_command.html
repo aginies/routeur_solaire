@@ -282,6 +282,13 @@
         <div id="dateTime">--/--/---- --:--</div>
         <button id="themeToggle" onclick="toggleTheme()">☀️ Mode</button>
         <div style="display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap;">
+            <div id="expectedPowerBadge" class="mqtt-badge" style="display: none; background: #27ae60; color: white; gap: 8px; padding: 8px 14px;">
+                <span style="font-size: 1.2em;">⚡</span>
+                <div style="display: flex; flex-direction: column; align-items: flex-start; line-height: 1.1;">
+                    <span style="font-size: 0.8em; opacity: 0.8;">Production estimée</span>
+                    <span id="expectedPowerValue" style="font-size: 1.1em; font-weight: bold;">-- W</span>
+                </div>
+            </div>
             <div id="weatherBadge" class="mqtt-badge" style="display: none; background: #3498db; color: white; gap: 8px; cursor: pointer;" title="Clic: détails / Double-clic: rafraîchir">
                 <svg id="weatherSvgIcon" style="width: 40px; height: 40px; fill: white;">
                     <use xlink:href="#day"></use>
@@ -441,6 +448,7 @@
                         '🌅 Lever: <b>' + (d.weather_sunrise||'--') + '</b> / Coucher: <b>' + (d.weather_sunset||'--') + '</b>',
                         '🕐 Dernière MAJ: <b>' + age + ' min</b>',
                     ];
+                    if (d.solar_panel_power > 0) lines.push('⚡ Production estimée: <b>' + Math.round(d.weather_expected_power || 0) + ' W</b> (facteur horaire: ' + ((d.weather_time_factor || 0) * 100).toFixed(0) + '%)');
                     if (d.weather_rain > 0) lines.push('🌧️ Pluie: <b>' + d.weather_rain + ' mm</b>');
                     if (d.weather_snow > 0) lines.push('❄️ Neige: <b>' + d.weather_snow + ' cm</b>');
                     document.getElementById('weatherDetailContent').innerHTML = lines.join('<br>');
@@ -618,6 +626,18 @@
                         }
                     } else {
                         wb.style.display = 'none';
+                    }
+                }
+
+                var epb = document.getElementById('expectedPowerBadge');
+                if (epb) {
+                    if (d.solar_panel_power > 0 && d.e_weather && !d.night_mode) {
+                        epb.style.display = 'inline-flex';
+                        var ep = Math.round(d.weather_expected_power || 0);
+                        document.getElementById('expectedPowerValue').textContent = ep + ' W';
+                        epb.style.background = d.e_equip2 ? (ep >= (d.equip2_max_power || 0) ? '#27ae60' : '#e67e22') : '#3498db';
+                    } else {
+                        epb.style.display = 'none';
                     }
                 }
 

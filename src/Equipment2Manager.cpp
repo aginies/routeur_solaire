@@ -37,9 +37,12 @@ bool Equipment2Manager::isCurrentlyOn() {
 
 bool Equipment2Manager::isBypassedByCloud() {
     if (!_config || !_config->e_equip2) return false;
-    // If it's scheduled, it runs regardless of clouds (force mode)
     if (isScheduled(Utils::getCurrentMinutes())) return false;
-    // Otherwise, if WeatherManager says it's too cloudy, we bypass
+
+    if (_config->solar_panel_power > 0) {
+        return WeatherManager::getExpectedSolarPower() < _config->equip2_max_power;
+    }
+
     return WeatherManager::isTooCloudy();
 }
 

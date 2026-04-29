@@ -29,6 +29,8 @@ public:
     static String getWeatherIcon() { return _weatherIcon; }
     static uint32_t getLastUpdate() { return _lastUpdate; }
     static bool isTooCloudy();
+    static float getTimeFactor();
+    static float getExpectedSolarPower();
     static void forceUpdate() { _updateRequested = true; }
 
 private:

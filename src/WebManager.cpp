@@ -139,6 +139,8 @@ void WebManager::applyRequestParams(AsyncWebServerRequest *request, Config &cfg)
     if (has("WEATHER_LAT")) cfg.weather_lat = get("WEATHER_LAT");
     if (has("WEATHER_LON")) cfg.weather_lon = get("WEATHER_LON");
     if (has("WEATHER_THRESH")) cfg.weather_cloud_threshold = get("WEATHER_THRESH").toInt();
+    if (has("SOLAR_PANEL_POWER")) cfg.solar_panel_power = get("SOLAR_PANEL_POWER").toInt();
+    if (has("SOLAR_PANEL_AZIMUTH")) cfg.solar_panel_azimuth = get("SOLAR_PANEL_AZIMUTH").toInt();
 
     // Web
     if (has("WEB_USER")) cfg.web_user = get("WEB_USER");
@@ -421,6 +423,8 @@ void WebManager::setupRoutes() {
         doc["weather_lat"] = _config->weather_lat;
         doc["weather_lon"] = _config->weather_lon;
         doc["weather_cloud_threshold"] = _config->weather_cloud_threshold;
+        doc["solar_panel_power"] = _config->solar_panel_power;
+        doc["solar_panel_azimuth"] = _config->solar_panel_azimuth;
         doc["fake_shelly"] = _config->fake_shelly;
         doc["web_user"] = _config->web_user;
         doc["web_password"] = _config->web_password;
@@ -661,6 +665,7 @@ void WebManager::streamStatusJson(AsyncWebServerRequest *request) {
     doc["max_stats_days"] = 30;
 #endif
     doc["equip2_bypassed"] = Equipment2Manager::isBypassedByCloud();
+    doc["equip2_max_power"] = _config->equip2_max_power;
     doc["night_mode"] = SolarMonitor::isNight(Utils::getCurrentMinutes());
 
     // Weather
@@ -682,6 +687,9 @@ void WebManager::streamStatusJson(AsyncWebServerRequest *request) {
         doc["weather_age"] = millis() - WeatherManager::getLastUpdate();
         doc["weather_icon"] = WeatherManager::getWeatherIcon();
         doc["weather_too_cloudy"] = WeatherManager::isTooCloudy();
+        doc["weather_time_factor"] = WeatherManager::getTimeFactor();
+        doc["weather_expected_power"] = WeatherManager::getExpectedSolarPower();
+        doc["solar_panel_power"] = _config->solar_panel_power;
     }
 
     time_t t_now; time(&t_now); struct tm ti; localtime_r(&t_now, &ti);

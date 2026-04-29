@@ -107,6 +107,8 @@ struct Config {
     String weather_lat = "";
     String weather_lon = "";
     int weather_cloud_threshold = 40; // Minimum solar confidence percentage
+    int solar_panel_power = 0; // Max solar panel power (W), 0 = disabled
+    int solar_panel_azimuth = 180; // Panel azimuth (0=N, 90=E, 180=S, 270=W)
 
     // Incremental Controller (pv-router algorithm)
     float delta = 50.0;          // upper threshold (W) — above this, importing too much

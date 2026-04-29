@@ -91,6 +91,40 @@ bool WeatherManager::isTooCloudy() {
     return getSolarConfidence() < _config->weather_cloud_threshold;
 }
 
+float WeatherManager::getTimeFactor() {
+    if (!_config || !_config->e_weather || _sunrise.length() < 16 || _sunset.length() < 16)
+        return 0.0f;
+
+    int sunriseMin = _sunrise.substring(11, 13).toInt() * 60 + _sunrise.substring(14, 16).toInt();
+    int sunsetMin  = _sunset.substring(11, 13).toInt() * 60 + _sunset.substring(14, 16).toInt();
+    if (sunsetMin <= sunriseMin) return 0.0f;
+
+    time_t now;
+    time(&now);
+    struct tm ti;
+    localtime_r(&now, &ti);
+    int currMin = ti.tm_hour * 60 + ti.tm_min;
+
+    if (currMin <= sunriseMin || currMin >= sunsetMin) return 0.0f;
+
+    float progress = (float)(currMin - sunriseMin) / (float)(sunsetMin - sunriseMin);
+    float elevationFactor = sinf(progress * M_PI);
+
+    // Sun azimuth goes ~90° (east/sunrise) to ~270° (west/sunset)
+    float sunAzimuth = 90.0f + 180.0f * progress;
+    float azimuthDiff = (sunAzimuth - _config->solar_panel_azimuth) * M_PI / 180.0f;
+    float azimuthFactor = fmaxf(0.0f, cosf(azimuthDiff));
+
+    return elevationFactor * azimuthFactor;
+}
+
+float WeatherManager::getExpectedSolarPower() {
+    if (!_config || !_config->e_weather || _config->solar_panel_power <= 0)
+        return 0.0f;
+
+    return _config->solar_panel_power * getTimeFactor() * (getSolarConfidence() / 100.0f);
+}
+
 bool WeatherManager::isNight() {
     if (!_config || !_config->e_weather || _sunrise.length() < 16 || _sunset.length() < 16) return false;
 
