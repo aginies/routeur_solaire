@@ -106,6 +106,8 @@
     "weather_lat": "",
     "weather_lon": "",
     "weather_cloud_threshold": 75,
+    "solar_panel_power": 0,
+    "solar_panel_azimuth": 180,
 
     "web_user": "",
     "web_password": ""

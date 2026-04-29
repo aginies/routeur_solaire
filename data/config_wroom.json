@@ -37,7 +37,7 @@
     "equip1_name": "Ballon",
     "equip1_max_power": 2300.0,
     "export_setpoint": 0.0,
-    "e_equip1": false,
+    "e_equip1": true,
     "equip1_shelly_ip": "",
     "equip1_shelly_index": 0,
     "e_equip1_mqtt": false,
@@ -91,7 +91,7 @@
     "zx_timeout_ms": 500,
     "debug_phase": false,
 
-    "e_mqtt": true,
+    "e_mqtt": false,
     "mqtt_ip": "10.0.10.101",
     "mqtt_port": 1883,
     "mqtt_user": "",
@@ -106,6 +106,8 @@
     "weather_lat": "",
     "weather_lon": "",
     "weather_cloud_threshold": 40,
+    "solar_panel_power": 0,
+    "solar_panel_azimuth": 180,
 
     "web_user": "",
     "web_password": ""
