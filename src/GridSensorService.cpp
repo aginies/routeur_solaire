@@ -160,7 +160,8 @@ float GridSensorService::getShellyPower() {
     http.setConnectTimeout(2000);
     http.setTimeout(_config->shelly_timeout * 1000);
     
-    String url = "http://" + _config->shelly_em_ip + "/emeter/" + String(_config->shelly_em_index);
+    char url[80];
+    snprintf(url, sizeof(url), "http://%s/emeter/%d", _config->shelly_em_ip.c_str(), _config->shelly_em_index);
     http.begin(client, url);
     
     int httpCode = http.GET();

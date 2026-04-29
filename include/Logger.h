@@ -46,7 +46,7 @@ public:
 #endif
 
 private:
-    static String levelToString(LogLevel level);
+    static const char* levelToString(LogLevel level);
     static void flushFile(const char* filename, std::vector<String>& buffer);
     static void rotate(const char* filename);
 

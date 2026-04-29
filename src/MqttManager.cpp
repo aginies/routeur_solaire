@@ -94,20 +94,24 @@ void MqttManager::onMqttDisconnect(espMqttClientTypes::DisconnectReason reason) 
 void MqttManager::onMqttMessage(const espMqttClientTypes::MessageProperties& properties,
                                  const char* topic, const uint8_t* payload,
                                  size_t len, size_t index, size_t total) {
-    String t = String(topic);
     size_t cplen = (len > 31) ? 31 : len;
     char buffer[32];
     memcpy(buffer, payload, cplen);
     buffer[cplen] = '\0';
 
-    if (t == _config->shelly_mqtt_topic) {
+    if (strcmp(topic, _config->shelly_mqtt_topic.c_str()) == 0) {
         latestMqttGridPower = atof(buffer);
         hasLatestMqttGridPower = true;
         return;
     }
 
-    String voltageTopic = _config->shelly_mqtt_topic.substring(0, _config->shelly_mqtt_topic.lastIndexOf('/')) + "/voltage";
-    if (t == voltageTopic) {
+    static String cachedVoltageTopic;
+    static String lastPowerTopic;
+    if (lastPowerTopic != _config->shelly_mqtt_topic) {
+        lastPowerTopic = _config->shelly_mqtt_topic;
+        cachedVoltageTopic = _config->shelly_mqtt_topic.substring(0, _config->shelly_mqtt_topic.lastIndexOf('/')) + "/voltage";
+    }
+    if (strcmp(topic, cachedVoltageTopic.c_str()) == 0) {
         float v = atof(buffer);
         if (v > 100.0 && v < 300.0) {
             latestMqttGridVoltage = v;
@@ -115,13 +119,13 @@ void MqttManager::onMqttMessage(const espMqttClientTypes::MessageProperties& pro
         return;
     }
 
-    if (_config->e_equip1_mqtt && _config->equip1_mqtt_topic.length() > 0 && t == _config->equip1_mqtt_topic) {
+    if (_config->e_equip1_mqtt && _config->equip1_mqtt_topic.length() > 0 && strcmp(topic, _config->equip1_mqtt_topic.c_str()) == 0) {
         latestMqttEq1Power = parseShellySwitchPower(payload, len);
         hasLatestMqttEq1Power = true;
         return;
     }
 
-    if (_config->e_equip2_mqtt && _config->equip2_mqtt_topic.length() > 0 && t == _config->equip2_mqtt_topic) {
+    if (_config->e_equip2_mqtt && _config->equip2_mqtt_topic.length() > 0 && strcmp(topic, _config->equip2_mqtt_topic.c_str()) == 0) {
         latestMqttEq2Power = parseShellySwitchPower(payload, len);
         hasLatestMqttEq2Power = true;
         return;
@@ -190,33 +194,47 @@ void MqttManager::publishStatus(float gridPower, float equipmentPower, bool equi
                               float esp32Temp, bool fanActive, float ssrTemp, int fanPercent) {
     if (!_mqttClient.connected()) return;
 
-    String base = _config->mqtt_name;
-    _mqttClient.publish((base + "/power").c_str(), 0, _config->mqtt_retain, String(gridPower).c_str());
-    _mqttClient.publish((base + "/equipment_power").c_str(), 0, _config->mqtt_retain, String(equipmentPower).c_str());
-    _mqttClient.publish((base + "/equipment_percent").c_str(), 0, _config->mqtt_retain, String(equipmentPercent, 1).c_str());
-    _mqttClient.publish((base + "/esp32_temp").c_str(), 0, _config->mqtt_retain, String(esp32Temp, 1).c_str());
-    _mqttClient.publish((base + "/fan_active").c_str(), 0, _config->mqtt_retain, fanActive ? "ON" : "OFF");
-    _mqttClient.publish((base + "/fan_percent").c_str(), 0, _config->mqtt_retain, String(fanPercent).c_str());
-
-    if (ssrTemp > -100.0) {
-        _mqttClient.publish((base + "/ssr_temp").c_str(), 0, _config->mqtt_retain, String(ssrTemp, 1).c_str());
+    static String tPower, tEqPower, tEqPercent, tEspTemp, tFanActive, tFanPercent, tSsrTemp, tStatusJson;
+    if (tPower.length() == 0) {
+        const String& base = _config->mqtt_name;
+        tPower = base + "/power";
+        tEqPower = base + "/equipment_power";
+        tEqPercent = base + "/equipment_percent";
+        tEspTemp = base + "/esp32_temp";
+        tFanActive = base + "/fan_active";
+        tFanPercent = base + "/fan_percent";
+        tSsrTemp = base + "/ssr_temp";
+        tStatusJson = base + "/status_json";
     }
 
-    // JSON Status
-    JsonDocument doc;
-    doc["grid_power"] = gridPower;
-    doc["equipment_power"] = equipmentPower;
-    doc["equipment_active"] = equipmentActive;
-    doc["force_mode"] = forceMode;
-    doc["equipment_percent"] = round(equipmentPercent * 10) / 10.0;
-    doc["ssr_temp"] = ssrTemp;
-    doc["esp32_temp"] = esp32Temp;
-    doc["fan_active"] = fanActive;
-    doc["fan_percent"] = fanPercent;
+    char val[16];
+    bool retain = _config->mqtt_retain;
+    snprintf(val, sizeof(val), "%.0f", gridPower);
+    _mqttClient.publish(tPower.c_str(), 0, retain, val);
+    snprintf(val, sizeof(val), "%.0f", equipmentPower);
+    _mqttClient.publish(tEqPower.c_str(), 0, retain, val);
+    snprintf(val, sizeof(val), "%.1f", equipmentPercent);
+    _mqttClient.publish(tEqPercent.c_str(), 0, retain, val);
+    snprintf(val, sizeof(val), "%.1f", esp32Temp);
+    _mqttClient.publish(tEspTemp.c_str(), 0, retain, val);
+    _mqttClient.publish(tFanActive.c_str(), 0, retain, fanActive ? "ON" : "OFF");
+    snprintf(val, sizeof(val), "%d", fanPercent);
+    _mqttClient.publish(tFanPercent.c_str(), 0, retain, val);
 
-    String payload;
-    serializeJson(doc, payload);
-    _mqttClient.publish((base + "/status_json").c_str(), 0, _config->mqtt_retain, payload.c_str());
+    if (ssrTemp > -100.0) {
+        snprintf(val, sizeof(val), "%.1f", ssrTemp);
+        _mqttClient.publish(tSsrTemp.c_str(), 0, retain, val);
+    }
+
+    char payload[256];
+    snprintf(payload, sizeof(payload),
+        "{\"grid_power\":%.0f,\"equipment_power\":%.0f,\"equipment_active\":%s,"
+        "\"force_mode\":%s,\"equipment_percent\":%.1f,\"ssr_temp\":%.1f,"
+        "\"esp32_temp\":%.1f,\"fan_active\":%s,\"fan_percent\":%d}",
+        gridPower, equipmentPower, equipmentActive ? "true" : "false",
+        forceMode ? "true" : "false", round(equipmentPercent * 10) / 10.0,
+        ssrTemp, esp32Temp, fanActive ? "true" : "false", fanPercent);
+    _mqttClient.publish(tStatusJson.c_str(), 0, retain, payload);
     Logger::debug("MQTT: Data published");
 }
 

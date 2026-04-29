@@ -87,14 +87,20 @@ void SolarMonitor::monitorTask(void* pvParameters) {
         // 1. Update Safety (Internal ESP32 temp)
         TemperatureManager::lastEspTemp = temperatureRead();
 
-        // 2. Night Mode & Boost Calculation
-        time_t t_now;
-        time(&t_now);
-        struct tm ti;
-        localtime_r(&t_now, &ti);
-        int currMin = ti.tm_hour * 60 + ti.tm_min;
-        bool ntpSynced = (ti.tm_year + 1900 >= 2024);
-        bool nightActive = ntpSynced ? isNight(currMin) : false;
+        // 2. Night Mode & Boost Calculation (cached, changes only on minute boundaries)
+        static uint32_t lastNightCheck = 0;
+        static bool nightActive = false;
+        static bool ntpSynced = false;
+        if (now - lastNightCheck >= 60000 || lastNightCheck == 0) {
+            lastNightCheck = now;
+            time_t t_now;
+            time(&t_now);
+            struct tm ti;
+            localtime_r(&t_now, &ti);
+            int currMin = ti.tm_hour * 60 + ti.tm_min;
+            ntpSynced = (ti.tm_year + 1900 >= 2024);
+            nightActive = ntpSynced ? isNight(currMin) : false;
+        }
         bool forcedWindow = ActuatorManager::inForceWindow();
         bool boostActive = (millis() / 1000) < ActuatorManager::boostEndTime;
         int currentPollInterval = nightActive ? _config->night_poll_interval : _config->poll_interval;

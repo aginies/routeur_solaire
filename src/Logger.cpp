@@ -33,7 +33,7 @@ void Logger::init(const char* filename, size_t maxBytes) {
     }
 }
 
-String Logger::levelToString(LogLevel level) {
+const char* Logger::levelToString(LogLevel level) {
     switch (level) {
         case LOG_DEBUG: return "DEBUG";
         case LOG_INFO:  return "INFO";
@@ -45,7 +45,7 @@ String Logger::levelToString(LogLevel level) {
 
 void Logger::log(const String& message, LogLevel level, bool critical) {
     if (_mutex == nullptr || xSemaphoreTakeRecursive(_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
-        Serial.printf("[%s] %s\n", levelToString(level).c_str(), message.c_str());
+        Serial.printf("[%s] %s\n", levelToString(level), message.c_str());
         return;
     }
 
@@ -56,7 +56,9 @@ void Logger::log(const String& message, LogLevel level, bool critical) {
     char timestamp[25];
     strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", &timeinfo);
     
-    String logEntry = String(timestamp) + " [" + levelToString(level) + "] " + message;
+    char prefix[40];
+    snprintf(prefix, sizeof(prefix), "%s [%s] ", timestamp, levelToString(level));
+    String logEntry = String(prefix) + message;
     
     // Always print to Serial
     Serial.println(logEntry);

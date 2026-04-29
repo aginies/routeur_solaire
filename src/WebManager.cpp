@@ -697,7 +697,8 @@ String WebManager::getStatusJson() {
     doc["uptime"] = now / 1000;
     doc["rssi"] = cachedRssi;
     doc["version"] = String(FIRMWARE_VERSION);
-    doc["build_time"] = String(__DATE__) + " " + String(__TIME__);
+    static const String buildTime = String(__DATE__) + " " + String(__TIME__);
+    doc["build_time"] = buildTime;
 
     doc["esp_temp"] = cachedEspTemp;
 
