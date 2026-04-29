@@ -13,7 +13,7 @@ This C++ version is a **migration from the original MicroPython implementation f
 - **Asynchronous Web Server**: Provides a rich web interface for real-time monitoring, logging, and configuration without blocking the control loop.
 - **Advanced Statistics**: Tracks and stores daily/hourly energy usage (Import/Export/Redirected) with historical data retention.
 - **Safety & Protection**: Includes watchdog timers, temperature monitoring (Internal & SSR heatsink), and automatic fan control.
-- **Weather-Aware Control**: Uses Open-Meteo cloud cover, solar radiation, sunrise, and sunset data to improve equipment decisions.
+- **Weather-Aware Control**: Uses Open-Meteo cloud cover, solar radiation, sunrise, and sunset data to improve equipment decisions. When solar panel power and azimuth are configured, estimates real-time expected production to decide whether Equipment 2 can run. **Requires internet access** for Open-Meteo API calls.
 - **Home Assistant Integration**: MQTT support with auto-discovery for easy integration into smart home systems.
 
 ## Architecture
@@ -104,7 +104,7 @@ The system can be fully configured via the web interface. Below is a detailed br
 - **Smart Modes**:
     - **Force Window**: Daily scheduled blocks (e.g., for off-peak water heating).
     - **Night Mode**: Reduces polling frequency during non-productive hours. When Open-Meteo is enabled, sunrise and sunset are fetched automatically and used instead of the manually configured night window.
-    - **Weather Anticipation**: Optional Open-Meteo integration using latitude/longitude to estimate solar availability and pause Equipment 2 when conditions are not favorable.
+    - **Weather Anticipation**: Optional Open-Meteo integration using latitude/longitude to estimate solar availability and pause Equipment 2 when conditions are not favorable. When `solar_panel_power` is configured, the system estimates real-time production using a time-of-day curve (sine from sunrise to sunset) adjusted by panel azimuth and solar confidence. Requires internet connectivity.
 
 ### Hardware & Safety
 - **Regulation Modes**:
@@ -186,12 +186,15 @@ The system uses a priority-ordered state machine. States at higher priority alwa
 
 ## Weather And Solar Confidence
 
-When weather support is enabled, the firmware calls the Open-Meteo Forecast API every 9 minutes. The data is used for two separate decisions:
+When weather support is enabled (`e_weather = true`), the firmware calls the [Open-Meteo Forecast API](https://open-meteo.com/) every 9 minutes. **This requires internet access** — the ESP32 must be able to reach `api.open-meteo.com` over HTTPS.
 
-- **Solar confidence index**: The web interface displays a simple confidence percentage estimating the available solar potential compared with clear-sky conditions.
+The data is used for several decisions:
+
+- **Solar confidence index**: The web interface displays a confidence percentage estimating the available solar potential compared with clear-sky conditions (90% radiation-based, 10% cloud-layer-based).
 - **Radiation-based cloud impact**: `shortwave_radiation_instant` is compared with a realistic clear-sky ground reference derived from `terrestrial_radiation_instant` to estimate usable sunlight right now.
 - **Cloud layer fallback**: Low, mid, and high cloud cover are still fetched and combined as a fallback/stabilizer when radiation data is missing or not usable.
-- **Equipment 2 start condition**: Equipment 2 can start only when the solar confidence reaches the configured minimum threshold, unless it is inside a forced schedule.
+- **Equipment 2 start condition (percentage mode)**: When `solar_panel_power = 0`, Equipment 2 can start only when the solar confidence reaches the configured `weather_cloud_threshold` percentage, unless it is inside a forced schedule.
+- **Equipment 2 start condition (power estimation mode)**: When `solar_panel_power > 0`, the system estimates the expected solar production using: `expected_power = solar_panel_power × time_factor × (solar_confidence / 100)`. The time factor is a sine curve from sunrise to sunset (0 at sunrise, 1.0 at solar noon, 0 at sunset), adjusted by panel azimuth — east-facing panels (90°) peak in the morning, south-facing (180°) at noon, west-facing (270°) in the afternoon. Equipment 2 starts only when `expected_power >= equip2_max_power`.
 - **Automatic night mode**: `daily=sunrise,sunset` with `timezone=auto` provides local sunrise and sunset times. When available, these values define night mode instead of the manual `night_start` / `night_end` settings.
 
 Manual night start/end values remain as a fallback when weather support is disabled or sunrise/sunset data has not been received yet.
@@ -366,7 +369,9 @@ Default values are shown. All fields are editable via the Web UI.
 | `e_weather` | bool | `false` | Enable Open-Meteo weather |
 | `weather_lat` | String | `""` | Latitude |
 | `weather_lon` | String | `""` | Longitude |
-| `weather_cloud_threshold` | int | `40` | Min solar confidence % for Eq2 |
+| `weather_cloud_threshold` | int | `40` | Min solar confidence % for Eq2 (used when `solar_panel_power = 0`) |
+| `solar_panel_power` | int | `0` | Solar panel peak power in watts (e.g. 3000 for 3kWc). When > 0, enables power-based Eq2 decision instead of percentage threshold |
+| `solar_panel_azimuth` | int | `180` | Panel orientation in degrees: 0=North, 90=East, 180=South, 270=West |
 
 ### Temperature / Fan
 | Field | Type | Default | Description |
@@ -531,7 +536,9 @@ Check serial log for `task_wdt: Task watchdog got triggered`. See [WDT_EXPLANATI
 If Equipment 2 (priority=1) never activates:
 - Eq1 must reach ≥95% duty cycle AND there must be surplus above Eq2's power + delta.
 - If `max_duty_percent` is <95, Eq1 can never hit 95% duty → Eq2 never triggers.
-- Check `weather_cloud_threshold` — if solar confidence is below threshold, Eq2 is bypassed unless scheduled.
+- If `solar_panel_power > 0`: check the estimated production in the weather popup — Eq2 only starts when estimated power >= `equip2_max_power`. Try lowering `solar_panel_power` to be more aggressive, or check `solar_panel_azimuth` matches your real panel orientation.
+- If `solar_panel_power = 0`: check `weather_cloud_threshold` — if solar confidence is below threshold, Eq2 is bypassed unless scheduled.
+- Verify `e_weather = true` and the ESP32 has internet access (Open-Meteo API requires HTTPS to `api.open-meteo.com`).
 - Verify `e_equip2 = true` and the Shelly is reachable.
 
 ## Known Limitations
