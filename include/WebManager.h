@@ -11,7 +11,6 @@ public:
     static void loop();
     static String getStatusJson();
     static String getHistoryJson();
-    static String templateProcessor(const String& var);
 
 private:
     static void setupRoutes();

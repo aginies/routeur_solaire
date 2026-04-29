@@ -33,7 +33,7 @@
         input[type="password"],
         input[type="number"],
         select {
-            width: 100%%;
+            width: 100%;
             padding: 10px;
             border: 1px solid #444;
             border-radius: 8px;
@@ -133,23 +133,22 @@
 <body>
     <div class="form-container">
         <div class="header">
-            <h1>Configuration %NAME% (%VERSION%)</h1>
+            <h1>Configuration <span id="headerName">...</span> (<span id="headerVersion">...</span>)</h1>
         </div>
-        %REBOOT_BANNER%
         
         <form id="configForm" action="/save_config" method="POST">
             <div class="form-group" style="padding: 0 10px;">
                 <label for="NAME">Nom du système</label>
-                <input type="text" id="NAME" name="NAME" value="%NAME%">
+                <input type="text" id="NAME" name="NAME">
             </div>
 
             <div class="form-group" style="padding: 0 10px;">
                 <label for="TIMEZONE">Fuseau horaire (Timezone)</label>
                 <select id="TIMEZONE" name="TIMEZONE">
-                    <option value="CET-1CEST,M3.5.0,M10.5.0/3" %TZ_PARIS%>Paris, Bruxelles, Berlin, Madrid</option>
-                    <option value="GMT0BST,M3.5.0,M10.5.0/3"   %TZ_LONDON%>Londres, Dublin, Lisbonne</option>
-                    <option value="EET-2EEST,M3.5.0,M10.5.0/3" %TZ_ATHENS%>Athènes, Helsinki, Kiev</option>
-                    <option value="UTC0"                       %TZ_UTC%>UTC / GMT</option>
+                    <option value="CET-1CEST,M3.5.0,M10.5.0/3">Paris, Bruxelles, Berlin, Madrid</option>
+                    <option value="GMT0BST,M3.5.0,M10.5.0/3"  >Londres, Dublin, Lisbonne</option>
+                    <option value="EET-2EEST,M3.5.0,M10.5.0/3">Athènes, Helsinki, Kiev</option>
+                    <option value="UTC0"                      >UTC / GMT</option>
                 </select>
                 <p style="font-size: 0.8em; color: #888; margin-top: 4px;">Utilisé pour la synchronisation de l'heure (NTP) et les logs.</p>
             </div>
@@ -162,74 +161,74 @@
                     <div class="form-group">
                         <label for="E_WIFI">Utiliser un réseau existant:</label>
                         <select id="E_WIFI" name="E_WIFI">
-                            <option value="True"  %EXTERNAL_WIFI_YES%>True</option>
-                            <option value="False" %EXTERNAL_WIFI_NO%>False</option>
+                            <option value="True" >True</option>
+                            <option value="False">False</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label for="WIFI_SSID">WiFi SSID:</label>
-                        <input type="text" id="WIFI_SSID" name="WIFI_SSID" value="%WIFI_SSID%">
+                        <input type="text" id="WIFI_SSID" name="WIFI_SSID">
                     </div>
                     <div class="form-group">
                         <label for="WIFI_PASSWORD">WiFi Password:</label>
-                        <input type="password" id="WIFI_PASSWORD" name="WIFI_PASSWORD" value="%WIFI_PASSWORD%">
+                        <input type="password" id="WIFI_PASSWORD" name="WIFI_PASSWORD">
                     </div>
                     <div class="form-group">
                         <label for="WIFI_STATIC_IP">Static IP (laisser vide pour DHCP):</label>
-                        <input type="text" id="WIFI_STATIC_IP" name="WIFI_STATIC_IP" value="%WIFI_STATIC_IP%" pattern="^(\d{1,3}\.){3}\d{1,3}$" placeholder="ex: 192.168.1.100">
+                        <input type="text" id="WIFI_STATIC_IP" name="WIFI_STATIC_IP" pattern="^(\d{1,3}\.){3}\d{1,3}$" placeholder="ex: 192.168.1.100">
                     </div>
                     <div class="form-group">
                         <label for="WIFI_SUBNET">Subnet Mask:</label>
-                        <input type="text" id="WIFI_SUBNET" name="WIFI_SUBNET" value="%WIFI_SUBNET%" pattern="^(\d{1,3}\.){3}\d{1,3}$" placeholder="ex: 255.255.255.0">
+                        <input type="text" id="WIFI_SUBNET" name="WIFI_SUBNET" pattern="^(\d{1,3}\.){3}\d{1,3}$" placeholder="ex: 255.255.255.0">
                     </div>
                     <div class="form-group">
                         <label for="WIFI_GATEWAY">Gateway:</label>
-                        <input type="text" id="WIFI_GATEWAY" name="WIFI_GATEWAY" value="%WIFI_GATEWAY%" pattern="^(\d{1,3}\.){3}\d{1,3}$" placeholder="ex: 192.168.1.1">
+                        <input type="text" id="WIFI_GATEWAY" name="WIFI_GATEWAY" pattern="^(\d{1,3}\.){3}\d{1,3}$" placeholder="ex: 192.168.1.1">
                     </div>
                     <div class="form-group">
                         <label for="WIFI_DNS">DNS Server:</label>
-                        <input type="text" id="WIFI_DNS" name="WIFI_DNS" value="%WIFI_DNS%" pattern="^(\d{1,3}\.){3}\d{1,3}$" placeholder="ex: 8.8.8.8">
+                        <input type="text" id="WIFI_DNS" name="WIFI_DNS" pattern="^(\d{1,3}\.){3}\d{1,3}$" placeholder="ex: 8.8.8.8">
                     </div>
                     <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
                     
                     <h3>Shelly EM (mesure de la consommation)</h3>
                     <div class="form-group">
                         <label for="SHELLY_EM_IP">IP du Shelly EM:</label>
-                        <input type="text" id="SHELLY_EM_IP" name="SHELLY_EM_IP" value="%SHELLY_EM_IP%" pattern="^(\d{1,3}\.){3}\d{1,3}$" placeholder="ex: 192.168.1.50">
+                        <input type="text" id="SHELLY_EM_IP" name="SHELLY_EM_IP" pattern="^(\d{1,3}\.){3}\d{1,3}$" placeholder="ex: 192.168.1.50">
                         <button type="button" onclick="testShelly('em',this)" style="margin-left:8px;padding:4px 12px;border-radius:6px;border:1px solid #3498db;background:#2c3e50;color:#3498db;cursor:pointer;">Tester</button>
                         <span id="testEm" style="margin-left:8px;font-size:0.85em;"></span>
                     </div>
                     <div class="form-group">
                         <label for="SHELLY_EM_INDEX">Pince Shelly EM (Canal):</label>
                         <select id="SHELLY_EM_INDEX" name="SHELLY_EM_INDEX">
-                            <option value="0" %SHELLY_EM_INDEX_0%>Pince 1 (Index 0)</option>
-                            <option value="1" %SHELLY_EM_INDEX_1%>Pince 2 (Index 1)</option>
+                            <option value="0">Pince 1 (Index 0)</option>
+                            <option value="1">Pince 2 (Index 1)</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label for="E_SHELLY_MQTT">Mode MQTT (plus rapide):</label>
                         <select id="E_SHELLY_MQTT" name="E_SHELLY_MQTT">
-                            <option value="True"  %SHELLY_MQTT_YES%>Activé (reçoit les données via MQTT)</option>
-                            <option value="False" %SHELLY_MQTT_NO%>Désactivé (utilise le mode HTTP standard)</option>
+                            <option value="True" >Activé (reçoit les données via MQTT)</option>
+                            <option value="False">Désactivé (utilise le mode HTTP standard)</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label for="SHELLY_MQTT_TOPIC">Topic MQTT Shelly:</label>
-                        <input type="text" id="SHELLY_MQTT_TOPIC" name="SHELLY_MQTT_TOPIC" value="%SHELLY_MQTT_TOPIC%">
+                        <input type="text" id="SHELLY_MQTT_TOPIC" name="SHELLY_MQTT_TOPIC">
                         <p style="font-size: 0.8em; color: #888; margin-top: 4px;">Utiliser le même index que la Pince Shelly EM (0 ou 1) dans le topic.</p>
                     </div>
                     <div class="form-group">
                         <label for="POLL_INTERVAL">Intervalle de lecture HTTP (secondes):</label>
-                        <input type="number" min="1" max="60" id="POLL_INTERVAL" name="POLL_INTERVAL" value="%POLL_INTERVAL%">
+                        <input type="number" min="1" max="60" id="POLL_INTERVAL" name="POLL_INTERVAL">
                     </div>
                     <div class="form-group">
                         <label for="SHELLY_TIMEOUT">Timeout Requête HTTP (sec):</label>
-                        <input type="number" min="1" max="10" id="SHELLY_TIMEOUT" name="SHELLY_TIMEOUT" value="%SHELLY_TIMEOUT%">
+                        <input type="number" min="1" max="10" id="SHELLY_TIMEOUT" name="SHELLY_TIMEOUT">
                         <p style="font-size: 0.8em; color: #888; margin-top: 4px;">Temps max d'attente pour une réponse Shelly.</p>
                     </div>
                     <div class="form-group">
                         <label for="SAFETY_TIMEOUT">Délai Sécurité sans données (sec):</label>
-                        <input type="number" min="2" max="60" id="SAFETY_TIMEOUT" name="SAFETY_TIMEOUT" value="%SAFETY_TIMEOUT%">
+                        <input type="number" min="2" max="60" id="SAFETY_TIMEOUT" name="SAFETY_TIMEOUT">
                         <p style="font-size: 0.8em; color: #888; margin-top: 4px;">Le système s'arrête si aucune donnée n'est reçue pendant ce délai.</p>
                     </div>
                     <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
@@ -238,29 +237,29 @@
                     <div class="form-group">
                         <label for="E_MQTT">Activer MQTT:</label>
                         <select id="E_MQTT" name="E_MQTT">
-                            <option value="True"  %MQTT_YES%>True</option>
-                            <option value="False" %MQTT_NO%>False</option>
+                            <option value="True" >True</option>
+                            <option value="False">False</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label for="MQTT_IP">IP du serveur MQTT:</label>
-                        <input type="text" id="MQTT_IP" name="MQTT_IP" value="%MQTT_IP%" pattern="^(\d{1,3}\.){3}\d{1,3}$" placeholder="ex: 192.168.1.10">
+                        <input type="text" id="MQTT_IP" name="MQTT_IP" pattern="^(\d{1,3}\.){3}\d{1,3}$" placeholder="ex: 192.168.1.10">
                     </div>
                     <div class="form-group">
                         <label for="MQTT_PORT">Port MQTT:</label>
-                        <input type="number" min="1" max="65535" id="MQTT_PORT" name="MQTT_PORT" value="%MQTT_PORT%">
+                        <input type="number" min="1" max="65535" id="MQTT_PORT" name="MQTT_PORT">
                     </div>
                     <div class="form-group">
                         <label for="MQTT_USER">Utilisateur MQTT:</label>
-                        <input type="text" id="MQTT_USER" name="MQTT_USER" value="%MQTT_USER%">
+                        <input type="text" id="MQTT_USER" name="MQTT_USER">
                     </div>
                     <div class="form-group">
                         <label for="MQTT_PASSWORD">Mot de passe MQTT:</label>
-                        <input type="password" id="MQTT_PASSWORD" name="MQTT_PASSWORD" value="%MQTT_PASSWORD%">
+                        <input type="password" id="MQTT_PASSWORD" name="MQTT_PASSWORD">
                     </div>
                     <div class="form-group">
                         <label for="MQTT_NAME">Nom MQTT (préfixe topic):</label>
-                        <input type="text" id="MQTT_NAME" name="MQTT_NAME" value="%MQTT_NAME%">
+                        <input type="text" id="MQTT_NAME" name="MQTT_NAME">
                     </div>
                 </div>
             </details>
@@ -272,46 +271,46 @@
                     <h3>Equipement 1 (+Mesure)</h3>
                     <div class="form-group">
                         <label for="EQUIP1_NAME">Nom de l'équipement:</label>
-                        <input type="text" id="EQUIP1_NAME" name="EQUIP1_NAME" value="%EQUIP1_NAME%">
+                        <input type="text" id="EQUIP1_NAME" name="EQUIP1_NAME">
                     </div>
                     <div class="form-group">
                         <label for="EQUIP1_MAX_POWER">Puissance max équipement (W):</label>
-                        <input type="number" min="1" max="3000" id="EQUIP1_MAX_POWER" name="EQUIP1_MAX_POWER" value="%EQUIP1_MAX_POWER%">
+                        <input type="number" min="1" max="3000" id="EQUIP1_MAX_POWER" name="EQUIP1_MAX_POWER">
                     </div>
                     <div class="form-group">
                         <label for="MAX_DUTY_PERCENT">Puissance max redirigee (100 = pas de limite):</label>
-                        <input type="number" step="1" min="0" max="100" id="MAX_DUTY_PERCENT" name="MAX_DUTY_PERCENT" value="%MAX_DUTY_PERCENT%">
+                        <input type="number" step="1" min="0" max="100" id="MAX_DUTY_PERCENT" name="MAX_DUTY_PERCENT">
                     </div>
                     <div class="form-group">
                         <label for="E_EQUIP1">Utiliser un Shelly pour mesurer Eq 1:</label>
                         <select id="E_EQUIP1" name="E_EQUIP1">
-                            <option value="True"  %EQUIP1_SHELLY_YES%>Oui (Utiliser un Shelly pour le retour de puissance)</option>
-                            <option value="False" %EQUIP1_SHELLY_NO%>Non (Calculer la puissance via le Duty Cycle)</option>
+                            <option value="True" >Oui (Utiliser un Shelly pour le retour de puissance)</option>
+                            <option value="False">Non (Calculer la puissance via le Duty Cycle)</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label for="EQUIP1_SHELLY_IP">IP du Shelly (Mesure EQ1):</label>
-                        <input type="text" id="EQUIP1_SHELLY_IP" name="EQUIP1_SHELLY_IP" value="%EQUIP1_SHELLY_IP%" pattern="^(\d{1,3}\.){3}\d{1,3}$" placeholder="ex: 192.168.1.61">
+                        <input type="text" id="EQUIP1_SHELLY_IP" name="EQUIP1_SHELLY_IP" pattern="^(\d{1,3}\.){3}\d{1,3}$" placeholder="ex: 192.168.1.61">
                         <button type="button" onclick="testShelly('eq1',this)" style="margin-left:8px;padding:4px 12px;border-radius:6px;border:1px solid #3498db;background:#2c3e50;color:#3498db;cursor:pointer;">Tester</button>
                         <span id="testEq1" style="margin-left:8px;font-size:0.85em;"></span>
                     </div>
                     <div class="form-group">
                         <label for="EQUIP1_SHELLY_INDEX">Pince/Canal Shelly (Eq 1):</label>
                         <select id="EQUIP1_SHELLY_INDEX" name="EQUIP1_SHELLY_INDEX">
-                            <option value="0" %EQUIP1_SHELLY_INDEX_0%>Index 0 (Normal / Pince 1)</option>
-                            <option value="1" %EQUIP1_SHELLY_INDEX_1%>Index 1 (Pince 2)</option>
+                            <option value="0">Index 0 (Normal / Pince 1)</option>
+                            <option value="1">Index 1 (Pince 2)</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label for="E_EQUIP1_MQTT">Mode MQTT (plus rapide):</label>
                         <select id="E_EQUIP1_MQTT" name="E_EQUIP1_MQTT">
-                            <option value="True"  %EQUIP1_MQTT_YES%>Activé (reçoit les données via MQTT)</option>
-                            <option value="False" %EQUIP1_MQTT_NO%>Désactivé (utilise le mode HTTP standard)</option>
+                            <option value="True" >Activé (reçoit les données via MQTT)</option>
+                            <option value="False">Désactivé (utilise le mode HTTP standard)</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label for="EQUIP1_MQTT_TOPIC">Topic MQTT puissance (Eq 1):</label>
-                        <input type="text" id="EQUIP1_MQTT_TOPIC" name="EQUIP1_MQTT_TOPIC" value="%EQUIP1_MQTT_TOPIC%" placeholder="ex: shellyplus1pm-XXID/status/switch:0">
+                        <input type="text" id="EQUIP1_MQTT_TOPIC" name="EQUIP1_MQTT_TOPIC" placeholder="ex: shellyplus1pm-XXID/status/switch:0">
                         <p style="font-size: 0.8em; color: #888; margin-top: 4px;">Le payload JSON (apower) ou float simple sont supportés.</p>
                     </div>
 
@@ -321,53 +320,53 @@
                     <div class="form-group">
                         <label for="E_EQUIP2">Activer l'équipement 2:</label>
                         <select id="E_EQUIP2" name="E_EQUIP2">
-                            <option value="True"  %EQUIP2_ENABLED_YES%>Oui (Activer la gestion du second équipement)</option>
-                            <option value="False" %EQUIP2_ENABLED_NO%>Non (Désactiver complètement)</option>
+                            <option value="True" >Oui (Activer la gestion du second équipement)</option>
+                            <option value="False">Non (Désactiver complètement)</option>
                         </select>
-                        %EQUIP2_LINK%
+                        <span id="eq2Link"></span>
                     </div>
                     <div class="form-group">
                         <label for="EQUIP2_NAME">Nom de l'équipement 2:</label>
-                        <input type="text" id="EQUIP2_NAME" name="EQUIP2_NAME" value="%EQUIP2_NAME%">
+                        <input type="text" id="EQUIP2_NAME" name="EQUIP2_NAME">
                     </div>
                     <div class="form-group">
                         <label for="EQUIP2_POWER">Puissance nominale Eq 2 (W):</label>
-                        <input type="number" min="1" max="10000" id="EQUIP2_POWER" name="EQUIP2_POWER" value="%EQUIP2_POWER%">
+                        <input type="number" min="1" max="10000" id="EQUIP2_POWER" name="EQUIP2_POWER">
                     </div>
                     <div class="form-group">
                         <label for="EQUIP2_PRIO">Priorité Eq 2:</label>
                         <select id="EQUIP2_PRIO" name="EQUIP2_PRIO">
-                            <option value="1" %EQUIP2_PRIO_1%>Equipement 1 d'abord</option>
-                            <option value="2" %EQUIP2_PRIO_2%>Equipement 2 d'abord</option>
+                            <option value="1">Equipement 1 d'abord</option>
+                            <option value="2">Equipement 2 d'abord</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label for="EQUIP2_MIN_TIME">Temps min de marche Eq 2 (min):</label>
-                        <input type="number" min="1" max="600" id="EQUIP2_MIN_TIME" name="EQUIP2_MIN_TIME" value="%EQUIP2_MIN_TIME%">
+                        <input type="number" min="1" max="600" id="EQUIP2_MIN_TIME" name="EQUIP2_MIN_TIME">
                     </div>
                     <div class="form-group">
                         <label for="EQUIP2_IP">IP du Shelly (Gestion Marche/Arrêt EQ2):</label>
-                        <input type="text" id="EQUIP2_IP" name="EQUIP2_IP" value="%EQUIP2_IP%" pattern="^(\d{1,3}\.){3}\d{1,3}$" placeholder="ex: 192.168.1.60">
+                        <input type="text" id="EQUIP2_IP" name="EQUIP2_IP" pattern="^(\d{1,3}\.){3}\d{1,3}$" placeholder="ex: 192.168.1.60">
                         <button type="button" onclick="testShelly('eq2',this)" style="margin-left:8px;padding:4px 12px;border-radius:6px;border:1px solid #3498db;background:#2c3e50;color:#3498db;cursor:pointer;">Tester</button>
                         <span id="testEq2" style="margin-left:8px;font-size:0.85em;"></span>
                     </div>
                     <div class="form-group">
                         <label for="EQUIP2_SHELLY_INDEX">Pince/Canal Shelly (Eq 2):</label>
                         <select id="EQUIP2_SHELLY_INDEX" name="EQUIP2_SHELLY_INDEX">
-                            <option value="0" %EQUIP2_SHELLY_INDEX_0%>Index 0 (Normal / Pince 1)</option>
-                            <option value="1" %EQUIP2_SHELLY_INDEX_1%>Index 1 (Pince 2)</option>
+                            <option value="0">Index 0 (Normal / Pince 1)</option>
+                            <option value="1">Index 1 (Pince 2)</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label for="E_EQUIP2_MQTT">Mode MQTT (plus rapide):</label>
                         <select id="E_EQUIP2_MQTT" name="E_EQUIP2_MQTT">
-                            <option value="True"  %EQUIP2_MQTT_YES%>Activé (reçoit les données via MQTT)</option>
-                            <option value="False" %EQUIP2_MQTT_NO%>Désactivé (utilise le mode HTTP standard)</option>
+                            <option value="True" >Activé (reçoit les données via MQTT)</option>
+                            <option value="False">Désactivé (utilise le mode HTTP standard)</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label for="EQUIP2_MQTT_TOPIC">Topic MQTT Shelly (Eq 2):</label>
-                        <input type="text" id="EQUIP2_MQTT_TOPIC" name="EQUIP2_MQTT_TOPIC" value="%EQUIP2_MQTT_TOPIC%" placeholder="ex: shellyplus1pm-XXXXXXXXXXXX/status/switch:0">
+                        <input type="text" id="EQUIP2_MQTT_TOPIC" name="EQUIP2_MQTT_TOPIC" placeholder="ex: shellyplus1pm-XXXXXXXXXXXX/status/switch:0">
                     </div>
                 </div>
             </details>
@@ -378,23 +377,23 @@
                 <div class="section-content">
                     <div class="form-group">
                         <label for="EXPORT_SETPOINT">Consigne réseau (W, 0 = zéro export):</label>
-                        <input type="number" id="EXPORT_SETPOINT" name="EXPORT_SETPOINT" value="%EXPORT_SETPOINT%">
+                        <input type="number" id="EXPORT_SETPOINT" name="EXPORT_SETPOINT">
                     </div>
                     <div class="form-group">
                         <label for="DELTA">Seuil haut Delta (W, import max tolere):</label>
-                        <input type="number" step="1" id="DELTA" name="DELTA" value="%DELTA%">
+                        <input type="number" step="1" id="DELTA" name="DELTA">
                     </div>
                     <div class="form-group">
                         <label for="DELTANEG">Seuil bas Deltaneg (W, export max tolere):</label>
-                        <input type="number" step="1" id="DELTANEG" name="DELTANEG" value="%DELTANEG%">
+                        <input type="number" step="1" id="DELTANEG" name="DELTANEG">
                     </div>
                     <div class="form-group">
                         <label for="COMPENSATION">Gain compensation (100 = standard):</label>
-                        <input type="number" step="1" id="COMPENSATION" name="COMPENSATION" value="%COMPENSATION%">
+                        <input type="number" step="1" id="COMPENSATION" name="COMPENSATION">
                     </div>
                     <div class="form-group">
                         <label for="DYNAMIC_THRESHOLD_W">Seuil de réactivité dynamique (W):</label>
-                        <input type="number" step="1" id="DYNAMIC_THRESHOLD_W" name="DYNAMIC_THRESHOLD_W" value="%DYNAMIC_THRESHOLD_W%">
+                        <input type="number" step="1" id="DYNAMIC_THRESHOLD_W" name="DYNAMIC_THRESHOLD_W">
                         <p style="font-size: 0.8em; color: #888; margin-top: 4px;">En dessous de ce seuil, le système attend 2 messages pour stabiliser.</p>
                     </div>
                 </div>
@@ -407,31 +406,31 @@
                     <div class="form-group">
                         <label for="FORCE_EQUIPMENT">Activer le mode forcé manuel:</label>
                         <select id="FORCE_EQUIPMENT" name="FORCE_EQUIPMENT">
-                            <option value="True"  %FORCE_EQUIPMENT_YES%>True</option>
-                            <option value="False" %FORCE_EQUIPMENT_NO%>False</option>
+                            <option value="True" >True</option>
+                            <option value="False">False</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label for="E_FORCE_WINDOW">Activer la plage forcée régulière:</label>
                         <select id="E_FORCE_WINDOW" name="E_FORCE_WINDOW">
-                            <option value="True"  %FORCE_WINDOW_YES%>True</option>
-                            <option value="False" %FORCE_WINDOW_NO%>False</option>
+                            <option value="True" >True</option>
+                            <option value="False">False</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label for="FORCE_START">Début Force (24h - HH:MM):</label>
-                        <input type="text" id="FORCE_START" name="FORCE_START" value="%FORCE_START%" pattern="^([01][0-9]|2[0-3]):[0-5][0-9]$" placeholder="ex: 14:30">
+                        <input type="text" id="FORCE_START" name="FORCE_START" pattern="^([01][0-9]|2[0-3]):[0-5][0-9]$" placeholder="ex: 14:30">
                     </div>
                     <div class="form-group">
                         <label for="FORCE_END">Fin Force (24h - HH:MM):</label>
-                        <input type="text" id="FORCE_END" name="FORCE_END" value="%FORCE_END%" pattern="^([01][0-9]|2[0-3]):[0-5][0-9]$" placeholder="ex: 18:00">
+                        <input type="text" id="FORCE_END" name="FORCE_END" pattern="^([01][0-9]|2[0-3]):[0-5][0-9]$" placeholder="ex: 18:00">
                     </div>
                     <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
 
                     <p style="font-size: 0.85em; color: #888; margin-bottom: 18px;">Le mode nuit est calculé automatiquement avec les heures de lever/coucher du soleil Open-Meteo lorsque la météo est activée.</p>
                     <div class="form-group">
                         <label for="NIGHT_POLL_INTERVAL">Intervalle de lecture Nuit (secondes):</label>
-                        <input type="number" min="1" max="3600" id="NIGHT_POLL_INTERVAL" name="NIGHT_POLL_INTERVAL" value="%NIGHT_POLL_INTERVAL%">
+                        <input type="number" min="1" max="3600" id="NIGHT_POLL_INTERVAL" name="NIGHT_POLL_INTERVAL">
                     </div>
                 </div>
             </details>
@@ -444,33 +443,33 @@
                     <div class="form-group">
                         <label for="E_JSY">Activer JSY (UART):</label>
                         <select id="E_JSY" name="E_JSY">
-                            <option value="True"  %JSY_YES%>Activé</option>
-                            <option value="False" %JSY_NO%>Désactivé</option>
+                            <option value="True" >Activé</option>
+                            <option value="False">Désactivé</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label for="JSY_UART_ID">UART ID:</label>
-                        <input type="number" min="0" max="3900" id="JSY_UART_ID" name="JSY_UART_ID" value="%JSY_UART_ID%">
+                        <input type="number" min="0" max="3900" id="JSY_UART_ID" name="JSY_UART_ID">
                     </div>
                     <div class="form-group">
                         <label for="JSY_TX">GPIO Pin TX:</label>
-                        <input type="number" min="0" max="39" id="JSY_TX" name="JSY_TX" value="%JSY_TX%">
+                        <input type="number" min="0" max="39" id="JSY_TX" name="JSY_TX">
                     </div>
                     <div class="form-group">
                         <label for="JSY_RX">GPIO Pin RX:</label>
-                        <input type="number" min="0" max="39" id="JSY_RX" name="JSY_RX" value="%JSY_RX%">
+                        <input type="number" min="0" max="39" id="JSY_RX" name="JSY_RX">
                     </div>
                     <div class="form-group">
                         <label for="ZX_PIN">GPIO Pin ZX (Zero-Crossing):</label>
-                        <input type="number" min="0" max="39" id="ZX_PIN" name="ZX_PIN" value="%ZX_PIN%">
+                        <input type="number" min="0" max="39" id="ZX_PIN" name="ZX_PIN">
                     </div>
                     <div class="form-group">
                         <label for="CONTROL_MODE">Mode de régulation SSR:</label>
                         <select id="CONTROL_MODE" name="CONTROL_MODE">
-                            <option value="burst" %MODE_BURST%>Burst (Période fixe, ex: 0.5s)</option>
-                            <option value="cycle_stealing" %MODE_CYCLE%>Cycle Stealing (Zero-Crossing, plus fluide)</option>
-                            <option value="trame" %MODE_TRAME%>Mode Trame (Bresenham, réparti sur 1s)</option>
-                            <option value="phase" %MODE_PHASE%>Contrôle de Phase (Smooth, Random SSR requis)</option>
+                            <option value="burst">Burst (Période fixe, ex: 0.5s)</option>
+                            <option value="cycle_stealing">Cycle Stealing (Zero-Crossing, plus fluide)</option>
+                            <option value="trame">Mode Trame (Bresenham, réparti sur 1s)</option>
+                            <option value="phase">Contrôle de Phase (Smooth, Random SSR requis)</option>
                         </select>
                         <p style="font-size: 0.8em; color: #888; margin-top: 4px;">Cycle Stealing nécessite un signal Zero-Crossing sur ZX_PIN.</p>
                     </div>
@@ -480,24 +479,24 @@
                     <div class="form-group">
                         <label for="E_FAN">Activer le ventilateur:</label>
                         <select id="E_FAN" name="E_FAN">
-                            <option value="True"  %FAN_YES%>True</option>
-                            <option value="False" %FAN_NO%>False</option>
+                            <option value="True" >True</option>
+                            <option value="False">False</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label for="FAN_PIN">Pin GPIO Ventilateur:</label>
-                        <input type="number" min="0" max="39" id="FAN_PIN" name="FAN_PIN" value="%FAN_PIN%">
+                        <input type="number" min="0" max="39" id="FAN_PIN" name="FAN_PIN">
                     </div>
                     <div class="form-group">
                         <label for="FAN_TEMP_OFFSET">Seuil activation (°C sous max SSR):</label>
-                        <input type="number" min="0" max="30" id="FAN_TEMP_OFFSET" name="FAN_TEMP_OFFSET" value="%FAN_TEMP_OFFSET%">
+                        <input type="number" min="0" max="30" id="FAN_TEMP_OFFSET" name="FAN_TEMP_OFFSET">
                     </div>
                     <div class="form-group">
                         <label>Test manuel:</label>
                         <div style="display: flex; gap: 8px;">
-                            <button type="button" onclick="testFan(0)" style="flex:1; padding: 8px; background: #555; color: white; border: none; border-radius: 4px;">0%%</button>
-                            <button type="button" onclick="testFan(50)" style="flex:1; padding: 8px; background: #e67e22; color: white; border: none; border-radius: 4px;">50%%</button>
-                            <button type="button" onclick="testFan(100)" style="flex:1; padding: 8px; background: #27ae60; color: white; border: none; border-radius: 4px;">100%%</button>
+                            <button type="button" onclick="testFan(0)" style="flex:1; padding: 8px; background: #555; color: white; border: none; border-radius: 4px;">0%</button>
+                            <button type="button" onclick="testFan(50)" style="flex:1; padding: 8px; background: #e67e22; color: white; border: none; border-radius: 4px;">50%</button>
+                            <button type="button" onclick="testFan(100)" style="flex:1; padding: 8px; background: #27ae60; color: white; border: none; border-radius: 4px;">100%</button>
                         </div>
                         <p id="fanTestMsg" style="font-size: 0.8em; color: #aaa; margin-top: 4px; display: none;"></p>
                     </div>
@@ -507,17 +506,17 @@
                     <div class="form-group">
                         <label for="E_SSR_TEMP">Activer la sonde SSR:</label>
                         <select id="E_SSR_TEMP" name="E_SSR_TEMP">
-                            <option value="True"  %SSR_TEMP_YES%>True</option>
-                            <option value="False" %SSR_TEMP_NO%>False</option>
+                            <option value="True" >True</option>
+                            <option value="False">False</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label for="DS18B20_PIN">GPIO Pin Sonde DS18B20:</label>
-                        <input type="number" min="0" max="39" id="DS18B20_PIN" name="DS18B20_PIN" value="%DS18B20_PIN%">
+                        <input type="number" min="0" max="39" id="DS18B20_PIN" name="DS18B20_PIN">
                     </div>
                     <div class="form-group">
                         <label for="SSR_MAX_TEMP">Température max sécurité SSR (°C):</label>
-                        <input type="number" step="0.5" min="40" max="120" id="SSR_MAX_TEMP" name="SSR_MAX_TEMP" value="%SSR_MAX_TEMP%">
+                        <input type="number" step="0.5" min="40" max="120" id="SSR_MAX_TEMP" name="SSR_MAX_TEMP">
                     </div>
                     <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
 
@@ -525,24 +524,24 @@
                     <div class="form-group">
                         <label for="CPU_FREQ">Fréquence CPU ESP32:</label>
                         <select id="CPU_FREQ" name="CPU_FREQ">
-                            <option value="20"  %SELECTED_20%>20 MHz</option>
-                            <option value="40"  %SELECTED_40%>40 MHz</option>
-                            <option value="80"  %SELECTED_80%>80 MHz</option>
-                            <option value="160" %SELECTED_160%>160 MHz</option>
-                            <option value="240" %SELECTED_240%>240 MHz</option>
+                            <option value="20" >20 MHz</option>
+                            <option value="40" >40 MHz</option>
+                            <option value="80" >80 MHz</option>
+                            <option value="160">160 MHz</option>
+                            <option value="240">240 MHz</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label for="I_LED_PIN">Internal LED Pin:</label>
-                        <input type="number" min="0" max="39" id="I_LED_PIN" name="I_LED_PIN" value="%I_LED_PIN%">
+                        <input type="number" min="0" max="39" id="I_LED_PIN" name="I_LED_PIN">
                     </div>
                     <div class="form-group">
                         <label for="SSR_PIN">SSR Pin (PWM):</label>
-                        <input type="number" min="0" max="39" id="SSR_PIN" name="SSR_PIN" value="%SSR_PIN%">
+                        <input type="number" min="0" max="39" id="SSR_PIN" name="SSR_PIN">
                     </div>
                     <div class="form-group">
                         <label for="RELAY_PIN">Relay Pin (enable circuit):</label>
-                        <input type="number" min="0" max="39" id="RELAY_PIN" name="RELAY_PIN" value="%RELAY_PIN%">
+                        <input type="number" min="0" max="39" id="RELAY_PIN" name="RELAY_PIN">
                     </div>
                 </div>
             </details>
@@ -554,23 +553,23 @@
                     <div class="form-group">
                         <label for="E_WEATHER">Activer l'anticipation météo:</label>
                         <select id="E_WEATHER" name="E_WEATHER">
-                            <option value="True"  %WEATHER_YES%>Activé</option>
-                            <option value="False" %WEATHER_NO%>Désactivé</option>
+                            <option value="True" >Activé</option>
+                            <option value="False">Désactivé</option>
                         </select>
                         <p style="font-size: 0.8em; color: #888; margin-top: 4px;">Permet de détecter les nuages entrants via Open-Meteo (gratuit & anonyme).</p>
                     </div>
                     <div class="form-group">
                         <label for="WEATHER_LAT">Latitude:</label>
-                        <input type="text" id="WEATHER_LAT" name="WEATHER_LAT" value="%WEATHER_LAT%" placeholder="ex: 43.604">
+                        <input type="text" id="WEATHER_LAT" name="WEATHER_LAT" placeholder="ex: 43.604">
                     </div>
                     <div class="form-group">
                         <label for="WEATHER_LON">Longitude:</label>
-                        <input type="text" id="WEATHER_LON" name="WEATHER_LON" value="%WEATHER_LON%" placeholder="ex: 1.444">
+                        <input type="text" id="WEATHER_LON" name="WEATHER_LON" placeholder="ex: 1.444">
                     </div>
                     <div class="form-group">
-                        <label for="WEATHER_THRESH">Confiance solaire minimum pour démarrer l'équipement 2 (%%):</label>
-                        <input type="number" min="0" max="100" id="WEATHER_THRESH" name="WEATHER_THRESH" value="%WEATHER_THRESH%">
-                        <p style="font-size: 0.8em; color: #888; margin-top: 4px;">L'équipement 2 peut démarrer si la confiance solaire est au moins égale à ce seuil. Exemple: 40 signifie démarrage possible à partir de 40%% de potentiel solaire estimé.</p>
+                        <label for="WEATHER_THRESH">Confiance solaire minimum pour démarrer l'équipement 2 (%):</label>
+                        <input type="number" min="0" max="100" id="WEATHER_THRESH" name="WEATHER_THRESH">
+                        <p style="font-size: 0.8em; color: #888; margin-top: 4px;">L'équipement 2 peut démarrer si la confiance solaire est au moins égale à ce seuil. Exemple: 40 signifie démarrage possible à partir de 40% de potentiel solaire estimé.</p>
                     </div>
                 </div>
             </details>
@@ -582,19 +581,19 @@
                     <div class="form-group">
                         <label for="FAKE_SHELLY">Activer FAKE_SHELLY (Mode simulation):</label>
                         <select id="FAKE_SHELLY" name="FAKE_SHELLY">
-                            <option value="True"  %FAKE_SHELLY_YES%>True</option>
-                            <option value="False" %FAKE_SHELLY_NO%>False</option>
+                            <option value="True" >True</option>
+                            <option value="False">False</option>
                         </select>
                     </div>
                     <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
                     <h3>Sécurité Web (Admin)</h3>
                     <div class="form-group">
                         <label for="WEB_USER">Utilisateur Web (laisser vide pour aucun):</label>
-                        <input type="text" id="WEB_USER" name="WEB_USER" value="%WEB_USER%">
+                        <input type="text" id="WEB_USER" name="WEB_USER">
                     </div>
                     <div class="form-group">
                         <label for="WEB_PASSWORD">Mot de passe Web:</label>
-                        <input type="password" id="WEB_PASSWORD" name="WEB_PASSWORD" value="%WEB_PASSWORD%">
+                        <input type="password" id="WEB_PASSWORD" name="WEB_PASSWORD">
                     </div>
                 </div>
             </details>
@@ -607,7 +606,7 @@
                         <label>Téléchargement des fichiers :</label>
                         <div style="display: flex; flex-direction: column; gap: 10px;">
                             <a href="/download_logs" target="_blank" style="background:#0f3460; color:#f0c040; padding:10px; border-radius:6px; text-decoration:none; text-align:center; font-weight:bold; border:1px solid #333;">📥 Télécharger log.txt (Système)</a>
-                            <a href="/download_data" target="_blank" style="background:#0f3460; color:#f0c040; padding:10px; border-radius:6px; text-decoration:none; text-align:center; font-weight:bold; border:1px solid #333; %DATA_LOG_DISABLED_STYLE%">📥 Télécharger solar_data.txt (Données)</a>
+                            <a href="/download_data" target="_blank" style="background:#0f3460; color:#f0c040; padding:10px; border-radius:6px; text-decoration:none; text-align:center; font-weight:bold; border:1px solid #333;">📥 Télécharger solar_data.txt (Données)</a>
                         </div>
                     </div>
                     <hr style="border: 0; border-top: 1px solid #333; margin: 20px 0;">
@@ -664,13 +663,96 @@
         </form>
 
         <div style="text-align: center; font-size: 0.7em; color: #aaa; margin-top: 15px;">
-            Version %VERSION% | Build: %BUILD_TIME%
+            Version <span id="footerVersion">...</span> | Build: <span id="footerBuild">...</span>
         </div>
     </div>
 
     <script>
         const configForm = document.getElementById('configForm');
-        // No need for explicit server URL in same-origin C++ server
+
+        fetch('/get_config').then(r=>r.json()).then(c=>{
+            function setVal(id,v){var e=document.getElementById(id);if(e){if(e.tagName==='SELECT')e.value=String(v);else e.value=v;}}
+            function setBool(id,v){var e=document.getElementById(id);if(e)e.value=v?'True':'False';}
+            document.getElementById('headerName').textContent=c.name;
+            document.getElementById('headerVersion').textContent='...';
+            setVal('NAME',c.name);
+            setVal('TIMEZONE',c.timezone);
+            setBool('E_WIFI',c.e_wifi);
+            setVal('WIFI_SSID',c.wifi_ssid);
+            setVal('WIFI_PASSWORD',c.wifi_password);
+            setVal('WIFI_STATIC_IP',c.wifi_static_ip);
+            setVal('WIFI_SUBNET',c.wifi_subnet);
+            setVal('WIFI_GATEWAY',c.wifi_gateway);
+            setVal('WIFI_DNS',c.wifi_dns);
+            setVal('SHELLY_EM_IP',c.shelly_em_ip);
+            setVal('SHELLY_EM_INDEX',String(c.shelly_em_index));
+            setBool('E_SHELLY_MQTT',c.e_shelly_mqtt);
+            setVal('SHELLY_MQTT_TOPIC',c.shelly_mqtt_topic);
+            setVal('POLL_INTERVAL',c.poll_interval);
+            setVal('SHELLY_TIMEOUT',c.shelly_timeout);
+            setVal('SAFETY_TIMEOUT',c.safety_timeout);
+            setBool('E_MQTT',c.e_mqtt);
+            setVal('MQTT_IP',c.mqtt_ip);
+            setVal('MQTT_PORT',c.mqtt_port);
+            setVal('MQTT_USER',c.mqtt_user);
+            setVal('MQTT_PASSWORD',c.mqtt_password);
+            setVal('MQTT_NAME',c.mqtt_name);
+            setVal('EQUIP1_NAME',c.equip1_name);
+            setVal('EQUIP1_MAX_POWER',c.equip1_max_power);
+            setVal('MAX_DUTY_PERCENT',c.max_duty_percent);
+            setBool('E_EQUIP1',c.e_equip1);
+            setVal('EQUIP1_SHELLY_IP',c.equip1_shelly_ip);
+            setVal('EQUIP1_SHELLY_INDEX',String(c.equip1_shelly_index));
+            setBool('E_EQUIP1_MQTT',c.e_equip1_mqtt);
+            setVal('EQUIP1_MQTT_TOPIC',c.equip1_mqtt_topic);
+            setBool('E_EQUIP2',c.e_equip2);
+            setVal('EQUIP2_NAME',c.equip2_name);
+            setVal('EQUIP2_POWER',c.equip2_max_power);
+            setVal('EQUIP2_PRIO',String(c.equip2_priority));
+            setVal('EQUIP2_MIN_TIME',c.equip2_min_on_time);
+            setVal('EQUIP2_IP',c.equip2_shelly_ip);
+            setVal('EQUIP2_SHELLY_INDEX',String(c.equip2_shelly_index));
+            setBool('E_EQUIP2_MQTT',c.e_equip2_mqtt);
+            setVal('EQUIP2_MQTT_TOPIC',c.equip2_mqtt_topic);
+            if(c.e_equip2){document.getElementById('eq2Link').innerHTML='<a href="/web_equip2" style="color:#3498db;margin-left:8px;">Planning Eq2</a>';}
+            setVal('EXPORT_SETPOINT',c.export_setpoint);
+            setVal('DELTA',c.delta);
+            setVal('DELTANEG',c.deltaneg);
+            setVal('COMPENSATION',c.compensation);
+            setVal('DYNAMIC_THRESHOLD_W',c.dynamic_threshold_w);
+            setBool('FORCE_EQUIPMENT',c.force_equipment);
+            setBool('E_FORCE_WINDOW',c.e_force_window);
+            setVal('FORCE_START',c.force_start);
+            setVal('FORCE_END',c.force_end);
+            setVal('NIGHT_POLL_INTERVAL',c.night_poll_interval);
+            setBool('E_JSY',c.e_jsy);
+            setVal('JSY_UART_ID',c.jsy_uart_id);
+            setVal('JSY_TX',c.jsy_tx);
+            setVal('JSY_RX',c.jsy_rx);
+            setVal('ZX_PIN',c.zx_pin);
+            setVal('CONTROL_MODE',c.control_mode);
+            setBool('E_FAN',c.e_fan);
+            setVal('FAN_PIN',c.fan_pin);
+            setVal('FAN_TEMP_OFFSET',c.fan_temp_offset);
+            setBool('E_SSR_TEMP',c.e_ssr_temp);
+            setVal('DS18B20_PIN',c.ds18b20_pin);
+            setVal('SSR_MAX_TEMP',c.ssr_max_temp);
+            setVal('CPU_FREQ',String(c.cpu_freq));
+            setVal('I_LED_PIN',c.internal_led_pin);
+            setVal('SSR_PIN',c.ssr_pin);
+            setVal('RELAY_PIN',c.relay_pin);
+            setBool('E_WEATHER',c.e_weather);
+            setVal('WEATHER_LAT',c.weather_lat);
+            setVal('WEATHER_LON',c.weather_lon);
+            setVal('WEATHER_THRESH',c.weather_cloud_threshold);
+            setBool('FAKE_SHELLY',c.fake_shelly);
+            setVal('WEB_USER',c.web_user);
+            setVal('WEB_PASSWORD',c.web_password);
+        }).then(()=>fetch('/status').then(r=>r.json()).then(s=>{
+            document.getElementById('headerVersion').textContent=s.version;
+            document.getElementById('footerVersion').textContent=s.version;
+            document.getElementById('footerBuild').textContent=s.build_time;
+        }));
         
         async function testShelly(target, btn) {
             btn.disabled = true;
@@ -701,7 +783,7 @@
             fetch('/test_fan?speed=' + speed, { method: 'POST' })
                 .then(r => r.json())
                 .then(d => {
-                    msg.textContent = d.success ? 'Test: OK ('+speed+'%%)' : 'Erreur';
+                    msg.textContent = d.success ? 'Test: OK ('+speed+'%)' : 'Erreur';
                     msg.style.color = d.success ? '#2ecc71' : '#e74c3c';
                     setTimeout(() => { msg.style.display = 'none'; }, 3000);
                 })
@@ -736,8 +818,8 @@
             xhr.upload.addEventListener('progress', (e) => {
                 if (e.lengthComputable) {
                     const percent = Math.round((e.loaded / e.total) * 100);
-                    prgBar.style.width = percent + '%%';
-                    prgStatus.textContent = `Téléchargement: ${percent}%% (${Math.round(e.loaded/1024)} KB / ${Math.round(e.total/1024)} KB)`;
+                    prgBar.style.width = percent + '%';
+                    prgStatus.textContent = `Téléchargement: ${percent}% (${Math.round(e.loaded/1024)} KB / ${Math.round(e.total/1024)} KB)`;
                 }
             });
 

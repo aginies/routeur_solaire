@@ -158,7 +158,7 @@
             border: 1px solid #333;
             width: 40px;
             height: 40px;
-            border-radius: 50%%;
+            border-radius: 50%;
             cursor: pointer;
             font-size: 1.2em;
             display: flex;
@@ -179,9 +179,9 @@
         }
         .cdn-error-banner strong { display: block; margin-bottom: 8px; }
         @keyframes pulse {
-            0%% { opacity: 0.6; }
-            50%% { opacity: 1; }
-            100%% { opacity: 0.6; }
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
         }
     </style>
 </head>
@@ -206,12 +206,15 @@
         </div>
 
         <script>
-            // Hide "Année" if device has limited history (e.g. WROOM with 14 days)
-            const maxStatsDays = parseInt("%MAX_STATS_DAYS%");
-            if (!isNaN(maxStatsDays) && maxStatsDays <= 31) {
-                document.getElementById('btnYear').style.display = 'none';
-                document.getElementById('subHeader').innerHTML += ` <br><span style="color:var(--primary-color); font-weight:bold;">(Limité aux ${maxStatsDays} derniers jours)</span>`;
-            }
+            fetch('/status').then(r=>r.json()).then(d=>{
+                var ms=d.max_stats_days||30;
+                if(ms<=31){
+                    document.getElementById('btnYear').style.display='none';
+                    document.getElementById('subHeader').innerHTML+=' <br><span style="color:var(--primary-color); font-weight:bold;">(Limité aux '+ms+' derniers jours)</span>';
+                }
+                var fv=document.getElementById('footerVersion');if(fv)fv.textContent=d.version;
+                var fb=document.getElementById('footerBuild');if(fb)fb.textContent=d.build_time;
+            });
         </script>
 
         <div id="dateSelector" style="display:flex; justify-content:center; align-items:center; gap:12px; margin-bottom:24px;">
@@ -239,7 +242,7 @@
             </div>
             <div class="stat-box">
                 <div class="label">Utilisation Surplus Solaire</div>
-                <div class="value" id="autoConsRate">— %%</div>
+                <div class="value" id="autoConsRate">— %</div>
             </div>
             <div class="stat-box">
                 <div class="label">Temps de redirection Solaire</div>
@@ -249,7 +252,7 @@
 
         <div class="chart-card" id="barCard">
             <div id="barNoData" class="no-data-msg" style="display:none;">Aucune donnée pour cette période</div>
-            <div id="barChart" style="width:100%%;"></div>
+            <div id="barChart" style="width:100%;"></div>
         </div>
 
         <div class="chart-card" id="pieCard">
@@ -268,7 +271,7 @@
             <a href="/">Retour au Dashboard</a>
         </div>
         <div style="text-align: center; font-size: 0.7em; color: #aaa; margin-top: 15px;">
-            Version %VERSION% | Build: %BUILD_TIME%
+            Version <span id="footerVersion">...</span> | Build: <span id="footerBuild">...</span>
         </div>
     </div>
 
@@ -486,10 +489,10 @@
             document.getElementById('totalImport').textContent   = tImp.toFixed(2) + ' kWh';
             document.getElementById('totalExport').textContent   = tExp.toFixed(2) + ' kWh';
             document.getElementById('totalRedirect').textContent = tRed.toFixed(2) + ' kWh';
-            document.getElementById('autoConsRate').textContent  = rate.toFixed(1) + ' %%';
+            document.getElementById('autoConsRate').textContent  = rate.toFixed(1) + ' %';
 
             const hrs  = Math.floor(totalActiveSecs / 3600);
-            const mins = Math.floor((totalActiveSecs %% 3600) / 60);
+            const mins = Math.floor((totalActiveSecs % 3600) / 60);
             document.getElementById('activeTime').textContent = totalActiveSecs > 0 ? hrs + 'h ' + mins + 'm' : '—';
 
             const barEl = document.getElementById('barChart');
@@ -581,7 +584,7 @@
             ctx.fillStyle = '#2ecc71';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(rate.toFixed(1) + '%%', cx, cy - 8);
+            ctx.fillText(rate.toFixed(1) + '%', cx, cy - 8);
             ctx.font = '0.75em Arial';
             ctx.fillStyle = isLight ? '#7f8c8d' : '#aaa';
             ctx.fillText('CAPTURE', cx, cy + 18);

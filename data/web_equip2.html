@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='20' fill='%23f0c040'/><g stroke='%23f0c040' stroke-width='4' stroke-linecap='round'><line x1='50' y1='10' x2='50' y2='22'/><line x1='50' y1='78' x2='50' y2='90'/><line x1='10' y1='50' x2='22' y2='50'/><line x1='78' y1='50' x2='90' y2='50'/><line x1='22' y1='22' x2='30' y2='30'/><line x1='70' y1='70' x2='78' y2='78'/><line x1='78' y1='22' x2='70' y2='30'/><line x1='30' y1='70' x2='22' y2='78'/></g></svg>">
-    <title>Solaire - Planning %EQUIP2_NAME%</title>
+    <title>Solaire - Planning Eq2</title>
     <style>
         :root {
             --primary-color: #f0c040;
@@ -51,7 +51,7 @@
         }
         .slot:hover { border-color: var(--primary-color); color: #fff; }
 
-        .btn { background: var(--primary-color); color: #1a1a2e; padding: 12px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%%; font-size: 1em; margin-top: 20px;}
+        .btn { background: var(--primary-color); color: #1a1a2e; padding: 12px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; font-size: 1em; margin-top: 20px;}
         .btn:hover { background: #d4a800; }
         .back-link { display: inline-block; margin-bottom: 20px; color: var(--primary-color); text-decoration: none; }
     </style>
@@ -59,7 +59,7 @@
 <body>
     <div class="container">
         <a href="/" class="back-link">← Retour Dashboard</a>
-        <h1>Planning %EQUIP2_NAME%</h1>
+        <h1>Planning <span id="eq2Title">Eq2</span></h1>
 
         <div class="status-grid">
             <div class="status-item">
@@ -87,15 +87,23 @@
     </div>
 
     <script>
-        let currentSchedule;
-        try { currentSchedule = BigInt("%EQUIP2_SCHEDULE_RAW%" || "0"); } catch(e) { currentSchedule = 0n; }
+        let currentSchedule = 0n;
+
+        fetch('/status_eq2').then(r=>r.json()).then(d=>{
+            if(d.equip2_name){
+                document.getElementById('eq2Title').textContent=d.equip2_name;
+                document.title='Solaire - Planning '+d.equip2_name;
+            }
+            try{currentSchedule=BigInt(d.equip2_schedule||"0");}catch(e){}
+            initGrid();
+        });
 
         function initGrid() {
             const grid = document.getElementById('scheduleGrid');
             grid.innerHTML = '';
             for (let i = 0; i < 48; i++) {
                 const h = Math.floor(i / 2);
-                const m = (i %% 2) * 30;
+                const m = (i % 2) * 30;
                 const timeStr = h.toString().padStart(2, '0') + ':' + (m === 0 ? '00' : '30');
                 
                 const slot = document.createElement('div');
@@ -141,7 +149,7 @@
                 if (d.min_time > 0) {
                     mt.style.display = 'block';
                     const mins = Math.floor(d.min_time / 60);
-                    const secs = d.min_time %% 60;
+                    const secs = d.min_time % 60;
                     document.getElementById('eq2MinTime').textContent = mins + ':' + secs.toString().padStart(2, '0');
                 } else {
                     mt.style.display = 'none';
@@ -149,7 +157,6 @@
             } catch(e) { console.warn("updateStatus (eq2) error:", e); }
         }
 
-        initGrid();
         updateStatus();
         setInterval(updateStatus, 5000);
     </script>

@@ -46,180 +46,6 @@ void WebManager::loop() {
     }
 }
 
-String WebManager::templateProcessor(const String& var) {
-    if (!_config) return String();
-
-    // Logger::debug("Template request: " + var);
-    if (var == "") return "%"; 
-    if (var == "NAME") return _config->name;
-    if (var == "EQUIP1_NAME") return _config->equip1_name;
-    if (var == "VERSION") return String(FIRMWARE_VERSION);
-    if (var == "BUILD_TIME") return String(__DATE__) + " " + String(__TIME__);
-
-#ifdef MAX_STATS_DAYS
-    if (var == "MAX_STATS_DAYS") return String(MAX_STATS_DAYS);
-#else
-    if (var == "MAX_STATS_DAYS") return "30";
-#endif
-
-    if (var == "STATS_LINK") {
-#ifdef DISABLE_STATS
-        return "";
-#else
-        return "<a href=\"/stats\" style=\"background:#f0c040; color:#1a1a2e; font-weight:bold;\">Statistiques</a>";
-#endif
-    }
-
-    if (var == "EQUIP2_URL") return "/web_equip2";
-    if (var == "EQUIP2_LINK") {
-        if (_config->e_equip2) {
-            return "<a href=\"/web_equip2\" style=\"background:#3498db; color:#fff; font-weight:bold;\">Planning Eq2</a>";
-        }
-        return "";
-    }
-
-    if (var == "TZ_PARIS") return (_config->timezone == "CET-1CEST,M3.5.0,M10.5.0/3") ? "selected" : "";
-    if (var == "TZ_LONDON") return (_config->timezone == "GMT0BST,M3.5.0,M10.5.0/3")   ? "selected" : "";
-    if (var == "TZ_ATHENS") return (_config->timezone == "EET-2EEST,M3.5.0,M10.5.0/3") ? "selected" : "";
-    if (var == "TZ_UTC") return (_config->timezone == "UTC0")                      ? "selected" : "";
-    
-    if (var == "REBOOT_BANNER") return "";
-
-    if (var == "EXTERNAL_WIFI_YES") return _config->e_wifi ? "selected" : "";
-    if (var == "EXTERNAL_WIFI_NO") return !_config->e_wifi ? "selected" : "";
-    if (var == "WIFI_SSID") return _config->wifi_ssid;
-    if (var == "WIFI_PASSWORD") return _config->wifi_password;
-    if (var == "WIFI_STATIC_IP") return _config->wifi_static_ip;
-    if (var == "WIFI_SUBNET") return _config->wifi_subnet;
-    if (var == "WIFI_GATEWAY") return _config->wifi_gateway;
-    if (var == "WIFI_DNS") return _config->wifi_dns;
-
-    if (var == "SHELLY_EM_IP") return _config->shelly_em_ip;
-    if (var == "SHELLY_EM_INDEX_0") return _config->shelly_em_index == 0 ? "selected" : "";
-    if (var == "SHELLY_EM_INDEX_1") return _config->shelly_em_index == 1 ? "selected" : "";
-    if (var == "SHELLY_MQTT_YES") return _config->e_shelly_mqtt ? "selected" : "";
-    if (var == "SHELLY_MQTT_NO") return !_config->e_shelly_mqtt ? "selected" : "";
-    if (var == "SHELLY_MQTT_TOPIC") return _config->shelly_mqtt_topic;
-    if (var == "POLL_INTERVAL") return String(_config->poll_interval);
-    if (var == "SHELLY_TIMEOUT") return String(_config->shelly_timeout);
-    if (var == "SAFETY_TIMEOUT") return String(_config->safety_timeout);
-
-    if (var == "MQTT_YES") return _config->e_mqtt ? "selected" : "";
-    if (var == "MQTT_NO") return !_config->e_mqtt ? "selected" : "";
-    if (var == "MQTT_IP") return _config->mqtt_ip;
-    if (var == "MQTT_PORT") return String(_config->mqtt_port);
-    if (var == "MQTT_USER") return _config->mqtt_user;
-    if (var == "MQTT_PASSWORD") return _config->mqtt_password;
-    if (var == "MQTT_NAME") return _config->mqtt_name;
-
-    if (var == "EQUIP1_MAX_POWER") return String(_config->equip1_max_power);
-    if (var == "MAX_DUTY_PERCENT") return String(_config->max_duty_percent);
-    if (var == "EXPORT_SETPOINT") return String(_config->export_setpoint);
-    if (var == "EQUIP1_SHELLY_YES") return _config->e_equip1 ? "selected" : "";
-    if (var == "EQUIP1_SHELLY_NO") return !_config->e_equip1 ? "selected" : "";
-    if (var == "EQUIP1_SHELLY_IP") return _config->equip1_shelly_ip;
-    if (var == "EQUIP1_SHELLY_INDEX_0") return _config->equip1_shelly_index == 0 ? "selected" : "";
-    if (var == "EQUIP1_SHELLY_INDEX_1") return _config->equip1_shelly_index == 1 ? "selected" : "";
-    if (var == "EQUIP1_MQTT_YES") return _config->e_equip1_mqtt ? "selected" : "";
-    if (var == "EQUIP1_MQTT_NO") return !_config->e_equip1_mqtt ? "selected" : "";
-    if (var == "EQUIP1_MQTT_TOPIC") return _config->equip1_mqtt_topic;
-    if (var == "DELTA") return String(_config->delta);
-    if (var == "DELTANEG") return String(_config->deltaneg);
-    if (var == "COMPENSATION") return String(_config->compensation);
-    if (var == "DYNAMIC_THRESHOLD_W") return String(_config->dynamic_threshold_w);
-
-    if (var == "DS18B20_PIN") return String(_config->ds18b20_pin);
-
-    if (var == "FORCE_EQUIPMENT_YES") return _config->force_equipment ? "selected" : "";
-    if (var == "FORCE_EQUIPMENT_NO") return !_config->force_equipment ? "selected" : "";
-    if (var == "FORCE_WINDOW_YES") return _config->e_force_window ? "selected" : "";
-    if (var == "FORCE_WINDOW_NO") return !_config->e_force_window ? "selected" : "";
-    if (var == "FORCE_START") return _config->force_start;
-    if (var == "FORCE_END") return _config->force_end;
-    
-    if (var == "NIGHT_POLL_INTERVAL") return String(_config->night_poll_interval);
-
-    if (var == "JSY_YES") return _config->e_jsy ? "selected" : "";
-    if (var == "JSY_NO") return !_config->e_jsy ? "selected" : "";
-    if (var == "JSY_UART_ID") return String(_config->jsy_uart_id);
-    if (var == "JSY_TX") return String(_config->jsy_tx);
-    if (var == "JSY_RX") return String(_config->jsy_rx);
-    if (var == "ZX_PIN") return String(_config->zx_pin);
-    
-    if (var == "MODE_BURST") return (_config->control_mode == "burst") ? "selected" : "";
-    if (var == "MODE_CYCLE") return (_config->control_mode == "cycle_stealing") ? "selected" : "";
-    if (var == "MODE_TRAME") return (_config->control_mode == "trame") ? "selected" : "";
-    if (var == "MODE_PHASE") return (_config->control_mode == "phase") ? "selected" : "";
-
-    if (var == "FAN_YES") return _config->e_fan ? "selected" : "";
-    if (var == "FAN_NO") return !_config->e_fan ? "selected" : "";
-    if (var == "FAN_PIN") return String(_config->fan_pin);
-    if (var == "FAN_TEMP_OFFSET") return String(_config->fan_temp_offset);
-    
-    if (var == "SSR_TEMP_YES") return _config->e_ssr_temp ? "selected" : "";
-    if (var == "SSR_TEMP_NO") return !_config->e_ssr_temp ? "selected" : "";
-    if (var == "SSR_MAX_TEMP") return String(_config->ssr_max_temp);
-    
-    if (var == "I_LED_PIN") return String(_config->internal_led_pin);
-    if (var == "SSR_PIN") return String(_config->ssr_pin);
-    if (var == "RELAY_PIN") return String(_config->relay_pin);
-
-    if (var == "SELECTED_20") return _config->cpu_freq == 20 ? "selected" : "";
-    if (var == "SELECTED_40") return _config->cpu_freq == 40 ? "selected" : "";
-    if (var == "SELECTED_80") return _config->cpu_freq == 80 ? "selected" : "";
-    if (var == "SELECTED_160") return _config->cpu_freq == 160 ? "selected" : "";
-    if (var == "SELECTED_240") return _config->cpu_freq == 240 ? "selected" : "";
-
-    if (var == "WEATHER_YES") return _config->e_weather ? "selected" : "";
-    if (var == "WEATHER_NO") return !_config->e_weather ? "selected" : "";
-    if (var == "WEATHER_LAT") return _config->weather_lat;
-    if (var == "WEATHER_LON") return _config->weather_lon;
-    if (var == "WEATHER_THRESH") return String(_config->weather_cloud_threshold);
-
-    if (var == "FAKE_SHELLY_YES") return _config->fake_shelly ? "selected" : "";
-    if (var == "FAKE_SHELLY_NO") return !_config->fake_shelly ? "selected" : "";
-
-    if (var == "WEB_USER") return _config->web_user;
-    if (var == "WEB_PASSWORD") return _config->web_password;
-
-    // Equipment 2 tokens
-    if (var == "EQUIP2_NAME") return _config->equip2_name;
-    if (var == "EQUIP2_IP") return _config->equip2_shelly_ip;
-    if (var == "EQUIP2_SHELLY_INDEX_0") return _config->equip2_shelly_index == 0 ? "selected" : "";
-    if (var == "EQUIP2_SHELLY_INDEX_1") return _config->equip2_shelly_index == 1 ? "selected" : "";
-    if (var == "EQUIP2_MQTT_YES") return _config->e_equip2_mqtt ? "selected" : "";
-    if (var == "EQUIP2_MQTT_NO") return !_config->e_equip2_mqtt ? "selected" : "";
-    if (var == "EQUIP2_MQTT_TOPIC") return _config->equip2_mqtt_topic;
-    if (var == "EQUIP2_POWER") return String(_config->equip2_max_power);
-    if (var == "EQUIP2_MIN_TIME") return String(_config->equip2_min_on_time);
-    if (var == "EQUIP2_ENABLED_YES") return _config->e_equip2 ? "selected" : "";
-    if (var == "EQUIP2_ENABLED_NO") return !_config->e_equip2 ? "selected" : "";
-    if (var == "EQUIP2_PRIO_1") return _config->equip2_priority == 1 ? "selected" : "";
-    if (var == "EQUIP2_PRIO_2") return _config->equip2_priority == 2 ? "selected" : "";
-    if (var == "E_EQUIP2_BOOL") return _config->e_equip2 ? "true" : "false";
-    if (var == "EQUIP2_SCHEDULE_RAW") return String(_config->equip2_schedule);
-
-#ifdef DISABLE_STATS
-    if (var == "STATS_DISABLED_STYLE") return "display:none;";
-#else
-    if (var == "STATS_DISABLED_STYLE") return "";
-#endif
-
-#ifdef DISABLE_HISTORY
-    if (var == "HISTORY_DISABLED_STYLE") return "display:none;";
-#else
-    if (var == "HISTORY_DISABLED_STYLE") return "";
-#endif
-
-#ifdef DISABLE_DATA_LOG
-    if (var == "DATA_LOG_DISABLED_STYLE") return "display:none;";
-#else
-    if (var == "DATA_LOG_DISABLED_STYLE") return "";
-#endif
-
-    return String();
-}
-
 void WebManager::setupRoutes() {
     auto authRequired = [](AsyncWebServerRequest *request) -> bool {
         if (_config->web_user.length() > 0) {
@@ -237,7 +63,9 @@ void WebManager::setupRoutes() {
 
     _server.on("/", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
-        request->send(LittleFS, "/web_command.html", "text/html", false, templateProcessor);
+        AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/web_command.html.gz", "text/html");
+        response->addHeader("Content-Encoding", "gzip");
+        request->send(response);
     });
 
     auto sendLogSnapshot = [authRequired](AsyncWebServerRequest *request, const char* path, const char* downloadName, const char* missingMessage) {
@@ -298,20 +126,23 @@ void WebManager::setupRoutes() {
     _server.on("/uPlot.iife.min.js", HTTP_GET, [](AsyncWebServerRequest *request) {
         AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/uPlot.iife.min.js.gz", "application/javascript");
         response->addHeader("Content-Encoding", "gzip");
+        response->addHeader("Cache-Control", "public, max-age=86400");
         request->send(response);
     });
     _server.on("/uPlot.min.css", HTTP_GET, [](AsyncWebServerRequest *request) {
         AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/uPlot.min.css.gz", "text/css");
         response->addHeader("Content-Encoding", "gzip");
+        response->addHeader("Cache-Control", "public, max-age=86400");
         request->send(response);
     });
     _server.serveStatic("/icons", LittleFS, "/icons");
 
 #ifndef DISABLE_STATS
-    _server.serveStatic("/web_stats.html", LittleFS, "/web_stats.html");
     _server.on("/stats", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
-        request->send(LittleFS, "/web_stats.html", "text/html", false, templateProcessor);
+        AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/web_stats.html.gz", "text/html");
+        response->addHeader("Content-Encoding", "gzip");
+        request->send(response);
     });
     _server.on("/get_stats", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
@@ -348,12 +179,16 @@ void WebManager::setupRoutes() {
 
     _server.on("/web_config", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
-        request->send(LittleFS, "/web_config.html", "text/html", false, templateProcessor);
+        AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/web_config.html.gz", "text/html");
+        response->addHeader("Content-Encoding", "gzip");
+        request->send(response);
     });
 
     _server.on("/web_equip2", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
-        request->send(LittleFS, "/web_equip2.html", "text/html", false, templateProcessor);
+        AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/web_equip2.html.gz", "text/html");
+        response->addHeader("Content-Encoding", "gzip");
+        request->send(response);
     });
 
     _server.on("/save_config_eq2", HTTP_POST, [authRequired](AsyncWebServerRequest *request) {
@@ -402,6 +237,8 @@ void WebManager::setupRoutes() {
         doc["state"] = stateStr;
         doc["power"] = Shelly1PMManager::getPower();
         doc["min_time"] = Equipment2Manager::getRemainingMinTime();
+        doc["equip2_name"] = _config->equip2_name;
+        doc["equip2_schedule"] = String((uint64_t)_config->equip2_schedule);
         String out;
         serializeJson(doc, out);
         request->send(200, "application/json", out);
@@ -506,6 +343,87 @@ void WebManager::setupRoutes() {
         } else {
             request->send(500, "text/plain", "Erreur lors de la sauvegarde");
         }
+    });
+
+    _server.on("/get_config", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
+        JsonDocument doc;
+        doc["name"] = _config->name;
+        doc["equip1_name"] = _config->equip1_name;
+        doc["timezone"] = _config->timezone;
+        doc["cpu_freq"] = _config->cpu_freq;
+        doc["e_wifi"] = _config->e_wifi;
+        doc["wifi_ssid"] = _config->wifi_ssid;
+        doc["wifi_password"] = _config->wifi_password;
+        doc["wifi_static_ip"] = _config->wifi_static_ip;
+        doc["wifi_subnet"] = _config->wifi_subnet;
+        doc["wifi_gateway"] = _config->wifi_gateway;
+        doc["wifi_dns"] = _config->wifi_dns;
+        doc["shelly_em_ip"] = _config->shelly_em_ip;
+        doc["shelly_em_index"] = _config->shelly_em_index;
+        doc["e_shelly_mqtt"] = _config->e_shelly_mqtt;
+        doc["shelly_mqtt_topic"] = _config->shelly_mqtt_topic;
+        doc["poll_interval"] = _config->poll_interval;
+        doc["shelly_timeout"] = _config->shelly_timeout;
+        doc["safety_timeout"] = _config->safety_timeout;
+        doc["e_mqtt"] = _config->e_mqtt;
+        doc["mqtt_ip"] = _config->mqtt_ip;
+        doc["mqtt_port"] = _config->mqtt_port;
+        doc["mqtt_user"] = _config->mqtt_user;
+        doc["mqtt_password"] = _config->mqtt_password;
+        doc["mqtt_name"] = _config->mqtt_name;
+        doc["equip1_max_power"] = _config->equip1_max_power;
+        doc["max_duty_percent"] = _config->max_duty_percent;
+        doc["export_setpoint"] = _config->export_setpoint;
+        doc["e_equip1"] = _config->e_equip1;
+        doc["equip1_shelly_ip"] = _config->equip1_shelly_ip;
+        doc["equip1_shelly_index"] = _config->equip1_shelly_index;
+        doc["e_equip1_mqtt"] = _config->e_equip1_mqtt;
+        doc["equip1_mqtt_topic"] = _config->equip1_mqtt_topic;
+        doc["delta"] = _config->delta;
+        doc["deltaneg"] = _config->deltaneg;
+        doc["compensation"] = _config->compensation;
+        doc["dynamic_threshold_w"] = _config->dynamic_threshold_w;
+        doc["ds18b20_pin"] = _config->ds18b20_pin;
+        doc["force_equipment"] = _config->force_equipment;
+        doc["e_force_window"] = _config->e_force_window;
+        doc["force_start"] = _config->force_start;
+        doc["force_end"] = _config->force_end;
+        doc["night_poll_interval"] = _config->night_poll_interval;
+        doc["e_jsy"] = _config->e_jsy;
+        doc["jsy_uart_id"] = _config->jsy_uart_id;
+        doc["jsy_tx"] = _config->jsy_tx;
+        doc["jsy_rx"] = _config->jsy_rx;
+        doc["zx_pin"] = _config->zx_pin;
+        doc["control_mode"] = _config->control_mode;
+        doc["e_fan"] = _config->e_fan;
+        doc["fan_pin"] = _config->fan_pin;
+        doc["fan_temp_offset"] = _config->fan_temp_offset;
+        doc["e_ssr_temp"] = _config->e_ssr_temp;
+        doc["ssr_max_temp"] = _config->ssr_max_temp;
+        doc["internal_led_pin"] = _config->internal_led_pin;
+        doc["ssr_pin"] = _config->ssr_pin;
+        doc["relay_pin"] = _config->relay_pin;
+        doc["e_weather"] = _config->e_weather;
+        doc["weather_lat"] = _config->weather_lat;
+        doc["weather_lon"] = _config->weather_lon;
+        doc["weather_cloud_threshold"] = _config->weather_cloud_threshold;
+        doc["fake_shelly"] = _config->fake_shelly;
+        doc["web_user"] = _config->web_user;
+        doc["web_password"] = _config->web_password;
+        doc["e_equip2"] = _config->e_equip2;
+        doc["equip2_name"] = _config->equip2_name;
+        doc["equip2_shelly_ip"] = _config->equip2_shelly_ip;
+        doc["equip2_shelly_index"] = _config->equip2_shelly_index;
+        doc["e_equip2_mqtt"] = _config->e_equip2_mqtt;
+        doc["equip2_mqtt_topic"] = _config->equip2_mqtt_topic;
+        doc["equip2_max_power"] = _config->equip2_max_power;
+        doc["equip2_priority"] = _config->equip2_priority;
+        doc["equip2_min_on_time"] = _config->equip2_min_on_time;
+        doc["equip2_schedule"] = String((uint64_t)_config->equip2_schedule);
+        String out;
+        serializeJson(doc, out);
+        request->send(200, "application/json", out);
     });
 
     _server.on("/update", HTTP_POST, [](AsyncWebServerRequest *request) {
@@ -711,7 +629,28 @@ String WebManager::getStatusJson() {
     doc["e_ssr_temp"] = _config->e_ssr_temp;
     doc["e_equip1"] = _config->e_equip1;
     doc["e_equip2"] = _config->e_equip2;
+    doc["equip1_name"] = _config->equip1_name;
     doc["equip2_name"] = _config->equip2_name;
+#ifdef DISABLE_STATS
+    doc["stats_enabled"] = false;
+#else
+    doc["stats_enabled"] = true;
+#endif
+#ifdef DISABLE_HISTORY
+    doc["history_enabled"] = false;
+#else
+    doc["history_enabled"] = true;
+#endif
+#ifdef DISABLE_DATA_LOG
+    doc["data_log_enabled"] = false;
+#else
+    doc["data_log_enabled"] = true;
+#endif
+#ifdef MAX_STATS_DAYS
+    doc["max_stats_days"] = MAX_STATS_DAYS;
+#else
+    doc["max_stats_days"] = 30;
+#endif
     doc["equip2_bypassed"] = Equipment2Manager::isBypassedByCloud();
     doc["night_mode"] = SolarMonitor::isNight(Utils::getCurrentMinutes());
 

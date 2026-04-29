@@ -251,7 +251,7 @@
             display: flex;
             flex-direction: column;
         }
-        .log-entry { display: block; margin-bottom: 2px; width: 100%%; }
+        .log-entry { display: block; margin-bottom: 2px; width: 100%; }
         .log-safety { color: #ff4d4d; font-weight: bold; }
         .log-error  { color: #ff4d4d; }
         .log-force  { color: #ffa500; }
@@ -271,7 +271,7 @@
             });
     </script>
 
-    <div id="loadingOverlay" style="position:fixed;top:0;left:0;width:100%%;height:100%%;background:#1a1a2e;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;color:#f0c040;font-size:1.3em;">
+    <div id="loadingOverlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:#1a1a2e;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;color:#f0c040;font-size:1.3em;">
         <div style="font-size:2em;margin-bottom:15px;">☀️</div>
         <div>Démarrage en cours...</div>
         <div style="font-size:0.8em;color:#888;margin-top:10px;">Connexion au système solaire</div>
@@ -287,12 +287,12 @@
                     <use xlink:href="#day"></use>
                 </svg>
                 <div style="display: flex; flex-direction: column; align-items: flex-start; line-height: 1.1;">
-                    <span id="weatherText" style="font-size: 0.95em; opacity: 0.95;">Confiance solaire: --%%</span>
+                    <span id="weatherText" style="font-size: 0.95em; opacity: 0.95;">Confiance solaire: --%</span>
                     <span id="weatherPrecip" style="font-size: 0.8em; opacity: 0.8; display: none;"></span>
                 </div>
             </div>
-            <div id="weatherBackdrop" onclick="document.getElementById('weatherDetail').style.display='none';this.style.display='none'" style="display:none;position:fixed;top:0;left:0;width:100%%;height:100%%;z-index:9998;background:rgba(0,0,0,0.3);"></div>
-            <div id="weatherDetail" style="display:none;position:fixed;top:50%%;left:50%%;transform:translate(-50%%,-50%%);background:#16213e;border:2px solid #f0c040;border-radius:12px;padding:20px;z-index:9999;color:#eee;min-width:280px;max-width:90%%;box-shadow:0 8px 24px rgba(0,0,0,0.6);">
+            <div id="weatherBackdrop" onclick="document.getElementById('weatherDetail').style.display='none';this.style.display='none'" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:9998;background:rgba(0,0,0,0.3);"></div>
+            <div id="weatherDetail" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#16213e;border:2px solid #f0c040;border-radius:12px;padding:20px;z-index:9999;color:#eee;min-width:280px;max-width:90%;box-shadow:0 8px 24px rgba(0,0,0,0.6);">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
                     <strong style="color:#f0c040;font-size:1.1em;">Détails Météo</strong>
                     <span onclick="document.getElementById('weatherDetail').style.display='none';document.getElementById('weatherBackdrop').style.display='none'" style="cursor:pointer;font-size:1.3em;color:#888;">✕</span>
@@ -319,13 +319,13 @@
             <!-- Équipement 1 -->
             <div style="margin-bottom: 8px;">
                 <div class="label">
-                    <span>Redirigé vers %EQUIP1_NAME%</span>
+                    <span>Redirigé vers <span id="eq1NameLabel">...</span></span>
                 </div>
                 <div class="value" id="equipmentPower">—<span class="unit">W</span></div>
             </div>
             <!-- Équipement 2 -->
             <div id="eq2Row" style="display: none; border-top: 1px solid var(--border-color); padding-top: 10px; margin-top: 4px; position: relative;">
-                <div class="label"><a href="%EQUIP2_URL%" id="eq2Link" style="color: inherit; text-decoration: none;"><span id="eq2NameLabel">Équipement 2</span></a></div>
+                <div class="label"><a href="/web_equip2" id="eq2Link" style="color: inherit; text-decoration: none;"><span id="eq2NameLabel">Équipement 2</span></a></div>
                 <div id="eq2BypassBadge" style="display:none; background: #7f8c8d; color: #fff; font-size: 0.65em; padding: 2px 8px; border-radius: 4px; font-weight: bold; width: fit-content; margin: 0 auto 4px auto;">NUAGES (PAUSE)</div>
                 <div class="value" id="equip2Power">—<span class="unit">W</span></div>
             </div>
@@ -334,7 +334,7 @@
             <div class="label"><span>Temp SSR</span></div>
             <div class="value" id="ssrTemp">—<span class="unit">°C</span></div>
             <div id="fanStatus" style="margin-top: 8px; display: none;">
-                <span class="badge badge-on" id="fanBadge">Ventilateur: 0%%</span>
+                <span class="badge badge-on" id="fanBadge">Ventilateur: 0%</span>
             </div>
         </div>
         <div class="card">
@@ -365,8 +365,8 @@
         <span id="sumExport" style="color:#f1c40f">—</span> injecté
     </div>
 
-    <div id="chartCard" class="chart-card" style="display: none; %HISTORY_DISABLED_STYLE%">
-        <div id="powerChart" style="width:100%%;"></div>
+    <div id="chartCard" class="chart-card" style="display: none;">
+        <div id="powerChart" style="width:100%;"></div>
     </div>
 
     <div id="safeStateBox" class="error-box"></div>
@@ -375,7 +375,7 @@
         <summary>Journaux</summary>
         <div class="tab-container">
             <button id="tabSys" class="tab-btn active" onclick="setLogMode('sys')">Système</button>
-            <button id="tabData" class="tab-btn" onclick="setLogMode('data')" style="%DATA_LOG_DISABLED_STYLE%">Données (1m)</button>
+            <button id="tabData" class="tab-btn" onclick="setLogMode('data')">Données (1m)</button>
         </div>
         <div class="log-box" id="logBox">Chargement...</div>
     </details>
@@ -408,11 +408,11 @@
 
     <div class="footer">
         <a href="/web_config">Configuration</a>
-        %STATS_LINK%
+        <a id="statsLink" href="/stats" style="background:#f0c040; color:#1a1a2e; font-weight:bold; display:none;">Statistiques</a>
         <a href="/RESET_device" onclick="return confirm('Redémarrer le device ?')">Reset</a>
     </div>
     <div style="text-align: center; font-size: 0.7em; color: #aaa; margin-top: 15px;">
-        <a href="https://github.com/aginies/domotique/tree/main/solar_cpp" target="_blank" style="background:none; color:inherit; padding:0;">Version %VERSION%</a> | Build: %BUILD_TIME%
+        <a href="https://github.com/aginies/domotique/tree/main/solar_cpp" target="_blank" style="background:none; color:inherit; padding:0;">Version <span id="footerVersion">...</span></a> | Build: <span id="footerBuild">...</span>
     </div>
 
     <script>
@@ -433,9 +433,9 @@
                     const d = lastStatus;
                     const age = d.weather_age ? Math.round(d.weather_age / 60000) : '?';
                     const lines = [
-                        '☀️ Confiance solaire: <b>' + Math.round(d.weather_solar_confidence || 0) + '%%</b>',
+                        '☀️ Confiance solaire: <b>' + Math.round(d.weather_solar_confidence || 0) + '%</b>',
                         '🌡️ Température: <b>' + (d.weather_temp !== undefined ? d.weather_temp.toFixed(1) + '°C' : '--') + '</b>',
-                        '☁️ Nuages: <b>' + (d.weather_clouds || 0) + '%%</b> (Bas:' + (d.weather_clouds_low||0) + ' Mid:' + (d.weather_clouds_mid||0) + ' Haut:' + (d.weather_clouds_high||0) + ')',
+                        '☁️ Nuages: <b>' + (d.weather_clouds || 0) + '%</b> (Bas:' + (d.weather_clouds_low||0) + ' Mid:' + (d.weather_clouds_mid||0) + ' Haut:' + (d.weather_clouds_high||0) + ')',
                         '📡 Rayonnement SW: <b>' + (d.weather_shortwave_radiation||0).toFixed(0) + ' W/m²</b>',
                         '🌍 Rayonnement terrestre: <b>' + (d.weather_terrestrial_radiation||0).toFixed(0) + ' W/m²</b>',
                         '🌅 Lever: <b>' + (d.weather_sunrise||'--') + '</b> / Coucher: <b>' + (d.weather_sunset||'--') + '</b>',
@@ -530,7 +530,7 @@
                     const fanBadge = document.getElementById('fanBadge');
                     if (fanEl && fanBadge) {
                         fanEl.style.display = d.fan_active ? 'block' : 'none';
-                        fanBadge.textContent = 'Ventilateur: ' + (d.fan_percent || 0) + '%%';
+                        fanBadge.textContent = 'Ventilateur: ' + (d.fan_percent || 0) + '%';
                     }
                 }
 
@@ -592,12 +592,12 @@
                             const confidence = isNaN(confidenceValue) ? null : Math.max(0, Math.min(100, confidenceValue));
                             const tooltip = confidence === null
                                 ? 'Confiance solaire indisponible: les donnees meteo ne sont pas encore disponibles.'
-                                : 'Confiance solaire ' + Math.round(confidence) + '%%: estimation du potentiel solaire actuel. ' +
-                                  Math.round(100 - confidence) + '%% de lumiere utile est estimee perdue par rapport a un ciel clair. ' +
+                                : 'Confiance solaire ' + Math.round(confidence) + '%: estimation du potentiel solaire actuel. ' +
+                                  Math.round(100 - confidence) + '% de lumiere utile est estimee perdue par rapport a un ciel clair. ' +
                                   'Calcul base sur le rayonnement solaire Open-Meteo compare a un ciel clair realiste au sol, avec les couches nuageuses en stabilisation.';
                             wb.title = tooltip;
                             if (wtText) {
-                                wtText.textContent = confidence === null ? 'Confiance solaire: --%%' : 'Confiance solaire: ' + Math.round(confidence) + '%%';
+                                wtText.textContent = confidence === null ? 'Confiance solaire: --%' : 'Confiance solaire: ' + Math.round(confidence) + '%';
                                 wtText.title = tooltip;
                             }
                         }
@@ -651,10 +651,22 @@
                 if (hu && d.uptime !== undefined) {
                     const up = parseInt(d.uptime);
                     const h = Math.floor(up / 3600);
-                    const m = Math.floor((up %% 3600) / 60);
-                    const s = up %% 60;
+                    const m = Math.floor((up % 3600) / 60);
+                    const s = up % 60;
                     hu.textContent = `${h}h ${m}m ${s}s`;
                 }
+
+                // Metadata from /status (populated once)
+                var eq1n = document.getElementById('eq1NameLabel');
+                if (eq1n && d.equip1_name) eq1n.textContent = d.equip1_name;
+                var fv = document.getElementById('footerVersion');
+                if (fv && d.version) fv.textContent = d.version;
+                var fb = document.getElementById('footerBuild');
+                if (fb && d.build_time) fb.textContent = d.build_time;
+                var sl = document.getElementById('statsLink');
+                if (sl && d.stats_enabled) sl.style.display = '';
+                if (!d.history_enabled) { var cc2 = document.getElementById('chartCard'); if (cc2) cc2.style.display = 'none'; }
+                if (!d.data_log_enabled) { var td = document.getElementById('tabData'); if (td) td.style.display = 'none'; }
 
             } catch (err) { console.error("ApplyStatus error:", err); }
         }
@@ -755,9 +767,9 @@
                     { label: 'Redirigé (W)', stroke: '#2ecc71', width: 2, fill: 'rgba(46,204,113,0.1)', scale: 'W' },
                 ];
 
-                if ("%E_EQUIP2_BOOL%" === "true") {
+                if (lastStatus && lastStatus.e_equip2) {
                     data.push(hist.map(p => p.e2 || 0));
-                    seriesDef.push({ label: '%EQUIP2_NAME% (W)', stroke: '#e74c3c', width: 2, fill: 'rgba(231,76,60,0.1)', scale: 'W' });
+                    seriesDef.push({ label: (lastStatus.equip2_name || 'Eq2') + ' (W)', stroke: '#e74c3c', width: 2, fill: 'rgba(231,76,60,0.1)', scale: 'W' });
                 }
 
                 data.push(ssrTemp);
