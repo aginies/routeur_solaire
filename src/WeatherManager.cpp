@@ -25,7 +25,7 @@ void WeatherManager::init(const Config& config) {
 
 void WeatherManager::startTask() {
     if (!_config || !_config->e_weather) return;
-    xTaskCreate(weatherTask, "weatherTask", 8192, NULL, 1, NULL);
+    xTaskCreatePinnedToCore(weatherTask, "weatherTask", 8192, NULL, 1, NULL, 1);
 }
 
 float WeatherManager::getEffectiveCloudiness() {

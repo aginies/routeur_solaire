@@ -199,6 +199,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
         StatsManager::update(GridSensorService::currentGridPower, ActuatorManager::equipmentPower, now - lastStatsUpdate, nightActive, _config->e_equip1);
 #endif
         lastStatsUpdate = now;
+        esp_task_wdt_reset();
 
         if (_config->e_mqtt && (now - lastMqttReport >= (_config->mqtt_report_interval * 1000))) {
             lastMqttReport = now;

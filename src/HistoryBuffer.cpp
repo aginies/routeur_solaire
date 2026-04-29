@@ -143,7 +143,6 @@ String HistoryBuffer::getHistoryJson() {
 }
 
 void HistoryBuffer::streamHistoryJson(AsyncWebServerRequest *request) {
-    AsyncResponseStream *response = request->beginResponseStream("application/json");
     JsonDocument doc;
     JsonArray arr = doc.to<JsonArray>();
 
@@ -162,7 +161,9 @@ void HistoryBuffer::streamHistoryJson(AsyncWebServerRequest *request) {
         }
         xSemaphoreGive(_dataMutex);
     }
-    serializeJson(doc, *response);
-    request->send(response);
+
+    String output;
+    serializeJson(doc, output);
+    request->send(200, "application/json", output);
 }
 #endif

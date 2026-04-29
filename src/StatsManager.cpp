@@ -259,33 +259,31 @@ void StatsManager::save() {
 
 #ifndef NATIVE_TEST
 void StatsManager::streamStatsJson(AsyncWebServerRequest *request) {
-    AsyncResponseStream *response = request->beginResponseStream("application/json");
+    String result;
+    result.reserve(4096);
+    result += "{";
 
-    response->print("{");
     bool first = true;
     if (_statsMutex && xSemaphoreTake(_statsMutex, pdMS_TO_TICKS(2000)) == pdTRUE) {
-        int iCount = 0;
+        char buf[64];
         for (auto const& [key, ds] : _history) {
-            if (!first) response->print(",");
+            if (!first) result += ",";
             first = false;
-            if (iCount++ % 20 == 0) esp_task_wdt_reset();
-            response->printf("\"%s\":{", key.c_str());
-            response->printf("\"import\":%.2f,", ds.import);
-            response->printf("\"redirect\":%.2f,", ds.redirect);
-            response->printf("\"export\":%.2f,", ds.export_wh);
-            response->printf("\"active_time\":%u,", ds.active_time);
-            response->print("\"h_import\":[");
-            for (int i = 0; i < 24; i++) response->printf("%.2f%s", ds.h_import[i], (i == 23) ? "" : ",");
-            response->print("],\"h_redirect\":[");
-            for (int i = 0; i < 24; i++) response->printf("%.2f%s", ds.h_redirect[i], (i == 23) ? "" : ",");
-            response->print("],\"h_export\":[");
-            for (int i = 0; i < 24; i++) response->printf("%.2f%s", ds.h_export[i], (i == 23) ? "" : ",");
-            response->print("]}");
+            snprintf(buf, sizeof(buf), "\"%s\":{\"import\":%.2f,\"redirect\":%.2f,\"export\":%.2f,\"active_time\":%u,",
+                     key.c_str(), ds.import, ds.redirect, ds.export_wh, ds.active_time);
+            result += buf;
+            result += "\"h_import\":[";
+            for (int i = 0; i < 24; i++) { snprintf(buf, sizeof(buf), "%.2f", ds.h_import[i]); result += buf; if (i < 23) result += ","; }
+            result += "],\"h_redirect\":[";
+            for (int i = 0; i < 24; i++) { snprintf(buf, sizeof(buf), "%.2f", ds.h_redirect[i]); result += buf; if (i < 23) result += ","; }
+            result += "],\"h_export\":[";
+            for (int i = 0; i < 24; i++) { snprintf(buf, sizeof(buf), "%.2f", ds.h_export[i]); result += buf; if (i < 23) result += ","; }
+            result += "]}";
         }
         xSemaphoreGive(_statsMutex);
     }
-    response->print("}");
-    request->send(response);
+    result += "}";
+    request->send(200, "application/json", result);
 }
 #endif
 

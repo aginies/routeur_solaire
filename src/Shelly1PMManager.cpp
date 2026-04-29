@@ -23,8 +23,9 @@ bool Shelly1PMManager::turnOn() {
     String url = "http://" + _config->equip2_shelly_ip + "/relay/0?turn=on";
     http.begin(client, url);
     int code = http.GET();
+    esp_task_wdt_reset();
     http.end();
-    
+
     if (code == 200) {
         _dev2.relayState = true;
         Logger::info("Shelly1PM [" + _config->equip2_name + "]: Turned ON");
@@ -44,8 +45,9 @@ bool Shelly1PMManager::turnOff() {
     String url = "http://" + _config->equip2_shelly_ip + "/relay/0?turn=off";
     http.begin(client, url);
     int code = http.GET();
+    esp_task_wdt_reset();
     http.end();
-    
+
     if (code == 200) {
         _dev2.relayState = false;
         Logger::info("Shelly1PM [" + _config->equip2_name + "]: Turned OFF");

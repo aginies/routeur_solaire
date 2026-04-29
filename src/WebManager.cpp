@@ -13,6 +13,7 @@
 #include "Equipment2Manager.h"
 #include "Shelly1PMManager.h"
 #include "Utils.h"
+#include <HTTPClient.h>
 #include <LittleFS.h>
 #include <Update.h>
 #include <ArduinoJson.h>
@@ -559,6 +560,94 @@ void WebManager::setupRoutes() {
         request->redirect("/");
     });
 
+    _server.on("/test_shelly", HTTP_POST, [](AsyncWebServerRequest *request) {
+        String target = request->hasParam("target", true) ? request->getParam("target", true)->value() : "";
+        String ip;
+        int index = 0;
+        bool isEM = false;
+
+        if (target == "em") {
+            ip = _config->shelly_em_ip;
+            index = _config->shelly_em_index;
+            isEM = true;
+        } else if (target == "eq1") {
+            ip = _config->equip1_shelly_ip;
+            index = _config->equip1_shelly_index;
+        } else if (target == "eq2") {
+            ip = _config->equip2_shelly_ip;
+            index = _config->equip2_shelly_index;
+        } else {
+            request->send(400, "application/json", "{\"ok\":false,\"error\":\"Invalid target\"}");
+            return;
+        }
+
+        if (ip.length() == 0) {
+            request->send(200, "application/json", "{\"ok\":false,\"error\":\"IP non configurée\"}");
+            return;
+        }
+
+        WiFiClient client;
+        HTTPClient http;
+        http.setConnectTimeout(1000);
+        http.setTimeout(2000);
+
+        String result;
+        if (isEM) {
+            String url = "http://" + ip + "/emeter/" + String(index);
+            http.begin(client, url);
+            int code = http.GET();
+            if (code == 200) {
+                JsonDocument doc;
+                if (!deserializeJson(doc, http.getStream())) {
+                    float power = doc["power"] | 0.0f;
+                    float voltage = doc["voltage"] | 0.0f;
+                    result = "{\"ok\":true,\"power\":" + String(power, 1) + ",\"voltage\":" + String(voltage, 1) + ",\"gen\":\"EM\"}";
+                } else {
+                    result = "{\"ok\":false,\"error\":\"JSON parse error\"}";
+                }
+            } else {
+                result = "{\"ok\":false,\"error\":\"HTTP " + String(code) + "\"}";
+            }
+            http.end();
+        } else {
+            String url = "http://" + ip + "/rpc/Switch.GetStatus?id=" + String(index);
+            http.begin(client, url);
+            int code = http.GET();
+            if (code == 200) {
+                JsonDocument doc;
+                if (!deserializeJson(doc, http.getStream())) {
+                    float power = doc["apower"] | 0.0f;
+                    bool relay = doc["output"] | false;
+                    result = "{\"ok\":true,\"power\":" + String(power, 1) + ",\"gen\":\"Gen2\",\"relay\":" + (relay ? "true" : "false") + "}";
+                } else {
+                    result = "{\"ok\":false,\"error\":\"JSON parse error (Gen2)\"}";
+                }
+                http.end();
+            } else {
+                http.end();
+                url = "http://" + ip + "/status";
+                http.begin(client, url);
+                code = http.GET();
+                if (code == 200) {
+                    JsonDocument doc;
+                    if (!deserializeJson(doc, http.getStream())) {
+                        float power = 0;
+                        if (doc.containsKey("meters")) power = doc["meters"][index]["power"] | 0.0f;
+                        else if (doc.containsKey("emeters")) power = doc["emeters"][index]["power"] | 0.0f;
+                        bool relay = doc["relays"][0]["ison"] | false;
+                        result = "{\"ok\":true,\"power\":" + String(power, 1) + ",\"gen\":\"Gen1\",\"relay\":" + (relay ? "true" : "false") + "}";
+                    } else {
+                        result = "{\"ok\":false,\"error\":\"JSON parse error (Gen1)\"}";
+                    }
+                } else {
+                    result = "{\"ok\":false,\"error\":\"HTTP " + String(code) + " (Gen1+Gen2)\"}";
+                }
+                http.end();
+            }
+        }
+        request->send(200, "application/json", result);
+    });
+
     _server.on("/status", HTTP_GET, [](AsyncWebServerRequest *request) {
         request->send(200, "application/json", getStatusJson());
     });
@@ -586,16 +675,31 @@ String WebManager::getStatusJson() {
     doc["total_redirect"] = StatsManager::totalRedirectToday;
     doc["total_export"] = StatsManager::totalExportToday;
 #endif
-    doc["free_ram"] = Utils::getFreeHeap();
-    doc["total_ram"] = Utils::getTotalHeap();
-    doc["free_psram"] = Utils::getFreePsram();
-    doc["total_psram"] = Utils::getTotalPsram();
-    doc["uptime"] = millis() / 1000;
-    doc["rssi"] = NetworkManager::getRSSI();
+    static uint32_t lastHealthUpdate = 0;
+    static uint32_t cachedFreeRam = 0, cachedTotalRam = 0;
+    static uint32_t cachedFreePsram = 0, cachedTotalPsram = 0;
+    static int cachedRssi = -100;
+    static float cachedEspTemp = 0;
+    uint32_t now = millis();
+    if (now - lastHealthUpdate >= 10000 || lastHealthUpdate == 0) {
+        lastHealthUpdate = now;
+        cachedFreeRam = Utils::getFreeHeap();
+        cachedTotalRam = Utils::getTotalHeap();
+        cachedFreePsram = Utils::getFreePsram();
+        cachedTotalPsram = Utils::getTotalPsram();
+        cachedRssi = NetworkManager::getRSSI();
+        cachedEspTemp = TemperatureManager::lastEspTemp;
+    }
+    doc["free_ram"] = cachedFreeRam;
+    doc["total_ram"] = cachedTotalRam;
+    doc["free_psram"] = cachedFreePsram;
+    doc["total_psram"] = cachedTotalPsram;
+    doc["uptime"] = now / 1000;
+    doc["rssi"] = cachedRssi;
     doc["version"] = String(FIRMWARE_VERSION);
     doc["build_time"] = String(__DATE__) + " " + String(__TIME__);
 
-    doc["esp_temp"] = TemperatureManager::lastEspTemp;
+    doc["esp_temp"] = cachedEspTemp;
 
     doc["grid_source"] = _config->e_shelly_mqtt ? "MQTT" : "HTTP";
     doc["shelly_link"] = (SafetyManager::currentState != SystemState::STATE_SAFE_TIMEOUT);
@@ -631,7 +735,7 @@ String WebManager::getStatusJson() {
         doc["weather_too_cloudy"] = WeatherManager::isTooCloudy();
     }
 
-    time_t now; time(&now); struct tm ti; localtime_r(&now, &ti);
+    time_t t_now; time(&t_now); struct tm ti; localtime_r(&t_now, &ti);
     char buf[12]; strftime(buf, sizeof(buf), "%H:%M", &ti);
     doc["rtc_time"] = String(buf);
     char buf2[24]; strftime(buf2, sizeof(buf2), "%d/%m/%Y", &ti);
