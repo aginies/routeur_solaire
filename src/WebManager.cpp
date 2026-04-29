@@ -135,6 +135,12 @@ void WebManager::setupRoutes() {
         response->addHeader("Cache-Control", "public, max-age=86400");
         request->send(response);
     });
+    _server.on("/help.json", HTTP_GET, [](AsyncWebServerRequest *request) {
+        AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/help.json.gz", "application/json");
+        response->addHeader("Content-Encoding", "gzip");
+        response->addHeader("Cache-Control", "public, max-age=86400");
+        request->send(response);
+    });
     _server.serveStatic("/icons", LittleFS, "/icons");
 
 #ifndef DISABLE_STATS

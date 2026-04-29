@@ -2,7 +2,7 @@
 # Compress static assets for LittleFS
 cd "$(dirname "$0")"
 
-FILES="chart.min.js web_command.html web_config.html web_stats.html"
+FILES="web_command.html web_config.html web_stats.html web_equip2.html help.json"
 
 echo "--- Compressing static assets ---"
 for f in $FILES; do

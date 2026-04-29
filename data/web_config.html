@@ -128,6 +128,34 @@
             text-align: center;
         }
         .header { text-align: center; margin-bottom: 20px; }
+        .help-btn {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 24px; height: 24px; border-radius: 50%;
+            background: rgba(240,192,64,0.2); color: #f0c040;
+            font-size: 0.75em; font-weight: bold; cursor: pointer;
+            border: 1px solid #f0c040; margin-right: 28px;
+            transition: background 0.2s;
+        }
+        .help-btn:hover { background: rgba(240,192,64,0.4); }
+        .modal-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7); z-index: 1000;
+            justify-content: center; align-items: center;
+        }
+        .modal-content {
+            background: #16213e; border-radius: 12px; padding: 25px; max-width: 650px;
+            width: 90%; max-height: 80vh; overflow-y: auto; position: relative;
+            border: 1px solid #f0c040; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            color: #ddd; line-height: 1.6; font-size: 0.9em;
+        }
+        .modal-content h3 { color: #f0c040; margin-top: 15px; }
+        .modal-content b { color: #eee; }
+        .modal-content code { background: #0d0d1a; padding: 2px 6px; border-radius: 4px; }
+        .modal-close {
+            position: absolute; top: 10px; right: 15px; background: none;
+            border: none; color: #888; font-size: 1.4em; cursor: pointer;
+        }
+        .modal-close:hover { color: #f0c040; }
     </style>
 </head>
 <body>
@@ -155,7 +183,7 @@
 
             <!-- 1. PARTIE CONNECTIVITÉ -->
             <details>
-                <summary>Connectivité (WiFi, Shelly, MQTT)</summary>
+                <summary><span class="help-btn" data-section="connectivity">?</span>Connectivité (WiFi, Shelly, MQTT)</summary>
                 <div class="section-content">
                     <h3>WiFi</h3>
                     <div class="form-group">
@@ -266,7 +294,7 @@
 
             <!-- 2. PARTIE RÉGULATION -->
             <details>
-                <summary>Equipment(s)</summary>
+                <summary><span class="help-btn" data-section="equipment">?</span>Equipment(s)</summary>
                 <div class="section-content">
                     <h3>Equipement 1 (+Mesure)</h3>
                     <div class="form-group">
@@ -373,7 +401,7 @@
 
             <!-- 3. RÉGULATION (EXPERT) -->
             <details>
-                <summary>Régulation (Expert)</summary>
+                <summary><span class="help-btn" data-section="regulation">?</span>Régulation (Expert)</summary>
                 <div class="section-content">
                     <div class="form-group">
                         <label for="EXPORT_SETPOINT">Consigne réseau (W, 0 = zéro export):</label>
@@ -401,7 +429,7 @@
 
             <!-- 4. MODE FORCÉ & NUIT -->
             <details>
-                <summary>Mode Forcé & Nuit</summary>
+                <summary><span class="help-btn" data-section="force_night">?</span>Mode Forcé & Nuit</summary>
                 <div class="section-content">
                     <div class="form-group">
                         <label for="FORCE_EQUIPMENT">Activer le mode forcé manuel:</label>
@@ -437,7 +465,7 @@
 
             <!-- 5. HARDWARE & PINS -->
             <details>
-                <summary>Hardware & Pins</summary>
+                <summary><span class="help-btn" data-section="hardware">?</span>Hardware & Pins</summary>
                 <div class="section-content">
                     <h3>JSY-MK-194 (Local Wired)</h3>
                     <div class="form-group">
@@ -548,7 +576,7 @@
 
             <!-- 6. MÉTÉO (OPEN-METEO) -->
             <details>
-                <summary>Météo (Open-Meteo)</summary>
+                <summary><span class="help-btn" data-section="weather">?</span>Météo (Open-Meteo)</summary>
                 <div class="section-content">
                     <div class="form-group">
                         <label for="E_WEATHER">Activer l'anticipation météo:</label>
@@ -576,7 +604,7 @@
 
             <!-- 7. EXPÉRIMENTAL & SÉCURITÉ -->
             <details>
-                <summary>🛠 Expérimental & Sécurité</summary>
+                <summary><span class="help-btn" data-section="experimental">?</span>🛠 Expérimental & Sécurité</summary>
                 <div class="section-content">
                     <div class="form-group">
                         <label for="FAKE_SHELLY">Activer FAKE_SHELLY (Mode simulation):</label>
@@ -600,7 +628,7 @@
 
             <!-- 8. MAINTENANCE & DIAGNOSTICS -->
             <details>
-                <summary>🛠 Maintenance & Diagnostics</summary>
+                <summary><span class="help-btn" data-section="maintenance">?</span>🛠 Maintenance & Diagnostics</summary>
                 <div class="section-content">
                     <div class="form-group">
                         <label>Téléchargement des fichiers :</label>
@@ -622,7 +650,7 @@
 
             <!-- 9. MISE À JOUR (OTA) -->
             <details style="margin-top: 20px;">
-                <summary>🚀 Mise à jour (OTA)</summary>
+                <summary><span class="help-btn" data-section="ota">?</span>🚀 Mise à jour (OTA)</summary>
                 <div class="section-content">
                     <div id='upload_form'>
                     <div class="form-group">
@@ -644,7 +672,7 @@
 
             <!-- 10. LICENCES -->
             <details style="margin-top: 20px;">
-                <summary>📜 Licences</summary>
+                <summary><span class="help-btn" data-section="licenses">?</span>📜 Licences</summary>
                 <div class="section-content" style="font-size: 0.8em; color: #bbb; line-height: 1.5;">
                 <p><strong>Code Source :</strong></p>
                 <p>Ce projet est distribué sous la licence <strong>GNU GPLv3</strong>.</p>
@@ -667,7 +695,27 @@
         </div>
     </div>
 
+    <div id="helpModal" class="modal-overlay" onclick="if(event.target===this)this.style.display='none'">
+        <div class="modal-content">
+            <button class="modal-close" onclick="document.getElementById('helpModal').style.display='none'">&#10005;</button>
+            <div id="helpContent"></div>
+        </div>
+    </div>
+
     <script>
+        let helpData = null;
+        async function showHelp(section) {
+            if (!helpData) {
+                try { const r = await fetch('/help.json'); helpData = await r.json(); }
+                catch(e) { alert('Impossible de charger l\'aide.'); return; }
+            }
+            document.getElementById('helpContent').innerHTML = helpData[section] || 'Aide non disponible.';
+            document.getElementById('helpModal').style.display = 'flex';
+        }
+        document.querySelectorAll('.help-btn').forEach(b => {
+            b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); showHelp(b.dataset.section); });
+        });
+
         const configForm = document.getElementById('configForm');
 
         fetch('/get_config').then(r=>r.json()).then(c=>{
