@@ -54,6 +54,7 @@ void setup() {
 
 #ifndef DISABLE_STATS
     StatsManager::init();
+    StatsManager::startTask();
 #endif
     LedManager::init(config);
     LedManager::startTask();
