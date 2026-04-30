@@ -351,17 +351,17 @@
             </div>
 
             <div style="margin-top: 12px;">
-                <form action="/boost" method="POST" style="display:flex; gap: 4px; justify-content: center;">
-                    <select name="min" style="padding: 4px; background: #0d0d1a; color: #eee; border: 1px solid #444; border-radius: 4px; font-size: 0.8em;">
-                        <option value="60" selected>1 h</option>
-                        <option value="120">2 h</option>
-                        <option value="180">3 h</option>
-                    </select>
-                    <button type="submit" class="badge badge-force" style="border:none; cursor:pointer; margin-top:0;">Boost</button>
-                </form>
-                <form action="/cancel_boost" method="POST" id="cancelBoostForm" style="display:none; margin-top:6px; justify-content: center;">
-                    <button type="submit" class="badge badge-off" style="border:none; cursor:pointer; margin-top:0;">Annuler Boost</button>
-                </form>
+                <div id="boostControls" style="display:flex; gap: 4px; justify-content: center;">
+                    <button onclick="showBoostPopup()" class="badge badge-force" style="border:none; cursor:pointer; margin-top:0;">Boost</button>
+                </div>
+                <div id="cancelBoostForm" style="display:none; margin-top:6px; justify-content: center;">
+                    <button onclick="cancelBoost()" class="badge badge-off" style="border:none; cursor:pointer; margin-top:0;">Annuler Boost</button>
+                </div>
+                <div style="margin-top: 12px; border-top: 1px solid #333; padding-top: 12px;">
+                    <button onclick="showVacationPopup()" class="badge" style="background:#555; color:white; border:none; cursor:pointer; margin-top:0;">Jours Vacances</button>
+                    <div id="vacationStatus" style="display:none; font-size: 0.8em; color: #f0c040; margin-top: 6px;"></div>
+                    <button id="cancelVacationBtn" onclick="cancelVacation()" class="badge badge-off" style="display:none; border:none; cursor:pointer; margin-top:6px;">Annuler Vacances</button>
+                </div>
             </div>
         </div>
     </div>
@@ -443,12 +443,11 @@
                         '☀️ Confiance solaire: <b>' + Math.round(d.weather_solar_confidence || 0) + '%</b>',
                         '🌡️ Température: <b>' + (d.weather_temp !== undefined ? d.weather_temp.toFixed(1) + '°C' : '--') + '</b>',
                         '☁️ Nuages: <b>' + (d.weather_clouds || 0) + '%</b> (Bas:' + (d.weather_clouds_low||0) + ' Mid:' + (d.weather_clouds_mid||0) + ' Haut:' + (d.weather_clouds_high||0) + ')',
-                        '📡 Rayonnement SW: <b>' + (d.weather_shortwave_radiation||0).toFixed(0) + ' W/m²</b>',
-                        '🌍 Rayonnement terrestre: <b>' + (d.weather_terrestrial_radiation||0).toFixed(0) + ' W/m²</b>',
+                        '📡 Rayonnement SW (Réel): <b>' + (d.weather_shortwave_radiation||0).toFixed(0) + ' W/m²</b>',
+                        '🌍 Potentiel (Ciel clair): <b>' + (d.weather_terrestrial_radiation||0).toFixed(0) + ' W/m²</b>',
                         '🌅 Lever: <b>' + (d.weather_sunrise||'--') + '</b> / Coucher: <b>' + (d.weather_sunset||'--') + '</b>',
-                        '🕐 Dernière MAJ: <b>' + age + ' min</b>',
-                    ];
-                    if (d.solar_panel_power > 0) lines.push('⚡ Production estimée: <b>' + Math.round(d.weather_expected_power || 0) + ' W</b> (facteur horaire: ' + ((d.weather_time_factor || 0) * 100).toFixed(0) + '%)');
+                        '🕐 Facteur horaire (Z:' + (d.solar_panel_azimuth||0) + '°, T:' + (d.solar_panel_tilt||0) + '°): <b>' + ((d.weather_time_factor || 0) * 100).toFixed(1) + '%</b>',
+                        '⏱️ Dernière MAJ: <b>' + age + ' min</b>',                    ];                    if (d.solar_panel_power > 0) lines.push('⚡ Production estimée: <b>' + Math.round(d.weather_expected_power || 0) + ' W</b> (facteur horaire: ' + ((d.weather_time_factor || 0) * 100).toFixed(0) + '%)');
                     if (d.weather_rain > 0) lines.push('🌧️ Pluie: <b>' + d.weather_rain + ' mm</b>');
                     if (d.weather_snow > 0) lines.push('❄️ Neige: <b>' + d.weather_snow + ' cm</b>');
                     document.getElementById('weatherDetailContent').innerHTML = lines.join('<br>');
@@ -518,11 +517,49 @@
 
                 // Force Mode & Boost
                 const fmEl = document.getElementById('forceMode');
-                if (fmEl) {
-                    fmEl.innerHTML = d.force_mode ? '<span class="badge badge-force">Forcé</span>' : '<span class="badge badge-off">Inactif</span>';
-                }
                 const cbEl = document.getElementById('cancelBoostForm');
-                if (cbEl) cbEl.style.display = d.boost_active ? 'flex' : 'none';
+                const bcEl = document.getElementById('boostControls');
+                const vsEl = document.getElementById('vacationStatus');
+                const cvBtn = document.getElementById('cancelVacationBtn');
+
+                if (fmEl) {
+                    if (d.boost_active) {
+                        fmEl.innerHTML = '<span class="badge badge-force">Boost ' + d.boost_remaining + 'm</span>';
+                        if (cbEl) cbEl.style.display = 'flex';
+                        if (bcEl) bcEl.style.display = 'none';
+                        if (vsEl) {
+                            // Use boost_end_time from server for perfect sync
+                            const end = new Date(d.boost_end_time * 1000);
+                            const options = { hour: '2-digit', minute: '2-digit' };
+                            vsEl.innerText = "⚡ Boost : Fin à " + end.toLocaleTimeString('fr-FR', options);
+                            vsEl.style.display = 'block';
+                        }
+                        if (cvBtn) cvBtn.style.display = 'none';
+                    } else if (d.is_vacation) {
+                        fmEl.innerHTML = '<span class="badge" style="background:#555; color:white;">Vacances (Pas de force)</span>';
+                        if (cbEl) cbEl.style.display = 'none';
+                        if (bcEl) bcEl.style.display = 'flex';
+                        if (vsEl) {
+                            const end = new Date(d.vacation_until * 1000);
+                            const options = { weekday: 'long', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' };
+                            vsEl.innerText = "🌴 Vacances : Reprise le " + end.toLocaleDateString('fr-FR', options);
+                            vsEl.style.display = 'block';
+                        }
+                        if (cvBtn) cvBtn.style.display = 'inline-block';
+                    } else if (d.force_mode) {
+                        fmEl.innerHTML = '<span class="badge badge-force">Forcé</span>';
+                        if (cbEl) cbEl.style.display = 'none';
+                        if (bcEl) bcEl.style.display = 'flex';
+                        if (vsEl) vsEl.style.display = 'none';
+                        if (cvBtn) cvBtn.style.display = 'none';
+                    } else {
+                        fmEl.innerHTML = '<span class="badge badge-off">Inactif</span>';
+                        if (cbEl) cbEl.style.display = 'none';
+                        if (bcEl) bcEl.style.display = 'flex';
+                        if (vsEl) vsEl.style.display = 'none';
+                        if (cvBtn) cvBtn.style.display = 'none';
+                    }
+                }
 
                 // SSR Temperature
                 const ssrCard = document.getElementById('ssrTempCard');
@@ -842,6 +879,103 @@
             document.head.appendChild(s);
         }, 3000);
 
+        function showBoostPopup() {
+            document.getElementById('boostBackdrop').style.display = 'block';
+            document.getElementById('boostPopup').style.display = 'block';
+            updateBoostEndDate();
+        }
+
+        function hideBoostPopup() {
+            document.getElementById('boostBackdrop').style.display = 'none';
+            document.getElementById('boostPopup').style.display = 'none';
+        }
+
+        function updateBoostEndDate() {
+            const hours = parseFloat(document.getElementById('boostHours').value) || 0;
+            if (hours > 0) {
+                const end = new Date();
+                end.setMinutes(end.getMinutes() + (hours * 60));
+                const options = { weekday: 'long', hour: '2-digit', minute: '2-digit' };
+                document.getElementById('boostEndDateDisplay').innerText = "Fin du boost le : " + end.toLocaleDateString('fr-FR', options);
+            } else {
+                document.getElementById('boostEndDateDisplay').innerText = "";
+            }
+        }
+
+        async function setBoost() {
+            const hours = document.getElementById('boostHours').value;
+            const minutes = Math.round(hours * 60);
+            try {
+                const r = await fetch('/boost', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'min=' + minutes
+                });
+                if (r.ok) {
+                    hideBoostPopup();
+                    setTimeout(updateStatus, 500);
+                } else {
+                    alert("Erreur lors de la configuration du boost");
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        async function cancelBoost() {
+            if (!confirm("Annuler le boost ?")) return;
+            try {
+                const r = await fetch('/cancel_boost', { method: 'POST' });
+                if (r.ok) {
+                    setTimeout(updateStatus, 500);
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        function showVacationPopup() {
+            document.getElementById('vacationBackdrop').style.display = 'block';
+            document.getElementById('vacationPopup').style.display = 'block';
+            updateVacationEndDate();
+        }
+
+        function hideVacationPopup() {
+            document.getElementById('vacationBackdrop').style.display = 'none';
+            document.getElementById('vacationPopup').style.display = 'none';
+        }
+
+        function updateVacationEndDate() {
+            const days = parseInt(document.getElementById('vacationDays').value) || 0;
+            if (days > 0) {
+                const end = new Date();
+                end.setDate(end.getDate() + days);
+                const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+                document.getElementById('vacationEndDateDisplay').innerText = "Reprise forcée le : " + end.toLocaleDateString('fr-FR', options);
+            } else {
+                document.getElementById('vacationEndDateDisplay').innerText = "";
+            }
+        }
+
+        async function setVacation() {
+            const days = document.getElementById('vacationDays').value;
+            try {
+                const r = await fetch('/set_vacation?days=' + days);
+                if (r.ok) {
+                    hideVacationPopup();
+                    setTimeout(updateStatus, 500);
+                } else {
+                    alert("Erreur lors de la configuration");
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        async function cancelVacation() {
+            if (!confirm("Annuler le mode vacances ?")) return;
+            try {
+                const r = await fetch('/cancel_vacation');
+                if (r.ok) {
+                    setTimeout(updateStatus, 500);
+                }
+            } catch (err) { console.error(err); }
+        }
+
         window.addEventListener('resize', function() {
             if (powerChart) {
                 var el = document.getElementById('powerChart');
@@ -849,5 +983,34 @@
             }
         });
     </script>
+    <div id="boostBackdrop" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:2000;" onclick="hideBoostPopup()"></div>
+    <div id="boostPopup" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#1a1a2e; color:#eee; padding:20px; border-radius:10px; border:1px solid #444; z-index:2001; width:90%; max-width:400px; text-align:center;">
+        <h3 style="margin-top:0;">Configuration Boost</h3>
+        <p style="font-size:0.9em; color:#aaa;">L'équipement 1 sera forcé à sa puissance maximale pendant la durée sélectionnée.</p>
+        <div style="margin: 20px 0;">
+            <label>Nombre d'heures :</label>
+            <input type="number" id="boostHours" value="1" min="1" max="24" style="width:60px; padding:5px; background:#0d0d1a; color:#eee; border:1px solid #444; border-radius:4px; margin-left:10px;" oninput="updateBoostEndDate()">
+        </div>
+        <p id="boostEndDateDisplay" style="font-size:0.9em; color:#f0c040; margin-bottom:20px; min-height:1.2em;"></p>
+        <div style="display:flex; gap:10px; justify-content:center;">
+            <button onclick="setBoost()" class="badge badge-force" style="border:none; cursor:pointer; padding:10px 20px;">Démarrer</button>
+            <button onclick="hideBoostPopup()" class="badge" style="background:#555; color:white; border:none; cursor:pointer; padding:10px 20px;">Fermer</button>
+        </div>
+    </div>
+
+    <div id="vacationBackdrop" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:2000;" onclick="hideVacationPopup()"></div>
+    <div id="vacationPopup" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#1a1a2e; color:#eee; padding:20px; border-radius:10px; border:1px solid #444; z-index:2001; width:90%; max-width:400px; text-align:center;">
+        <h3 style="margin-top:0;">Configuration Vacances</h3>
+        <p style="font-size:0.9em; color:#aaa;">Pendant les vacances, la plage forcée (nuit) est ignorée. Seul le surplus solaire est utilisé.</p>
+        <div style="margin: 20px 0;">
+            <label>Nombre de jours :</label>
+            <input type="number" id="vacationDays" value="7" min="1" max="90" style="width:60px; padding:5px; background:#0d0d1a; color:#eee; border:1px solid #444; border-radius:4px; margin-left:10px;" oninput="updateVacationEndDate()">
+        </div>
+        <p id="vacationEndDateDisplay" style="font-size:0.9em; color:#f0c040; margin-bottom:20px; min-height:1.2em;"></p>
+        <div style="display:flex; gap:10px; justify-content:center;">
+            <button onclick="setVacation()" class="badge badge-force" style="border:none; cursor:pointer; padding:10px 20px;">Démarrer</button>
+            <button onclick="hideVacationPopup()" class="badge" style="background:#555; color:white; border:none; cursor:pointer; padding:10px 20px;">Fermer</button>
+        </div>
+    </div>
 </body>
 </html>

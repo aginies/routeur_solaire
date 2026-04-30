@@ -64,6 +64,7 @@
     "min_power_threshold": 10.0,
     "min_off_time": 1,
     "boost_minutes": 60,
+    "vacation_until": 0,
 
     "force_equipment": false,
     "e_force_window": true,
@@ -108,6 +109,8 @@
     "weather_cloud_threshold": 75,
     "solar_panel_power": 0,
     "solar_panel_azimuth": 180,
+    "solar_panel_tilt": 32,
+    "solar_loss_factor": 14,
 
     "web_user": "",
     "web_password": ""

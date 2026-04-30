@@ -120,6 +120,8 @@ struct Config {
     int weather_cloud_threshold = 40; // Minimum solar confidence percentage
     int solar_panel_power = 0; // Max solar panel power (W), 0 = disabled
     int solar_panel_azimuth = 180; // Panel azimuth (0=N, 90=E, 180=S, 270=W)
+    int solar_panel_tilt = 35; // Panel tilt in degrees (0=horizontal, 90=vertical)
+    int solar_loss_factor = 14; // Percentage of system losses (cables, inverter, dirt)
 
     // Incremental Controller (pv-router algorithm)
     float delta = 50.0;          // upper threshold (W) — above this, importing too much
@@ -134,6 +136,9 @@ struct Config {
     int min_off_time = 1;
     int boost_minutes = 60;
     
+    // Vacation Mode
+    uint32_t vacation_until = 0; // Epoch timestamp until when vacation mode is active
+
     // Force Mode
     bool force_equipment = false;
     bool e_force_window = false;

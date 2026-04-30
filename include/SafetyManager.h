@@ -27,7 +27,7 @@ enum class EmergencyKind {
 class SafetyManager {
 public:
     static void init(const Config& config);
-    static SystemState evaluateState(float espTemp, float ssrTemp, uint32_t lastGoodPoll, bool boostActive, bool forcedWindow, bool nightActive);
+    static SystemState evaluateState(float espTemp, float ssrTemp, uint32_t lastGoodPoll, bool boostActive, bool forcedWindow, bool nightActive, uint32_t currentEpoch);
     static void applyState(SystemState newState);
     
     static SystemState currentState;

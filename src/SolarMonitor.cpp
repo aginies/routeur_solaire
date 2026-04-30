@@ -156,21 +156,36 @@ void SolarMonitor::monitorTask(void* pvParameters) {
             _lastGoodPoll = now;
         }
 
-        // 4. Evaluate State Machine
+        // 3. Update State Machine
+        time_t t_now;
+        time(&t_now);
         SystemState newState = SafetyManager::evaluateState(
             TemperatureManager::lastEspTemp,
             TemperatureManager::currentSsrTemp,
             _lastGoodPoll,
             boostActive,
             forcedWindow,
-            nightActive
+            nightActive,
+            (uint32_t)t_now
         );
         SafetyManager::applyState(newState);
 
         // 5. Grid Power Retrieval & Control Math
+        esp_task_wdt_reset();
         if (now - lastPoll >= currentPollInterval * 1000UL) {
             lastPoll = now;
+            
+            // Bug #21: Unsubscribe from WDT around network-dependent polls.
+            // If DNS is broken or a Shelly is hung, the HTTP stack can block for >30s,
+            // which exceeds the watchdog timeout even if we pet it before.
+            bool isNetworkPoll = !_config->e_jsy && !_config->e_shelly_mqtt;
+            if (isNetworkPoll) esp_task_wdt_delete(NULL);
+            
             bool pollOk = GridSensorService::fetchGridData();
+            
+            if (isNetworkPoll) esp_task_wdt_add(NULL);
+            esp_task_wdt_reset();
+
             if (pollOk) {
                 _lastGoodPoll = now;
                 
@@ -276,6 +291,8 @@ void SolarMonitor::monitorTask(void* pvParameters) {
         if (_config->e_mqtt && (now - lastMqttReport >= ((uint32_t)_config->mqtt_report_interval * 1000UL))) {
             lastMqttReport = now;
             esp_task_wdt_reset();
+            
+            // Bug #21: MqttManager::publishStatus can block if the stack is hung
             MqttManager::publishStatus(
                 GridSensorService::currentGridPower,
                 ActuatorManager::equipmentPower,
@@ -287,6 +304,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
                 TemperatureManager::currentSsrTemp,
                 ActuatorManager::fanPercent
             );
+            esp_task_wdt_reset();
         }
 
         // 6. Maintenance Loops (Moved from main loop for core isolation)
@@ -295,20 +313,35 @@ void SolarMonitor::monitorTask(void* pvParameters) {
         esp_task_wdt_reset();
         WebManager::loop();
         esp_task_wdt_reset();
+        
+        // Bug #21: MQTT loop handles reconnections which might involve DNS
+        bool mqttNetworkActive = _config->e_mqtt || _config->e_shelly_mqtt || _config->e_equip1_mqtt || _config->e_equip2_mqtt;
+        if (mqttNetworkActive) esp_task_wdt_delete(NULL);
         MqttManager::loop();
+        if (mqttNetworkActive) esp_task_wdt_add(NULL);
+        
+        esp_task_wdt_reset();
 
         // 7. Measured Power Update (Shelly 1PM)
-        // Bug #14: rate-limit Shelly1PM polling to ~once per 2 s. The outer task loops at ~110 ms
-        // (~9 Hz), and Shelly1PMManager::update() does a blocking HTTP call each time, which
-        // saturates the device and adds tens-of-ms jitter to the control loop.
+        // Bug #14: rate-limit Shelly1PM polling to ~once per 2 s.
         static uint32_t lastShelly1PMUpdate = 0;
         if (now - lastShelly1PMUpdate >= 2000) {
             lastShelly1PMUpdate = now;
+            
+            // Bug #21: Shelly1PMManager::update() does blocking HTTP/DNS
+            bool shellyPollActive = (!_config->e_equip1_mqtt && _config->equip1_shelly_ip.length() > 0) ||
+                                   (!_config->e_equip2_mqtt && _config->equip2_shelly_ip.length() > 0);
+            if (shellyPollActive) esp_task_wdt_delete(NULL);
+            
             Shelly1PMManager::update();
+            
+            if (shellyPollActive) esp_task_wdt_add(NULL);
             esp_task_wdt_reset();
+            
             if (_config->e_equip1 && Shelly1PMManager::hasValidEq1Data()) {
                 ActuatorManager::equipmentPower = Shelly1PMManager::getPowerEq1();
             }
+            esp_task_wdt_reset();
         }
 
         vTaskDelay(pdMS_TO_TICKS(110)); 

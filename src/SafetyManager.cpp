@@ -34,7 +34,7 @@ void SafetyManager::init(const Config& config) {
     setEmergency(EmergencyKind::NONE);
 }
 
-SystemState SafetyManager::evaluateState(float espTemp, float ssrTemp, uint32_t lastGoodPoll, bool boostActive, bool forcedWindow, bool nightActive) {
+SystemState SafetyManager::evaluateState(float espTemp, float ssrTemp, uint32_t lastGoodPoll, bool boostActive, bool forcedWindow, bool nightActive, uint32_t currentEpoch) {
     if (!_config) return SystemState::STATE_EMERGENCY_FAULT;
 
     // Hysteresis calculation: recovery only happens when temp is 5C below max
@@ -69,7 +69,10 @@ SystemState SafetyManager::evaluateState(float espTemp, float ssrTemp, uint32_t 
     }
 
     // 2. Priority 2: BOOST (Manual / Schedule)
-    if (boostActive || forcedWindow) {
+    bool vacationMode = (currentEpoch > 0 && currentEpoch < _config->vacation_until);
+    bool effectiveForced = forcedWindow && !vacationMode;
+
+    if (boostActive || effectiveForced) {
         setEmergency(EmergencyKind::NONE);
         return SystemState::STATE_BOOST;
     }

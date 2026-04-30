@@ -167,6 +167,8 @@ Config ConfigManager::load() {
     if (has(doc, "weather_cloud_threshold")) config.weather_cloud_threshold = doc["weather_cloud_threshold"];
     if (has(doc, "solar_panel_power")) config.solar_panel_power = doc["solar_panel_power"];
     if (has(doc, "solar_panel_azimuth")) config.solar_panel_azimuth = clampInt(doc["solar_panel_azimuth"].as<int>(), 0, 359, config.solar_panel_azimuth, "solar_panel_azimuth");
+    if (has(doc, "solar_panel_tilt")) config.solar_panel_tilt = clampInt(doc["solar_panel_tilt"].as<int>(), 0, 90, config.solar_panel_tilt, "solar_panel_tilt");
+    if (has(doc, "solar_loss_factor")) config.solar_loss_factor = clampInt(doc["solar_loss_factor"].as<int>(), 0, 90, config.solar_loss_factor, "solar_loss_factor");
 
     // Incremental Controller
     if (has(doc, "delta")) config.delta = doc["delta"];
@@ -180,6 +182,7 @@ Config ConfigManager::load() {
     if (has(doc, "min_power_threshold")) config.min_power_threshold = doc["min_power_threshold"];
     if (has(doc, "min_off_time")) config.min_off_time = doc["min_off_time"];
     if (has(doc, "boost_minutes")) config.boost_minutes = doc["boost_minutes"];
+    if (has(doc, "vacation_until")) config.vacation_until = doc["vacation_until"];
 
     // Force/Night Mode
     if (has(doc, "force_equipment")) config.force_equipment = doc["force_equipment"];
@@ -301,6 +304,8 @@ bool ConfigManager::save(const Config& config) {
     doc["weather_cloud_threshold"] = config.weather_cloud_threshold;
     doc["solar_panel_power"] = config.solar_panel_power;
     doc["solar_panel_azimuth"] = config.solar_panel_azimuth;
+    doc["solar_panel_tilt"] = config.solar_panel_tilt;
+    doc["solar_loss_factor"] = config.solar_loss_factor;
 
     doc["delta"] = config.delta;
     doc["deltaneg"] = config.deltaneg;
@@ -311,6 +316,8 @@ bool ConfigManager::save(const Config& config) {
     doc["min_power_threshold"] = config.min_power_threshold;
     doc["min_off_time"] = config.min_off_time;
     doc["boost_minutes"] = config.boost_minutes;
+    doc["vacation_until"] = config.vacation_until;
+
     doc["force_equipment"] = config.force_equipment;
     doc["e_force_window"] = config.e_force_window;
     doc["force_start"] = config.force_start;

@@ -166,8 +166,10 @@ void WebManager::applyRequestParams(AsyncWebServerRequest *request, Config &cfg)
     if (has("WEATHER_LAT")) cfg.weather_lat = get("WEATHER_LAT").substring(0, 16);
     if (has("WEATHER_LON")) cfg.weather_lon = get("WEATHER_LON").substring(0, 16);
     if (has("WEATHER_THRESH")) cfg.weather_cloud_threshold = clampInt(get("WEATHER_THRESH").toInt(), 0, 100);
-    if (has("SOLAR_PANEL_POWER")) cfg.solar_panel_power = clampInt(get("SOLAR_PANEL_POWER").toInt(), 0, 100000);
+    if (has("SOLAR_PANEL_POWER")) cfg.solar_panel_power = clampInt(get("SOLAR_PANEL_POWER").toInt(), 0, 50000);
     if (has("SOLAR_PANEL_AZIMUTH")) cfg.solar_panel_azimuth = clampInt(get("SOLAR_PANEL_AZIMUTH").toInt(), 0, 360);
+    if (has("SOLAR_PANEL_TILT")) cfg.solar_panel_tilt = clampInt(get("SOLAR_PANEL_TILT").toInt(), 0, 90);
+    if (has("SOLAR_LOSS_FACTOR")) cfg.solar_loss_factor = clampInt(get("SOLAR_LOSS_FACTOR").toInt(), 0, 90);
 
     // Web
     if (has("WEB_USER")) cfg.web_user = get("WEB_USER").substring(0, 64);
@@ -278,6 +280,29 @@ void WebManager::setupRoutes() {
         response->addHeader("Content-Encoding", "gzip");
         request->send(response);
     });
+    _server.on("/set_vacation", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
+        int days = request->hasParam("days") ? request->getParam("days")->value().toInt() : 0;
+        if (days > 0) {
+            time_t now;
+            time(&now);
+            Config cfg = *_config;
+            cfg.vacation_until = (uint32_t)now + (days * 86400UL);
+            ConfigManager::save(cfg);
+            request->send(200, "text/plain", "Vacances configurées");
+        } else {
+            request->send(400, "text/plain", "Nombre de jours invalide");
+        }
+    });
+
+    _server.on("/cancel_vacation", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
+        Config cfg = *_config;
+        cfg.vacation_until = 0;
+        ConfigManager::save(cfg);
+        request->send(200, "text/plain", "Vacances annulées");
+    });
+
     _server.on("/get_stats", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
         StatsManager::streamStatsJson(request);
@@ -512,6 +537,9 @@ void WebManager::setupRoutes() {
         doc["weather_cloud_threshold"] = _config->weather_cloud_threshold;
         doc["solar_panel_power"] = _config->solar_panel_power;
         doc["solar_panel_azimuth"] = _config->solar_panel_azimuth;
+        doc["solar_panel_tilt"] = _config->solar_panel_tilt;
+        doc["solar_loss_factor"] = _config->solar_loss_factor;
+        doc["vacation_until"] = _config->vacation_until;
         doc["fake_shelly"] = _config->fake_shelly;
         doc["web_user"] = _config->web_user;
         doc["web_password"] = _config->web_password;
@@ -717,6 +745,10 @@ void WebManager::streamStatusJson(AsyncWebServerRequest *request) {
     doc["eq1_real_power"] = Shelly1PMManager::getPowerEq1();
     doc["equip2_power"] = Shelly1PMManager::getPower();
     doc["boost_active"] = (SafetyManager::currentState == SystemState::STATE_BOOST);
+    uint32_t nowSec = millis() / 1000;
+    int32_t remaining = (int32_t)(ActuatorManager::boostEndTime - nowSec);
+    doc["boost_remaining"] = remaining > 0 ? (remaining / 60) : 0;
+    doc["boost_end_time"] = ActuatorManager::boostEndTime;
     doc["force_mode"] = (SafetyManager::currentState == SystemState::STATE_BOOST);
     doc["emergency_mode"] = (SafetyManager::currentState == SystemState::STATE_EMERGENCY_FAULT);
     doc["emergency_reason"] = SafetyManager::emergencyReason;
@@ -794,6 +826,11 @@ void WebManager::streamStatusJson(AsyncWebServerRequest *request) {
     doc["equip2_bypassed"] = Equipment2Manager::isBypassedByCloud();
     doc["equip2_max_power"] = _config->equip2_max_power;
     doc["night_mode"] = SolarMonitor::isNight(Utils::getCurrentMinutes());
+    
+    time_t t_now_epoch;
+    time(&t_now_epoch);
+    doc["vacation_until"] = _config->vacation_until;
+    doc["is_vacation"] = (_config->vacation_until > (uint32_t)t_now_epoch);
 
     // Weather
     doc["e_weather"] = _config->e_weather;
@@ -817,6 +854,9 @@ void WebManager::streamStatusJson(AsyncWebServerRequest *request) {
         doc["weather_time_factor"] = WeatherManager::getTimeFactor();
         doc["weather_expected_power"] = WeatherManager::getExpectedSolarPower();
         doc["solar_panel_power"] = _config->solar_panel_power;
+        doc["solar_panel_azimuth"] = _config->solar_panel_azimuth;
+        doc["solar_panel_tilt"] = _config->solar_panel_tilt;
+        doc["solar_loss_factor"] = _config->solar_loss_factor;
     }
 
     time_t t_now; time(&t_now); struct tm ti; localtime_r(&t_now, &ti);

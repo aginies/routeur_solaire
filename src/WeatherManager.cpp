@@ -48,11 +48,9 @@ void WeatherManager::init(const Config& config) {
     }
 
     _client.setInsecure();
-    // Bug #2: setInsecure() disables TLS cert verification. Acceptable for the
-    // public Open-Meteo endpoint over read-only data, but documented here so
-    // future contributors don't ship private data over this client.
-    _client.setTimeout(15);        // 15s TLS handshake + connect timeout
-    _http.useHTTP10(true);
+    // Bug #2: setInsecure() disables TLS cert verification.
+    _client.setTimeout(15);
+    _http.useHTTP10(true); 
     _http.setTimeout(15000);
     _http.setConnectTimeout(10000);
 }
@@ -124,12 +122,6 @@ static void snapshotSunTimes(String& sunriseOut, String& sunsetOut) {
     sunsetOut  = WeatherManager::getSunset();
 }
 
-// Bug #1 (header audit): out-of-line definitions for sunrise/sunset/icon
-// getters. Take _weatherStringMutex while copying the static String to a
-// local, returned by value. Falls back to a lock-free copy if the mutex
-// isn't initialized yet (init() hasn't run) or can't be acquired in time —
-// in that boot/contention edge case we accept the residual race rather than
-// returning empty data, matching the prior best-effort semantics.
 String WeatherManager::getSunrise() {
     if (_weatherStringMutex && xSemaphoreTake(_weatherStringMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
         String copy = _sunrise;
@@ -179,11 +171,13 @@ float WeatherManager::getTimeFactor() {
     if (!_config || !_config->e_weather) return 0.0f;
 
     String sr, ss;
-    snapshotSunTimes(sr, ss); // Bug #4
+    snapshotSunTimes(sr, ss);
 
-    int sunriseMin = parseHourMinute(sr); // Bug #7
+    int sunriseMin = parseHourMinute(sr);
     int sunsetMin  = parseHourMinute(ss);
-    if (sunriseMin < 0 || sunsetMin < 0) return 0.0f;
+    if (sunriseMin < 0 || sunsetMin < 0) {
+        return 0.0f;
+    }
     if (sunsetMin <= sunriseMin) return 0.0f;
 
     time_t now;
@@ -192,24 +186,53 @@ float WeatherManager::getTimeFactor() {
     localtime_r(&now, &ti);
     int currMin = ti.tm_hour * 60 + ti.tm_min;
 
-    if (currMin <= sunriseMin || currMin >= sunsetMin) return 0.0f;
+    if (currMin <= sunriseMin || currMin >= sunsetMin) {
+        return 0.0f;
+    }
 
     float progress = (float)(currMin - sunriseMin) / (float)(sunsetMin - sunriseMin);
-    float elevationFactor = sinf(progress * M_PI);
 
-    // Sun azimuth goes ~90° (east/sunrise) to ~270° (west/sunset)
-    float sunAzimuth = 90.0f + 180.0f * progress;
-    float azimuthDiff = (sunAzimuth - _config->solar_panel_azimuth) * M_PI / 180.0f;
-    float azimuthFactor = fmaxf(0.0f, cosf(azimuthDiff));
+    // --- ACCURATE SOLAR INCIDENCE MODEL ---
+    // 1. Estimate Sun position
+    // Elevation: Simple sine approximation peaking at 90° (solar noon)
+    float sunElevation = sinf(progress * M_PI); // 0 at sunrise/sunset, 1 at noon
+    float sunElevationRad = asinf(sunElevation); // Sun height in radians
 
-    return elevationFactor * azimuthFactor;
+    // Azimuth: Linear approximation from 90° (East) to 270° (West)
+    float sunAzimuthRad = (90.0f + 180.0f * progress) * M_PI / 180.0f;
+
+    // 2. Panel orientation
+    float panelAzimuthRad = (float)_config->solar_panel_azimuth * M_PI / 180.0f;
+    float panelTiltRad = (float)_config->solar_panel_tilt * M_PI / 180.0f;
+
+    // 3. Incidence Angle Calculation (Spherical Law of Cosines)
+    // The factor is the cosine of the angle between the sun and the panel's normal.
+    // Factor = cos(sun_elev) * sin(panel_tilt) * cos(sun_azim - panel_azim) + sin(sun_elev) * cos(panel_tilt)
+    float cosIncidence = cosf(sunElevationRad) * sinf(panelTiltRad) * cosf(sunAzimuthRad - panelAzimuthRad) 
+                       + sinf(sunElevationRad) * cosf(panelTiltRad);
+
+    // Clamp factor: 0.0 if the sun is behind the panel, 1.0 if perfectly perpendicular
+    float timeFactor = fmaxf(0.0f, cosIncidence);
+
+    return timeFactor;
 }
 
 float WeatherManager::getExpectedSolarPower() {
     if (!_config || !_config->e_weather || _config->solar_panel_power <= 0)
         return 0.0f;
 
-    return _config->solar_panel_power * getTimeFactor() * (getSolarConfidence() / 100.0f);
+    // The STC (Standard Test Conditions) power is rated at 1000 W/m2.
+    // We use the actual shortwave radiation hitting the ground as our base intensity.
+    float intensityFactor = _shortwaveRadiationInstant / 1000.0f;
+    
+    // The TimeFactor now acts as an "Orientation Gain".
+    // It models how well the tilted panel captures the light relative to the flat ground.
+    // It is 1.0 at peak alignment and drops as the sun moves away.
+    float basePower = _config->solar_panel_power * intensityFactor * getTimeFactor();
+
+    // Apply system losses (cables, inverter efficiency, etc.)
+    float lossMultiplier = 1.0f - ((float)_config->solar_loss_factor / 100.0f);
+    return basePower * lossMultiplier;
 }
 
 bool WeatherManager::isNight() {
@@ -254,12 +277,10 @@ void WeatherManager::weatherTask(void* pvParameters) {
 void WeatherManager::updateWeather() {
     if (!_config || !_config->e_weather) return;
 
-    // Bug #8: don't fire HTTP request without coordinates
     if (_config->weather_lat.length() == 0 || _config->weather_lon.length() == 0) {
         return;
     }
 
-    // Bug #6: rate-limit so forceUpdate() spam can't hammer the API.
     uint32_t now = millis();
     if (_lastFetchAttemptMs != 0 && (now - _lastFetchAttemptMs) < WEATHER_MIN_REFRESH_MS) {
         return;
@@ -298,7 +319,6 @@ void WeatherManager::updateWeather() {
 
                 bool isDay = cur["is_day"] | true;
 
-                // Map Open-Meteo weather codes to weather-sprite.svg IDs
                 int code = cur["weather_code"] | 0;
                 String iconBuf;
                 if (code == 0) iconBuf = isDay ? "day" : "night";
@@ -347,9 +367,3 @@ void WeatherManager::updateWeather() {
         _http.end();
     }
 }
-
-// Bug #14: documented behavior — _weatherIcon defaults to "" until first
-// successful update; UI must handle the empty string (e.g. show generic icon).
-// Bug #13: when weather is disabled, getEffectiveCloudiness/getSolarConfidence
-// return 0/100 respectively (i.e. "perfectly clear"). Callers that need a
-// distinct "unknown" state must check _config->e_weather themselves.

@@ -195,6 +195,16 @@
                         <input type="number" min="0" max="360" id="SOLAR_PANEL_AZIMUTH" name="SOLAR_PANEL_AZIMUTH">
                         <p style="font-size: 0.8em; color: #888; margin-top: 4px;">Orientation des panneaux : 0=Nord, 90=Est, 180=Sud, 270=Ouest. Décale la courbe de production estimée selon l'orientation réelle.</p>
                     </div>
+                    <div class="form-group">
+                        <label for="SOLAR_PANEL_TILT">Inclinaison des panneaux (°):</label>
+                        <input type="number" min="0" max="90" id="SOLAR_PANEL_TILT" name="SOLAR_PANEL_TILT">
+                        <p style="font-size: 0.8em; color: #888; margin-top: 4px;">Inclinaison par rapport à l'horizontale : 0=Plat, 90=Vertical. Optimise l'estimation de production selon l'angle d'incidence du soleil.</p>
+                    </div>
+                    <div class="form-group">
+                        <label for="SOLAR_LOSS_FACTOR">Pertes du système (%):</label>
+                        <input type="number" min="0" max="90" id="SOLAR_LOSS_FACTOR" name="SOLAR_LOSS_FACTOR">
+                        <p style="font-size: 0.8em; color: #888; margin-top: 4px;">Pertes estimées (onduleur, câbles, poussière). Par défaut 14%. Réduit proportionnellement la production estimée.</p>
+                    </div>
                 </div>
             </details>
 
@@ -818,6 +828,8 @@
             setVal('WEATHER_THRESH',c.weather_cloud_threshold);
             setVal('SOLAR_PANEL_POWER',c.solar_panel_power);
             setVal('SOLAR_PANEL_AZIMUTH',c.solar_panel_azimuth);
+            setVal('SOLAR_PANEL_TILT',c.solar_panel_tilt);
+            setVal('SOLAR_LOSS_FACTOR',c.solar_loss_factor);
             setBool('FAKE_SHELLY',c.fake_shelly);
             setVal('WEB_USER',c.web_user);
             setVal('WEB_PASSWORD',c.web_password);
