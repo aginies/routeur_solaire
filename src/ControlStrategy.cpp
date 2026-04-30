@@ -9,6 +9,7 @@ volatile uint32_t ControlStrategy::_zxCounter = 0;
 volatile uint32_t ControlStrategy::_zxTime = 0;
 EventGroupHandle_t ControlStrategy::_zxEventGroup = nullptr;
 TaskHandle_t ControlStrategy::_currentTaskHandle = nullptr;
+esp_timer_handle_t ControlStrategy::_phaseTimer = nullptr;
 
 void ControlStrategy::init(const Config& config) {
     _config = &config;
@@ -23,6 +24,13 @@ void ControlStrategy::stopTasks() {
         esp_task_wdt_delete(_currentTaskHandle);
         vTaskDelete(_currentTaskHandle);
         _currentTaskHandle = nullptr;
+    }
+
+    // Bug #12: tear down the phase-mode hardware timer if it was running.
+    if (_phaseTimer != nullptr) {
+        esp_timer_stop(_phaseTimer);
+        esp_timer_delete(_phaseTimer);
+        _phaseTimer = nullptr;
     }
 
     // Bug #1: guard against writing to invalid GPIO if ActuatorManager::init()
@@ -62,8 +70,23 @@ void ControlStrategy::startTasks() {
         xTaskCreatePinnedToCore(trameControlTask, "trameTask", 4096, NULL, 5, &_currentTaskHandle, 1);
     } else if (_config->control_mode == "phase") {
         pinMode(_config->zx_pin, INPUT_PULLUP);
-        attachInterrupt(digitalPinToInterrupt(_config->zx_pin), handleZxInterrupt, RISING);
-        xTaskCreatePinnedToCore(phaseControlTask, "phaseTask", 4096, NULL, 5, &_currentTaskHandle, 1);
+        // Bug #12: create the one-shot hardware timer used to fire the SSR at
+        // the precise phase angle. Created BEFORE attaching the ISR so the
+        // ISR can never see a NULL handle.
+        const esp_timer_create_args_t targs = {
+            .callback = &phaseFireSsr,
+            .arg = nullptr,
+            .dispatch_method = ESP_TIMER_TASK,
+            .name = "phaseFire",
+            .skip_unhandled_events = true,
+        };
+        if (esp_timer_create(&targs, &_phaseTimer) != ESP_OK) {
+            Logger::error("phase: esp_timer_create failed - SSR will stay OFF");
+            return;
+        }
+        attachInterrupt(digitalPinToInterrupt(_config->zx_pin), handlePhaseZxInterrupt, RISING);
+        // Slim watchdog task: only checks for mains loss, never busy-waits.
+        xTaskCreatePinnedToCore(phaseControlTask, "phaseTask", 2048, NULL, 5, &_currentTaskHandle, 1);
     } else {
         // Bug #8: unrecognized control_mode silently leaves SSR dead. Warn loudly.
         Logger::warn("ControlStrategy: unknown control_mode '" + _config->control_mode + "' - SSR will remain OFF");
@@ -199,74 +222,98 @@ void ControlStrategy::trameControlTask(void* pvParameters) {
     cycleStealingTask(pvParameters);
 }
 
+// Bug #12: phase-mode ISR. Runs from the AC zero-cross interrupt and either
+// drives the SSR latch high/low immediately (full-on / full-off endpoints) or
+// arms the one-shot esp_timer to fire the SSR pulse `waitUs` microseconds
+// later. NO busy-wait, NO blocking call -> no CPU starvation, no IWDT trip.
+void IRAM_ATTR ControlStrategy::handlePhaseZxInterrupt() {
+    if (!_zxEventGroup) return;
+
+    // Keep counter / timestamp / event bit updated for the watchdog task and
+    // for any other consumer (e.g. status JSON, logs).
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    _zxTime = micros();
+    _zxCounter++;
+    xEventGroupSetBitsFromISR(_zxEventGroup, 0x01, &xHigherPriorityTaskWoken);
+
+    if (ActuatorManager::ssrPin < 0) {
+        if (xHigherPriorityTaskWoken) portYIELD_FROM_ISR();
+        return;
+    }
+
+    // Atomic 32-bit float read. ActuatorManager::currentDuty is updated from a
+    // task; reads here are intrinsically aligned and atomic on Xtensa.
+    float duty = ActuatorManager::currentDuty;
+    if (duty < 0.0f) duty = 0.0f;
+    if (duty > 1.0f) duty = 1.0f;
+    ActuatorManager::equipmentActive = (duty > 0.01f);
+
+    const uint32_t halfPeriodUs = 10000; // 50Hz; 8333us for 60Hz
+
+    if (duty >= 0.99f) {
+        // Full-on: latch high, no timer needed.
+        digitalWrite(ActuatorManager::ssrPin, HIGH);
+    } else if (duty <= 0.01f) {
+        // Full-off.
+        digitalWrite(ActuatorManager::ssrPin, LOW);
+    } else {
+        uint32_t waitUs = (uint32_t)((1.0f - duty) * halfPeriodUs);
+        // esp_timer dispatch overhead is ~30-50us; if requested delay is below
+        // that floor, fire immediately to avoid missing the half-cycle.
+        if (waitUs < 50) {
+            digitalWrite(ActuatorManager::ssrPin, HIGH);
+            // Fall through; phaseFireSsr won't run, but the SSR is already
+            // latched. The watchdog task or the next ZX will drop it again.
+        } else if (_phaseTimer != nullptr) {
+            // Cancel any still-pending shot from the previous half-cycle so we
+            // never double-fire if the previous timer hasn't run yet.
+            esp_timer_stop(_phaseTimer);
+            esp_timer_start_once(_phaseTimer, waitUs);
+        }
+    }
+
+    if (xHigherPriorityTaskWoken) portYIELD_FROM_ISR();
+}
+
+// Bug #12: esp_timer one-shot callback. Runs in the high-priority esp_timer
+// task (NOT in ISR context). The 150us pulse is short enough to keep here.
+void ControlStrategy::phaseFireSsr(void* /*arg*/) {
+    if (ActuatorManager::ssrPin < 0) return;
+    digitalWrite(ActuatorManager::ssrPin, HIGH);
+    delayMicroseconds(150);
+    digitalWrite(ActuatorManager::ssrPin, LOW);
+}
+
 void ControlStrategy::phaseControlTask(void* pvParameters) {
+    // Bug #12: this task no longer does any phase-angle work itself. The ZX
+    // ISR + esp_timer one-shot handle the precise SSR firing. This task is now
+    // just a slim mains-loss watchdog: if no zero-cross was seen for >500ms
+    // it forces the SSR off so we don't leave the load energised after the AC
+    // signal disappears.
     if (!_config) { vTaskDelete(NULL); return; }
     esp_task_wdt_add(NULL);
-    uint32_t localZxCount = _zxCounter;
-    // Bug #10: 50Hz hardcoded. Could be made configurable; for now leave as a
-    // documented constant (most EU installs are 50Hz).
-    const uint32_t halfPeriodUs = 10000; // 10ms for 50Hz; 8333us for 60Hz
 
     {
         char buf[80];
-        snprintf(buf, sizeof(buf), "Phase Angle Control Mode Started on pin %d", _config->zx_pin);
+        snprintf(buf, sizeof(buf), "Phase Angle Control Mode Started on pin %d (esp_timer)", _config->zx_pin);
         Logger::info(String(buf));
     }
 
-    // Bug #7: hoist out of static
     uint32_t lastCheck = millis();
-    uint32_t lastCount = localZxCount;
+    uint32_t lastCount = _zxCounter;
 
     while (true) {
         esp_task_wdt_reset();
-        xEventGroupWaitBits(_zxEventGroup, 0x01, pdTRUE, pdFALSE, pdMS_TO_TICKS(100));
+        // Wake on ZX event OR timeout. Timeout caps the WDT-feed latency.
+        xEventGroupWaitBits(_zxEventGroup, 0x01, pdTRUE, pdFALSE, pdMS_TO_TICKS(200));
 
-        // Bug #2: rollover-safe.  Discard missed interrupts to maintain sync.
-        uint32_t zxSnap = _zxCounter;
-        if ((int32_t)(zxSnap - (localZxCount + 1)) > 0) {
-            localZxCount = zxSnap - 1;
-        }
-
-        while ((int32_t)(zxSnap - localZxCount) > 0) {
-            localZxCount++;
-            esp_task_wdt_reset();
-
-            uint32_t zxRef = _zxTime; // Capture the ISR timestamp
-            // Bug #3: clamp duty
-            float duty = ActuatorManager::currentDuty;
-            if (duty < 0.0f) duty = 0.0f;
-            if (duty > 1.0f) duty = 1.0f;
-            ActuatorManager::equipmentActive = (duty > 0.01f);
-
-            if (duty >= 0.99f) {
-                digitalWrite(ActuatorManager::ssrPin, HIGH);
-            } else if (duty <= 0.01f) {
-                digitalWrite(ActuatorManager::ssrPin, LOW);
-            } else {
-                // Phase angle calculation (waitUs is the delay after ZX)
-                uint32_t waitUs = (uint32_t)((1.0f - duty) * halfPeriodUs);
-
-                // JITTER-AWARE TRIGGERING:
-                // Check how much time already passed since the real interrupt
-                uint32_t elapsed = micros() - zxRef;
-
-                if (elapsed < waitUs) {
-                    // We are early enough, wait for the remaining time
-                    delayMicroseconds(waitUs - elapsed);
-                    digitalWrite(ActuatorManager::ssrPin, HIGH);
-                    delayMicroseconds(150);
-                    digitalWrite(ActuatorManager::ssrPin, LOW);
-                } else {
-                    // We are already LATE for this cycle due to system jitter.
-                }
-            }
-        }
-
-        // Bug #7: hoisted from static
         uint32_t nowMs = millis();
         if ((int32_t)(nowMs - lastCheck) > 500) {
             if (_zxCounter == lastCount) {
-                digitalWrite(ActuatorManager::ssrPin, LOW);
+                // No mains seen for >500ms -> force off.
+                if (ActuatorManager::ssrPin >= 0) {
+                    digitalWrite(ActuatorManager::ssrPin, LOW);
+                }
                 ActuatorManager::equipmentActive = false;
             }
             lastCount = _zxCounter;
