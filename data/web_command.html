@@ -706,10 +706,15 @@
                 const hu = document.getElementById('healthUptime');
                 if (hu && d.uptime !== undefined) {
                     const up = parseInt(d.uptime);
-                    const h = Math.floor(up / 3600);
+                    const d_ = Math.floor(up / 86400);
+                    const h = Math.floor((up % 86400) / 3600);
                     const m = Math.floor((up % 3600) / 60);
                     const s = up % 60;
-                    hu.textContent = `${h}h ${m}m ${s}s`;
+                    if (d_ > 0) {
+                        hu.textContent = `${d_}d ${h}h ${m}m ${s}s`;
+                    } else {
+                        hu.textContent = `${h}h ${m}m ${s}s`;
+                    }
                 }
 
                 // Metadata from /status (populated once)
