@@ -523,16 +523,20 @@
 
                 if (fmEl) {
                     if (d.boost_active) {
-                        fmEl.innerHTML = '<span class="badge badge-force">Boost ' + d.boost_remaining + 'm</span>';
+                        if (d.boost_remaining > 0) {
+                            fmEl.innerHTML = '<span class="badge badge-force">Boost ' + d.boost_remaining + 'm</span>';
+                            if (vsEl) {
+                                const end = new Date(d.boost_end_time * 1000);
+                                const options = { hour: '2-digit', minute: '2-digit' };
+                                vsEl.innerText = "⚡ Boost : Fin à " + end.toLocaleTimeString('fr-FR', options);
+                                vsEl.style.display = 'block';
+                            }
+                        } else {
+                            fmEl.innerHTML = '<span class="badge badge-force">Mode Forcé (Plage Horaire)</span>';
+                            if (vsEl) vsEl.style.display = 'none';
+                        }
                         if (cbEl) cbEl.style.display = 'flex';
                         if (bcEl) bcEl.style.display = 'none';
-                        if (vsEl) {
-                            // Use boost_end_time from server for perfect sync
-                            const end = new Date(d.boost_end_time * 1000);
-                            const options = { hour: '2-digit', minute: '2-digit' };
-                            vsEl.innerText = "⚡ Boost : Fin à " + end.toLocaleTimeString('fr-FR', options);
-                            vsEl.style.display = 'block';
-                        }
                         if (cvBtn) cvBtn.style.display = 'none';
                     } else if (d.is_vacation) {
                         fmEl.innerHTML = '<span class="badge" style="background:#555; color:white;">Vacances (Pas de force)</span>';

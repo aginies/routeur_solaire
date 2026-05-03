@@ -147,6 +147,7 @@ void WebManager::applyRequestParams(AsyncWebServerRequest *request, Config &cfg)
     if (has("CONTROL_MODE")) cfg.control_mode = get("CONTROL_MODE").substring(0, 32);
 
     // Force / Night
+    if (has("BOOST_MINUTES")) cfg.boost_minutes = get("BOOST_MINUTES").toInt();
     if (has("FORCE_EQUIPMENT")) cfg.force_equipment = (get("FORCE_EQUIPMENT") == "True");
     if (has("E_FORCE_WINDOW")) cfg.e_force_window = (get("E_FORCE_WINDOW") == "True");
     if (has("FORCE_START")) cfg.force_start = get("FORCE_START").substring(0, 8);
