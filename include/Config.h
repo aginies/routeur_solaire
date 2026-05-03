@@ -45,7 +45,7 @@ public:
 };
 #endif
 
-#define FIRMWARE_VERSION "0.3.0"
+#define FIRMWARE_VERSION "0.9.1"
 
 struct Config {
     // System

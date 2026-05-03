@@ -81,6 +81,13 @@ float WeatherManager::getEffectiveCloudiness() {
     if (clearSkyGround <= 0.0f) return cloudLayerIndex;
 
     float radiationConfidence = constrain(_shortwaveRadiationInstant / clearSkyGround, 0.0f, 1.0f) * 100.0f;
+
+    // Use a milder penalty (squared) to match the new power formula.
+    // This accounts for the fact that diffuse light is still very usable.
+    float totalClouds = (float)getCloudCover() / 100.0f;
+    float cloudPenalty = 1.0f - (0.25f * powf(totalClouds, 2.0f));
+    radiationConfidence *= cloudPenalty;
+
     float cloudConfidence = 100.0f - cloudLayerIndex;
     float solarConfidence = (radiationConfidence * 0.9f) + (cloudConfidence * 0.1f);
 
@@ -221,18 +228,35 @@ float WeatherManager::getExpectedSolarPower() {
     if (!_config || !_config->e_weather || _config->solar_panel_power <= 0)
         return 0.0f;
 
-    // The STC (Standard Test Conditions) power is rated at 1000 W/m2.
-    // We use the actual shortwave radiation hitting the ground as our base intensity.
+    // 1. Base Intensity (GHI / STC)
     float intensityFactor = _shortwaveRadiationInstant / 1000.0f;
     
-    // The TimeFactor now acts as an "Orientation Gain".
-    // It models how well the tilted panel captures the light relative to the flat ground.
-    // It is 1.0 at peak alignment and drops as the sun moves away.
-    float basePower = _config->solar_panel_power * intensityFactor * getTimeFactor();
+    // 2. Blend Direct vs Diffuse light based on cloud cover
+    // On a clear day (0% clouds), light is ~80% direct. 
+    // On a dark day (100% clouds), light is 100% diffuse.
+    float clouds = (float)getCloudCover() / 100.0f;
+    float diffuseRatio = 0.2f + (0.8f * clouds);
+    float directRatio = 1.0f - diffuseRatio;
 
-    // Apply system losses (cables, inverter efficiency, etc.)
+    // 3. Directional Factor (How well the panel faces the sun)
+    float cosIncidence = getTimeFactor();
+
+    // 4. Diffuse Factor (How much sky the tilted panel sees)
+    // Formula: (1 + cos(tilt)) / 2
+    float panelTiltRad = (float)_config->solar_panel_tilt * M_PI / 180.0f;
+    float skyViewFactor = (1.0f + cosf(panelTiltRad)) / 2.0f;
+
+    // 5. Blended Gain
+    float totalGain = (directRatio * cosIncidence) + (diffuseRatio * skyViewFactor);
+
+    // 6. Apply Losses and moderate Cloud Penalty
     float lossMultiplier = 1.0f - ((float)_config->solar_loss_factor / 100.0f);
-    return basePower * lossMultiplier;
+    // Moderate penalty (squared) to account for spectrum shifts in heavy clouds
+    float cloudPenalty = 1.0f - (0.25f * powf(clouds, 2.0f)); 
+
+    float estimate = _config->solar_panel_power * intensityFactor * totalGain * lossMultiplier * cloudPenalty;
+
+    return fmaxf(0.0f, estimate);
 }
 
 bool WeatherManager::isNight() {

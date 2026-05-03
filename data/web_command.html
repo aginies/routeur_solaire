@@ -446,8 +446,7 @@
                         '📡 Rayonnement SW (Réel): <b>' + (d.weather_shortwave_radiation||0).toFixed(0) + ' W/m²</b>',
                         '🌍 Potentiel (Ciel clair): <b>' + (d.weather_terrestrial_radiation||0).toFixed(0) + ' W/m²</b>',
                         '🌅 Lever: <b>' + (d.weather_sunrise||'--') + '</b> / Coucher: <b>' + (d.weather_sunset||'--') + '</b>',
-                        '🕐 Facteur horaire (Z:' + (d.solar_panel_azimuth||0) + '°, T:' + (d.solar_panel_tilt||0) + '°): <b>' + ((d.weather_time_factor || 0) * 100).toFixed(1) + '%</b>',
-                        '⏱️ Dernière MAJ: <b>' + age + ' min</b>',                    ];                    if (d.solar_panel_power > 0) lines.push('⚡ Production estimée: <b>' + Math.round(d.weather_expected_power || 0) + ' W</b> (facteur horaire: ' + ((d.weather_time_factor || 0) * 100).toFixed(0) + '%)');
+                        '⏱️ Dernière MAJ: <b>' + age + ' min</b>',                    ];                    if (d.solar_panel_power > 0) lines.push('⚡ Production estimée: <b>' + Math.round(d.weather_expected_power || 0) + ' W</b>');
                     if (d.weather_rain > 0) lines.push('🌧️ Pluie: <b>' + d.weather_rain + ' mm</b>');
                     if (d.weather_snow > 0) lines.push('❄️ Neige: <b>' + d.weather_snow + ' cm</b>');
                     document.getElementById('weatherDetailContent').innerHTML = lines.join('<br>');
@@ -959,7 +958,7 @@
                 const r = await fetch('/set_vacation?days=' + days);
                 if (r.ok) {
                     hideVacationPopup();
-                    setTimeout(updateStatus, 500);
+                    setTimeout(updateStatus, 1000);
                 } else {
                     alert("Erreur lors de la configuration");
                 }
@@ -971,7 +970,7 @@
             try {
                 const r = await fetch('/cancel_vacation');
                 if (r.ok) {
-                    setTimeout(updateStatus, 500);
+                    setTimeout(updateStatus, 1000);
                 }
             } catch (err) { console.error(err); }
         }
