@@ -984,12 +984,14 @@
             } catch (err) { console.error(err); }
         }
 
-        window.addEventListener('resize', function() {
+        const ro = new ResizeObserver(entries => {
             if (powerChart) {
-                var el = document.getElementById('powerChart');
-                powerChart.setSize({ width: el.parentElement.clientWidth - 32, height: 280 });
+                for (let entry of entries) {
+                    powerChart.setSize({ width: entry.contentRect.width - 32, height: 280 });
+                }
             }
         });
+        ro.observe(document.getElementById('powerChart').parentElement);
     </script>
     <div id="boostBackdrop" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:2000;" onclick="hideBoostPopup()"></div>
     <div id="boostPopup" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#1a1a2e; color:#eee; padding:20px; border-radius:10px; border:1px solid #444; z-index:2001; width:90%; max-width:400px; text-align:center;">

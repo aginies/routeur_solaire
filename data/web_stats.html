@@ -618,12 +618,14 @@
             document.getElementById('themeToggle').textContent = '🌙';
         }
 
-        window.addEventListener('resize', function() {
+        const ro = new ResizeObserver(entries => {
             if (barChart) {
-                var el = document.getElementById('barChart');
-                barChart.setSize({ width: el.parentElement.clientWidth - 48, height: 350 });
+                for (let entry of entries) {
+                    barChart.setSize({ width: entry.contentRect.width - 48, height: 350 });
+                }
             }
         });
+        ro.observe(document.getElementById('barChart').parentElement);
 
         refreshView();
     </script>
