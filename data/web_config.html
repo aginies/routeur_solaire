@@ -156,6 +156,7 @@
             border: none; color: #888; font-size: 1.4em; cursor: pointer;
         }
         .modal-close:hover { color: #f0c040; }
+        .form-help { font-size: 0.8em; color: #888; margin-top: 4px; }
     </style>
 </head>
 <body>
@@ -178,7 +179,7 @@
                     <option value="EET-2EEST,M3.5.0,M10.5.0/3">Athènes, Helsinki, Kiev</option>
                     <option value="UTC0"                      >UTC / GMT</option>
                 </select>
-                <p style="font-size: 0.8em; color: #888; margin-top: 4px;">Utilisé pour la synchronisation de l'heure (NTP) et les logs.</p>
+                <p class="form-help">Utilisé pour la synchronisation de l'heure (NTP) et les logs.</p>
             </div>
 
             <!-- INSTALLATION SOLAIRE -->
@@ -188,22 +189,22 @@
                     <div class="form-group">
                         <label for="SOLAR_PANEL_POWER">Puissance panneaux solaires (W):</label>
                         <input type="number" min="0" max="50000" id="SOLAR_PANEL_POWER" name="SOLAR_PANEL_POWER">
-                        <p style="font-size: 0.8em; color: #888; margin-top: 4px;">Puissance crête de votre installation solaire (ex: 3000 pour 3kWc). Le système estime la production attendue selon l'heure et la météo pour décider du démarrage de l'équipement 2. Mettre 0 pour utiliser le seuil de confiance classique.</p>
+                        <p class="form-help">Puissance crête de votre installation solaire (ex: 3000 pour 3kWc). Le système estime la production attendue selon l'heure et la météo pour décider du démarrage de l'équipement 2. Mettre 0 pour utiliser le seuil de confiance classique.</p>
                     </div>
                     <div class="form-group">
                         <label for="SOLAR_PANEL_AZIMUTH">Azimut des panneaux (°):</label>
                         <input type="number" min="0" max="360" id="SOLAR_PANEL_AZIMUTH" name="SOLAR_PANEL_AZIMUTH">
-                        <p style="font-size: 0.8em; color: #888; margin-top: 4px;">Orientation des panneaux : 0=Nord, 90=Est, 180=Sud, 270=Ouest. Décale la courbe de production estimée selon l'orientation réelle.</p>
+                        <p class="form-help">Orientation des panneaux : 0=Nord, 90=Est, 180=Sud, 270=Ouest. Décale la courbe de production estimée selon l'orientation réelle.</p>
                     </div>
                     <div class="form-group">
                         <label for="SOLAR_PANEL_TILT">Inclinaison des panneaux (°):</label>
                         <input type="number" min="0" max="90" id="SOLAR_PANEL_TILT" name="SOLAR_PANEL_TILT">
-                        <p style="font-size: 0.8em; color: #888; margin-top: 4px;">Inclinaison par rapport à l'horizontale : 0=Plat, 90=Vertical. Optimise l'estimation de production selon l'angle d'incidence du soleil.</p>
+                        <p class="form-help">Inclinaison par rapport à l'horizontale : 0=Plat, 90=Vertical. Optimise l'estimation de production selon l'angle d'incidence du soleil.</p>
                     </div>
                     <div class="form-group">
                         <label for="SOLAR_LOSS_FACTOR">Pertes du système (%):</label>
                         <input type="number" min="0" max="90" id="SOLAR_LOSS_FACTOR" name="SOLAR_LOSS_FACTOR">
-                        <p style="font-size: 0.8em; color: #888; margin-top: 4px;">Pertes estimées (onduleur, câbles, poussière). Par défaut 14%. Réduit proportionnellement la production estimée.</p>
+                        <p class="form-help">Pertes estimées (onduleur, câbles, poussière). Par défaut 14%. Réduit proportionnellement la production estimée.</p>
                     </div>
                 </div>
             </details>
@@ -273,7 +274,7 @@
                     <div class="form-group">
                         <label for="SHELLY_MQTT_TOPIC">Topic MQTT Shelly:</label>
                         <input type="text" id="SHELLY_MQTT_TOPIC" name="SHELLY_MQTT_TOPIC">
-                        <p style="font-size: 0.8em; color: #888; margin-top: 4px;">Utiliser le même index que la Pince Shelly EM (0 ou 1) dans le topic.</p>
+                        <p class="form-help">Utiliser le même index que la Pince Shelly EM (0 ou 1) dans le topic.</p>
                     </div>
                     <div class="form-group">
                         <label for="POLL_INTERVAL">Intervalle de lecture HTTP (secondes):</label>
@@ -282,12 +283,12 @@
                     <div class="form-group">
                         <label for="SHELLY_TIMEOUT">Timeout Requête HTTP (sec):</label>
                         <input type="number" min="1" max="10" id="SHELLY_TIMEOUT" name="SHELLY_TIMEOUT">
-                        <p style="font-size: 0.8em; color: #888; margin-top: 4px;">Temps max d'attente pour une réponse Shelly.</p>
+                        <p class="form-help">Temps max d'attente pour une réponse Shelly.</p>
                     </div>
                     <div class="form-group">
                         <label for="SAFETY_TIMEOUT">Délai Sécurité sans données (sec):</label>
                         <input type="number" min="2" max="60" id="SAFETY_TIMEOUT" name="SAFETY_TIMEOUT">
-                        <p style="font-size: 0.8em; color: #888; margin-top: 4px;">Le système s'arrête si aucune donnée n'est reçue pendant ce délai.</p>
+                        <p class="form-help">Le système s'arrête si aucune donnée n'est reçue pendant ce délai.</p>
                     </div>
                     <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
 
@@ -391,7 +392,7 @@
                     <div class="form-group">
                         <label for="EQUIP1_MQTT_TOPIC">Topic MQTT puissance (Eq 1):</label>
                         <input type="text" id="EQUIP1_MQTT_TOPIC" name="EQUIP1_MQTT_TOPIC" placeholder="ex: shellyplus1pm-XXID/status/switch:0">
-                        <p style="font-size: 0.8em; color: #888; margin-top: 4px;">Le payload JSON (apower) ou float simple sont supportés.</p>
+                        <p class="form-help">Le payload JSON (apower) ou float simple sont supportés.</p>
                     </div>
 
                     <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
@@ -474,7 +475,7 @@
                     <div class="form-group">
                         <label for="DYNAMIC_THRESHOLD_W">Seuil de réactivité dynamique (W):</label>
                         <input type="number" step="1" id="DYNAMIC_THRESHOLD_W" name="DYNAMIC_THRESHOLD_W">
-                        <p style="font-size: 0.8em; color: #888; margin-top: 4px;">En dessous de ce seuil, le système attend 2 messages pour stabiliser.</p>
+                        <p class="form-help">En dessous de ce seuil, le système attend 2 messages pour stabiliser.</p>
                     </div>
                     <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
 
@@ -491,7 +492,7 @@
                             <option value="trame">Mode Trame (Bresenham, réparti sur 1s)</option>
                             <option value="phase">Contrôle de Phase (Smooth, Random SSR requis)</option>
                         </select>
-                        <p style="font-size: 0.8em; color: #888; margin-top: 4px;">Cycle Stealing nécessite un signal Zero-Crossing sur ZX_PIN.</p>
+                        <p class="form-help">Cycle Stealing nécessite un signal Zero-Crossing sur ZX_PIN.</p>
                     </div>
                 </div>
             </details>
@@ -621,7 +622,7 @@
                             <option value="True" >Activé</option>
                             <option value="False">Désactivé</option>
                         </select>
-                        <p style="font-size: 0.8em; color: #888; margin-top: 4px;">Permet de détecter les nuages entrants via Open-Meteo (gratuit & anonyme).</p>
+                        <p class="form-help">Permet de détecter les nuages entrants via Open-Meteo (gratuit & anonyme).</p>
                     </div>
                     <div class="form-group">
                         <label for="WEATHER_LAT">Latitude:</label>
@@ -634,7 +635,7 @@
                     <div class="form-group">
                         <label for="WEATHER_THRESH">Confiance solaire minimum pour démarrer l'équipement 2 (%):</label>
                         <input type="number" min="0" max="100" id="WEATHER_THRESH" name="WEATHER_THRESH">
-                        <p style="font-size: 0.8em; color: #888; margin-top: 4px;">L'équipement 2 peut démarrer si la confiance solaire est au moins égale à ce seuil. Exemple: 40 signifie démarrage possible à partir de 40% de potentiel solaire estimé. Ignoré si la puissance panneaux est renseignée.</p>
+                        <p class="form-help">L'équipement 2 peut démarrer si la confiance solaire est au moins égale à ce seuil. Exemple: 40 signifie démarrage possible à partir de 40% de potentiel solaire estimé. Ignoré si la puissance panneaux est renseignée.</p>
                     </div>
                 </div>
             </details>
