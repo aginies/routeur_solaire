@@ -10,7 +10,8 @@ This C++ version is a **migration from the original MicroPython implementation f
 
 - **High-Speed Diversion**: Implements a highly responsive power diversion algorithm (burst-fire/trame mode) to match excess solar production with a resistive load.
 - **Multi-Source Monitoring**: Supports data acquisition from Shelly EM (via HTTP or MQTT) and JSY-MK-194 (via UART). Equipment power measurement via Shelly Plus 1PM (HTTP or MQTT).
-- **Asynchronous Web Server**: Provides a rich web interface for real-time monitoring, logging, and configuration without blocking the control loop.
+- **Asynchronous Web Server**: Provides a rich web interface for real-time monitoring (including uptime formatting with days), logging, and configuration without blocking the control loop.
+- **Improved Force Mode UI**: Clearly distinguishes between manual "Boost" and scheduled "Mode Forcé (Plage Horaire)" to avoid confusion.
 - **Advanced Statistics**: Tracks and stores daily/hourly energy usage (Import/Export/Redirected) with historical data retention.
 - **Safety & Protection**: Includes watchdog timers, temperature monitoring (Internal & SSR heatsink), and automatic fan control.
 - **Weather-Aware Control**: Uses Open-Meteo cloud cover, solar radiation, sunrise, and sunset data to improve equipment decisions. When solar panel power and azimuth are configured, estimates real-time expected production to decide whether Equipment 2 can run. **Requires internet access** for Open-Meteo API calls.
@@ -70,7 +71,7 @@ This project supports two primary ESP32 architectures, each optimized for differ
 ### ESP32-S3 (Modern & Powerful)
 - **Environment**: `esp32s3`
 - **Performance**: High-speed processing and native support for modern features.
-- **Memory**: Utilizes **PSRAM** for extended buffer and data handling.
+- **Memory**: Supports various Flash/PSRAM combinations (e.g., N8R2, N16R8) via dynamic build-time selection.
 - **Data Retention**: Configured to store up to **365 days** of historical statistics (`MAX_STATS_DAYS=365`).
 - **Hardware**: Uses specialized pins (e.g., RGB Internal LED on Pin 48).
 
@@ -78,6 +79,7 @@ This project supports two primary ESP32 architectures, each optimized for differ
 - **Environment**: `esp32dev`
 - **Performance**: Standard dual-core performance, highly reliable for general tasks.
 - **Memory**: Uses internal SRAM (no PSRAM required). Statistics, history, and data logging are **disabled** entirely (`DISABLE_STATS`, `DISABLE_HISTORY`, `DISABLE_DATA_LOG`) to keep the footprint small.
+- **Optimizations**: Specific low-RAM tuning including reduced TCP stack size (8KB) and connection limits. Uses **ArduinoJson Filtering** to parse weather data without OOM risks.
 - **Data Retention**: No persistent statistics storage.
 
 ## Web Configuration Guide
@@ -238,7 +240,7 @@ All endpoints except `/update` and `/RESET_device` respect the configured `web_u
 | GET | `/test` | No | Health check. Returns free heap (for debugging). |
 | GET | `/` | Yes | Main web dashboard (`web_command.html.gz`). |
 | GET | `/status` | No | Real-time status JSON (grid_power, equipment_power, temps, RAM, RSSI, weather, etc.). |
-| GET | `/history` | No | Power history as JSON array (1440 points on PSRAM, or 120 on SRAM). |
+| GET | `/history` | No | Power history as JSON array (720 points on PSRAM, or 120 on SRAM). |
 | GET | `/get_log_action` | No | Stream the last 4 KB of `log.txt`. |
 | GET | `/get_solar_data` | No | Stream the last 4 KB of `solar_data.txt`. |
 | GET | `/download_logs` | Yes | Download `log.txt` as attachment. |
@@ -474,13 +476,16 @@ The project provides `flash.sh` for simplified flashing:
 | :--- | :--- |
 | `-e s3` | Target ESP32-S3 (default) |
 | `-e wroom` | Target ESP32-WROOM (swaps config, disables stats/history) |
+| `-v <var>` | **ESP32-S3 Variant**: e.g., `N8R2`, `N16R8` (default), `N8`. Sets Flash/PSRAM configs. |
 | `-t` / `--test` | Run unit tests on host (native environment) |
 | `--erase` | Full chip erase (clears NVS/Stats) before flashing |
 | `--skip-fs` | Skip building and uploading the filesystem (LittleFS) |
 | `-m` / `--monitor` | Launch serial monitor after flashing |
 | `-d <days>` | Override `MAX_STATS_DAYS` at build time |
 
-Example: `./flash.sh -e s3 --erase -m`
+**Note**: The default build targets **S3** hardware with **N16R8** (16MB Flash, 8MB Octal PSRAM).
+
+Example: `./flash.sh -v N8R2 --erase -m`
 
 ## Native Unit Tests
 
@@ -488,10 +493,10 @@ Four test suites compile for the native (desktop) environment via `platformio.in
 
 | Test | Purpose | Run Command |
 | :--- | :--- | :--- |
-| `test_temp` | DS18B20 temperature read logic, fault detection, hysteresis | `./flash.sh -t` or `pio test -e native` |
-| `test_safety` | Safety state machine transitions, hysteresis, timeout logic | `./flash.sh -t` or `pio test -e native` |
-| `test_controller` | Incremental PID controller math, delta boundaries | `./flash.sh -t` or `pio test -e native` |
-| `test_stats` | Stats accumulation, day rollover, save/load | `./flash.sh -t` or `pio test -e native` |
+| `test_temp` | DS18B20 temperature read logic, **latching fault detection**, hysteresis | `./flash.sh -t` or `pio test -e native` |
+| `test_safety` | Safety state machine, hysteresis, **integer overflow protection for large timeouts** | `./flash.sh -t` or `pio test -e native` |
+| `test_controller` | Incremental PID controller math, **symmetric power capping (20%/cycle)**, overflow protection | `./flash.sh -t` or `pio test -e native` |
+| `test_stats` | Stats accumulation, **Night Mode logic**, direct measurement validation | `./flash.sh -t` or `pio test -e native` |
 
 Tests use a `NATIVE_TEST` preprocessor flag to stub Arduino/ESP32 dependencies (String, millis, Preferences, etc.). The `simulate_solar.py` script provides an MQTT-based simulation environment for integration testing.
 
