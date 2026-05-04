@@ -17,8 +17,8 @@ int HistoryBuffer::historyCount = 0;
 SemaphoreHandle_t HistoryBuffer::_dataMutex = nullptr;
 TaskHandle_t HistoryBuffer::_taskHandle = nullptr;
 
-// Bug #3: cap on getHistoryJson() to avoid OOM on large PSRAM buffers
-static const int HISTORY_JSON_MAX_POINTS = 200;
+// Bug #3: cap on getHistoryJson() to avoid OOM on large buffers
+static const int HISTORY_JSON_MAX_POINTS = 720;
 
 void HistoryBuffer::init(const Config& config) {
     if (powerHistory) {
@@ -27,7 +27,7 @@ void HistoryBuffer::init(const Config& config) {
     }
 
 #ifdef BOARD_HAS_PSRAM
-    maxHistory = 1440; // 2 hours at 5s interval
+    maxHistory = 720; // 1 hour at 5s interval
     powerHistory = (PowerPoint*)ps_malloc(sizeof(PowerPoint) * maxHistory);
 #else
     maxHistory = 120; // 10 minutes
