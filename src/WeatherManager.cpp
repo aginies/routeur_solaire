@@ -321,8 +321,24 @@ void WeatherManager::updateWeather() {
     if (_http.begin(_client, url)) {
         int httpCode = _http.GET();
         if (httpCode == HTTP_CODE_OK) {
+            // Memory optimization: filter the large JSON to save heap space (critical for WROOM)
+            JsonDocument filter;
+            filter["current"]["cloud_cover"] = true;
+            filter["current"]["cloud_cover_low"] = true;
+            filter["current"]["cloud_cover_mid"] = true;
+            filter["current"]["cloud_cover_high"] = true;
+            filter["current"]["shortwave_radiation_instant"] = true;
+            filter["current"]["terrestrial_radiation_instant"] = true;
+            filter["current"]["temperature_2m"] = true;
+            filter["current"]["rain"] = true;
+            filter["current"]["snowfall"] = true;
+            filter["current"]["is_day"] = true;
+            filter["current"]["weather_code"] = true;
+            filter["daily"]["sunrise"][0] = true;
+            filter["daily"]["sunset"][0] = true;
+
             JsonDocument doc;
-            DeserializationError error = deserializeJson(doc, _http.getStream());
+            DeserializationError error = deserializeJson(doc, _http.getStream(), DeserializationOption::Filter(filter));
             if (!error) {
                 JsonVariant cur = doc["current"];
 
