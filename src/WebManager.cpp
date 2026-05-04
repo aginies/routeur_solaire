@@ -338,6 +338,11 @@ void WebManager::setupRoutes() {
             default:
                 request->send(400, "text/plain", "Aucun fichier reçu");
         }
+        // Bug fix: free the heap-allocated status object
+        if (request->_tempObject) {
+            free(request->_tempObject);
+            request->_tempObject = nullptr;
+        }
     }, [authRequired](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
         if (!authRequired(request)) return;
         // Bug #3: state is static (AsyncWebServer serializes upload chunks per server instance)
