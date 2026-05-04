@@ -4,6 +4,7 @@ set -e
 
 # Default values
 ENV="s3"
+VARIANT="N16R8"
 SKIP_FS=false
 STATS_DAYS=""
 RUN_TESTS=false
@@ -15,6 +16,7 @@ usage() {
     echo "Usage: $0 [options]"
     echo "Options:"
     echo "  -e <env>    Target environment: 's3' (default), 'wroom' (mini kit), or 'native' (for tests)"
+    echo "  -v <var>    Hardware variant for ESP32-S3 (e.g., N8R2, N16R8, N8). Injects PIO overrides."
     echo "  -d <days>   Override MAX_STATS_DAYS (history limit)"
     echo "  -t, --test  Run unit tests on host (native environment)"
     echo "  -m, --monitor Launch serial monitor after flashing"
@@ -45,6 +47,14 @@ while [[ "$#" -gt 0 ]]; do
                 exit 1
             fi
             ;;
+        -v|--variant) 
+            if [[ -n "$2" && "$2" != -* ]]; then
+                VARIANT="$2"; shift
+            else
+                echo "Error: Argument for $1 is missing" >&2
+                exit 1
+            fi
+            ;;
         -d) 
             if [[ -n "$2" && "$2" != -* ]]; then
                 STATS_DAYS="$2"; shift
@@ -70,11 +80,9 @@ if [ "$RUN_TESTS" = true ]; then
     pio test -e native
     echo "--- TESTS PASSED ---"
     # If we only wanted tests, we can exit here
-    if [ "$ENV" == "s3" ] && [ "$SKIP_FS" == false ] && [ "$COMPRESS" == false ] && [ -z "$STATS_DAYS" ]; then
-         # Check if user passed other arguments. If not, exit.
-         # Actually simpler: if they didn't specify an env, assume they only wanted tests.
-         # But the user might want tests then flash.
+    if [ "$ENV" == "s3" ] && [ "$SKIP_FS" == false ] && [ -z "$STATS_DAYS" ] && [ -z "$VARIANT" ]; then
          echo "Tests finished."
+         exit 0
     fi
 fi
 
@@ -99,6 +107,58 @@ elif [ "$ENV" == "native" ]; then
 else
     echo "Error: Invalid environment '$ENV'. Use 's3', 'wroom', or 'native'."
     exit 1
+fi
+
+# Handle Hardware Variant overrides for S3
+if [ -n "$VARIANT" ]; then
+    if [ "$PIO_ENV" != "esp32s3" ]; then
+        echo "Warning: -v/--variant only applies to 's3' environment."
+    else
+        # Force uppercase
+        VARIANT=$(echo "$VARIANT" | tr '[:lower:]' '[:upper:]')
+        echo "--- Applying hardware variant: $VARIANT ---"
+        
+        # Regex parsing for N<flash>R<psram>
+        # e.g., N8R2, N16R8, N8
+        if [[ "$VARIANT" =~ N([0-9]+)(R([0-9]+))? ]]; then
+            FLASH="${BASH_REMATCH[1]}"
+            PSRAM="${BASH_REMATCH[3]}"
+        else
+            echo "Error: Unknown variant format '$VARIANT'. Expected N<flash>R<psram> (e.g., N8R2, N16R8, N8)."
+            exit 1
+        fi
+        
+        # Flash Overrides via Environment Variables
+        if [ -n "$FLASH" ]; then
+            export PLATFORMIO_BOARD_UPLOAD_FLASH_SIZE="${FLASH}MB"
+            # Standard partition names in ESP32 Arduino core
+            if [ "$FLASH" -eq 4 ]; then
+                export PLATFORMIO_BOARD_BUILD_PARTITIONS="default.csv"
+            else
+                export PLATFORMIO_BOARD_BUILD_PARTITIONS="default_${FLASH}MB.csv"
+            fi
+        fi
+        
+        # PSRAM Overrides via Environment Variables
+        if [ -n "$PSRAM" ]; then
+            export PLATFORMIO_BUILD_FLAGS="${PLATFORMIO_BUILD_FLAGS} -DBOARD_HAS_PSRAM"
+            # 8MB and 16MB PSRAM are usually OPI (Octal)
+            if [ "$PSRAM" -eq 8 ] || [ "$PSRAM" -eq 16 ]; then
+                export PLATFORMIO_BOARD_BUILD_ARDUINO_MEMORY_TYPE="qio_opi"
+                export PLATFORMIO_BOARD_BUILD_FLASH_MODE="qio"
+                export PLATFORMIO_BOARD_BUILD_PSRAM_TYPE="opi"
+            # 2MB PSRAM is usually QSPI
+            elif [ "$PSRAM" -eq 2 ]; then
+                export PLATFORMIO_BOARD_BUILD_ARDUINO_MEMORY_TYPE="qio_qspi"
+                export PLATFORMIO_BOARD_BUILD_FLASH_MODE="qio"
+                export PLATFORMIO_BOARD_BUILD_PSRAM_TYPE="qio"
+            fi
+        else
+            # Unset PSRAM flag for variants like N8 (no PSRAM)
+            export PLATFORMIO_BUILD_UNFLAGS="${PLATFORMIO_BUILD_UNFLAGS} -DBOARD_HAS_PSRAM"
+            export PLATFORMIO_BOARD_BUILD_FLASH_MODE="qio"
+        fi
+    fi
 fi
 
 # Handle Stats Days override
