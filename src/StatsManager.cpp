@@ -18,7 +18,7 @@
 static Preferences prefs;
 #endif
 
-std::map<String, DailyStats> StatsManager::_history;
+StatsManager::HistoryMap StatsManager::_history;
 uint32_t StatsManager::_lastSave = 0;
 float StatsManager::totalImportToday = 0;
 float StatsManager::totalRedirectToday = 0;
@@ -191,7 +191,9 @@ void StatsManager::update(float gridPower, float equipmentPower, uint32_t interv
     if (gridPower < -90000.0) return;
 
     time_t now_t; time(&now_t); struct tm ti; localtime_r(&now_t, &ti);
+#ifndef NATIVE_TEST
     if (ti.tm_year < 120) return;
+#endif
 
     String key = getTodayKey();
     // Bug #12: use float literal to avoid implicit float->double->float
@@ -212,9 +214,10 @@ void StatsManager::update(float gridPower, float equipmentPower, uint32_t interv
 
     float energyRedirect = solarRedirPower * intervalHours;
 
-#ifndef NATIVE_TEST
     bool dayChanged = false;
+#ifndef NATIVE_TEST
     if (_statsMutex && xSemaphoreTake(_statsMutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+#endif
         if (_history.find(key) == _history.end()) {
             // NEW DAY RESET
             totalImportToday = 0;
@@ -251,17 +254,21 @@ void StatsManager::update(float gridPower, float equipmentPower, uint32_t interv
         totalImportToday = ds.import;
         totalRedirectToday = ds.redirect;
         totalExportToday = ds.export_wh;
-
+#ifndef NATIVE_TEST
         xSemaphoreGive(_statsMutex);
     }
+#endif
 
+#ifndef NATIVE_TEST
     // Bug #9: on day change, persist NVS immediately
     if (dayChanged) {
         persistNvsTotals(key);
     }
+#endif
 
     // Bug #3: prime lastNvsSave so first call after boot doesn't trigger immediate write.
     static uint32_t lastNvsSave = 0;
+#ifndef NATIVE_TEST
     if (lastNvsSave == 0) lastNvsSave = millis();
     if (millis() - lastNvsSave > 60000) {
         persistNvsTotals(key);
@@ -398,7 +405,7 @@ void StatsManager::streamStatsJson(AsyncWebServerRequest *request) {
         request->send(503, "text/plain", "System busy");
         return;
     }
-    std::map<String, DailyStats> snapshot = _history; // copy under lock
+    HistoryMap snapshot = _history; // copy under lock
     xSemaphoreGive(_statsMutex);
 
     AsyncResponseStream *response = request->beginResponseStream("application/json");

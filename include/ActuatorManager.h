@@ -3,9 +3,6 @@
 
 #ifndef NATIVE_TEST
 #include <Arduino.h>
-#else
-#include <string>
-typedef std::string String;
 #endif
 #include "Config.h"
 

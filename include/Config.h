@@ -8,6 +8,7 @@
 #include <string>
 #include <iostream>
 #include <cstdio>
+typedef void* TaskHandle_t;
 class String : public std::string {
 public:
     String() : std::string("") {}

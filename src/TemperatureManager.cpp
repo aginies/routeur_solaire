@@ -21,13 +21,10 @@ const Config* TemperatureManager::_config = nullptr;
 OneWire* TemperatureManager::_oneWire = nullptr;
 DallasTemperature* TemperatureManager::_sensors = nullptr;
 TaskHandle_t TemperatureManager::_taskHandle = nullptr;
+uint32_t TemperatureManager::_lastRead = 0;
 
 #ifdef NATIVE_TEST
 float DallasTemperature::mockTemp = 25.0f;
-#endif
-
-#ifdef NATIVE_TEST
-#define String(v) std::to_string(v)
 #endif
 
 // Bug #12: named constants instead of magic numbers

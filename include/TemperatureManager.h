@@ -7,7 +7,7 @@
 #include <DallasTemperature.h>
 #else
 #include <string>
-typedef std::string String;
+#include "Config.h"
 class OneWire {
 public:
     OneWire(int pin) {}
@@ -49,6 +49,10 @@ private:
     static OneWire* _oneWire;
     static DallasTemperature* _sensors;
     static TaskHandle_t _taskHandle;
+#ifdef NATIVE_TEST
+public:
+#endif
+    static uint32_t _lastRead;
 };
 
 #endif

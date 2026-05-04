@@ -10,6 +10,7 @@
 #include <ESPAsyncWebServer.h>
 #endif
 #include <map>
+#include "PsramAllocator.h"
 
 #ifndef DISABLE_STATS
 
@@ -51,7 +52,8 @@ public:
     #ifdef NATIVE_TEST
 public:
 #endif
-    static std::map<String, DailyStats> _history;
+    typedef std::map<String, DailyStats, std::less<String>, PsramAllocator<std::pair<const String, DailyStats>>> HistoryMap;
+    static HistoryMap _history;
     static uint32_t _lastSave;
 #ifndef NATIVE_TEST
     static SemaphoreHandle_t _statsMutex;
