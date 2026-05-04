@@ -18,12 +18,12 @@ public:
     static bool inForceWindow();
     static int timeToMinutes(const String& hhmm); // Bug #6: pass by const ref
 
-    static float currentDuty;
-    static float equipmentPower;
-    static bool equipmentActive;
-    static bool fanActive;
-    static int fanPercent;
-    static uint32_t boostEndTime;
+    static volatile float currentDuty;
+    static volatile float equipmentPower;
+    static volatile bool equipmentActive;
+    static volatile bool fanActive;
+    static volatile int fanPercent;
+    static volatile uint32_t boostEndTime;
 
     // Direct hardware access for control tasks
     static int ssrPin;

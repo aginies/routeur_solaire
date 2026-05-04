@@ -6,12 +6,12 @@
 // Bug #7: avoid hardcoding LEDC channel literal
 #define FAN_LEDC_CHANNEL 4
 
-float ActuatorManager::currentDuty = 0.0;
-float ActuatorManager::equipmentPower = 0.0;
-bool ActuatorManager::equipmentActive = false;
-bool ActuatorManager::fanActive = false;
-int ActuatorManager::fanPercent = 0;
-uint32_t ActuatorManager::boostEndTime = 0;
+volatile float ActuatorManager::currentDuty = 0.0;
+volatile float ActuatorManager::equipmentPower = 0.0;
+volatile bool ActuatorManager::equipmentActive = false;
+volatile bool ActuatorManager::fanActive = false;
+volatile int ActuatorManager::fanPercent = 0;
+volatile uint32_t ActuatorManager::boostEndTime = 0;
 int ActuatorManager::ssrPin = -1;
 
 const Config* ActuatorManager::_config = nullptr;
