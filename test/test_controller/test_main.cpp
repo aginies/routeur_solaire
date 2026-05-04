@@ -1,4 +1,11 @@
 #include <unity.h>
+#include "../../include/Logger.h"
+
+void Logger::warn(const String& m) {}
+void Logger::info(const String& m) {}
+void Logger::error(const String& m, bool c) {}
+void Logger::debug(const String& m) {}
+
 #include "../../src/IncrementalController.cpp" 
 
 void setUp(void) {}
@@ -59,6 +66,29 @@ void test_slow_start_cap(void) {
     TEST_ASSERT_EQUAL_INT32(200, newDuty);
 }
 
+void test_symmetric_cap(void) {
+    // Max step is 200 units (20%)
+    IncrementalController ctrl(100000, -50000, 500, 1000000);
+    int32_t initialDuty = 1000;
+    
+    // Massive import (5000W) should trigger max reduction of 200
+    int32_t newDuty = ctrl.update(initialDuty, 5000000);
+    TEST_ASSERT_EQUAL_INT32(800, newDuty);
+}
+
+void test_large_power_overflow(void) {
+    // Test that very large grid power values don't cause overflow issues in internal calculations
+    IncrementalController ctrl(100000, -50000, 100, 2300000);
+    
+    // 100kW import (ridiculous but good for overflow test)
+    int32_t newDuty = ctrl.update(500, 100000000);
+    TEST_ASSERT_EQUAL_INT32(300, newDuty); // 500 - 200 (cap)
+    
+    // 100kW export
+    newDuty = ctrl.update(500, -100000000);
+    TEST_ASSERT_EQUAL_INT32(700, newDuty); // 500 + 200 (cap)
+}
+
 int main(int argc, char **argv) {
     UNITY_BEGIN();
     RUN_TEST(test_duty_decreases_on_import);
@@ -66,5 +96,7 @@ int main(int argc, char **argv) {
     RUN_TEST(test_duty_boundaries);
     RUN_TEST(test_dead_zone);
     RUN_TEST(test_slow_start_cap);
+    RUN_TEST(test_symmetric_cap);
+    RUN_TEST(test_large_power_overflow);
     return UNITY_END();
 }

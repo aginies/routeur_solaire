@@ -18,8 +18,10 @@
 void ActuatorManager::setDuty(float d) {}
 void ActuatorManager::openRelay() {}
 void ActuatorManager::closeRelay() {}
-void Logger::error(const std::string& m, bool c) {}
-void Logger::info(const std::string& m) {}
+void Logger::error(const String& m, bool c) {}
+void Logger::info(const String& m) {}
+void Logger::warn(const String& m) {}
+void Logger::debug(const String& m) {}
 
 // Initialize static members for tests
 float TemperatureManager::currentSsrTemp = 25.0f;
@@ -45,7 +47,8 @@ void test_priority_overheat_vs_boost(void) {
         millis(), // lastGoodPoll (Now)
         true,  // boostActive
         false, // forcedWindow
-        false  // nightActive
+        false, // nightActive
+        0      // currentEpoch
     );
     
     TEST_ASSERT_EQUAL_INT((int)SystemState::STATE_EMERGENCY_FAULT, (int)state);
@@ -64,7 +67,8 @@ void test_priority_timeout_vs_night(void) {
         millis() - 15000, // lastGoodPoll (15s ago, > 10s timeout)
         false, // boostActive
         false, // forcedWindow
-        true   // nightActive
+        true,  // nightActive
+        0      // currentEpoch
     );
     
     TEST_ASSERT_EQUAL_INT((int)SystemState::STATE_SAFE_TIMEOUT, (int)state);
@@ -83,7 +87,8 @@ void test_priority_boost_vs_night(void) {
         millis(), // lastGoodPoll (Now)
         true,  // boostActive
         false, // forcedWindow
-        true   // nightActive
+        true,  // nightActive
+        0      // currentEpoch
     );
     
     TEST_ASSERT_EQUAL_INT((int)SystemState::STATE_BOOST, (int)state);
@@ -103,7 +108,8 @@ void test_normal_state(void) {
         millis(), // lastGoodPoll (Now)
         false, // boostActive
         false, // forcedWindow
-        false  // nightActive
+        false, // nightActive
+        0      // currentEpoch
     );
     
     TEST_ASSERT_EQUAL_INT((int)SystemState::STATE_NORMAL, (int)state);
@@ -117,18 +123,32 @@ void test_ssr_hysteresis(void) {
     SafetyManager::init(cfg);
     
     // 1. Trigger Overheat
-    SystemState state = SafetyManager::evaluateState(40.0f, 66.0f, millis(), false, false, false);
+    SystemState state = SafetyManager::evaluateState(40.0f, 66.0f, millis(), false, false, false, 0);
     TEST_ASSERT_EQUAL_INT((int)SystemState::STATE_EMERGENCY_FAULT, (int)state);
     SafetyManager::applyState(state);
     
     // 2. Cooling down but still in hysteresis zone (66 -> 62)
     // Threshold is 65, but hysteresis says must go below 65-5=60 to recover.
-    state = SafetyManager::evaluateState(40.0f, 62.0f, millis(), false, false, false);
+    state = SafetyManager::evaluateState(40.0f, 62.0f, millis(), false, false, false, 0);
     TEST_ASSERT_EQUAL_INT((int)SystemState::STATE_EMERGENCY_FAULT, (int)state);
     
     // 3. Cooling down below hysteresis (62 -> 59)
-    state = SafetyManager::evaluateState(40.0f, 59.0f, millis(), false, false, false);
+    state = SafetyManager::evaluateState(40.0f, 59.0f, millis(), false, false, false, 0);
     TEST_ASSERT_EQUAL_INT((int)SystemState::STATE_NORMAL, (int)state);
+}
+
+void test_safety_timeout_overflow(void) {
+    Config cfg;
+    cfg.safety_timeout = 60; // 60 seconds
+    SafetyManager::init(cfg);
+    
+    // 59 seconds ago should NOT trigger timeout
+    SystemState state = SafetyManager::evaluateState(40.0f, 30.0f, millis() - 59000, false, false, false, 0);
+    TEST_ASSERT_EQUAL_INT((int)SystemState::STATE_NORMAL, (int)state);
+    
+    // 61 seconds ago SHOULD trigger timeout
+    state = SafetyManager::evaluateState(40.0f, 30.0f, millis() - 61000, false, false, false, 0);
+    TEST_ASSERT_EQUAL_INT((int)SystemState::STATE_SAFE_TIMEOUT, (int)state);
 }
 
 int main(int argc, char **argv) {
@@ -138,5 +158,6 @@ int main(int argc, char **argv) {
     RUN_TEST(test_priority_boost_vs_night);
     RUN_TEST(test_normal_state);
     RUN_TEST(test_ssr_hysteresis);
+    RUN_TEST(test_safety_timeout_overflow);
     return UNITY_END();
 }
