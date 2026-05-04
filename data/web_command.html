@@ -5,59 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='20' fill='%23f0c040'/><g stroke='%23f0c040' stroke-width='4' stroke-linecap='round'><line x1='50' y1='10' x2='50' y2='22'/><line x1='50' y1='78' x2='50' y2='90'/><line x1='10' y1='50' x2='22' y2='50'/><line x1='78' y1='50' x2='90' y2='50'/><line x1='22' y1='22' x2='30' y2='30'/><line x1='70' y1='70' x2='78' y2='78'/><line x1='78' y1='22' x2='70' y2='30'/><line x1='30' y1='70' x2='22' y2='78'/></g></svg>">
     <title>Solaire</title>
+    <link rel="stylesheet" href="/style.css">
+    <script src="/main.js"></script>
     <style>
-        :root {
-            --bg-color: #1a1a2e;
-            --card-bg: #16213e;
-            --text-color: #eee;
-            --accent-color: #f0c040;
-            --muted-text: #aaa;
-            --log-bg: #0d0d1a;
-            --border-color: #333;
-        }
-        
-        body.light-mode {
-            --bg-color: #f0f2f5;
-            --card-bg: #ffffff;
-            --text-color: #333;
-            --accent-color: #e67e22;
-            --muted-text: #666;
-            --log-bg: #f9f9f9;
-            --border-color: #ddd;
-        }
-
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: Arial, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            padding: 20px;
-            transition: background 0.3s, color 0.3s;
-        }
         .header {
             text-align: center;
-            margin-bottom: 24px;
+            margin-bottom: var(--spacing);
             position: relative;
             max-width: 1000px;
             margin-left: auto;
             margin-right: auto;
         }
-        h1 { color: var(--accent-color); font-size: 1.6em; }
-        #dateTime { font-size: 0.9em; color: var(--muted-text); margin-top: 4px; }
         
-        #themeToggle {
-            position: absolute;
-            top: 0;
-            right: 0;
-            background: none;
-            border: 1px solid var(--border-color);
-            color: var(--accent-color);
-            padding: 5px 10px;
-            border-radius: 20px;
-            cursor: pointer;
-            font-size: 0.8em;
-        }
-
         .mqtt-badge {
             display: inline-flex;
             align-items: center;
@@ -75,33 +34,13 @@
         .mqtt-err { background: #e74c3c; color: #fff; }
         .mqtt-off { background: #555; color: #ccc; }
 
-        .cards {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 12px;
-            justify-content: center;
-            margin-bottom: 24px;
-            max-width: 1000px;
-            margin-left: auto;
-            margin-right: auto;
-        }
-        .card {
-            background: var(--card-bg);
-            border-radius: 12px;
-            padding: 16px 12px;
-            flex: 1 1 160px;
-            min-width: 140px;
-            text-align: center;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-            border: 1px solid var(--border-color);
-        }
         .chart-card {
             background: var(--card-bg);
             border-radius: 12px;
             padding: 16px;
             max-width: 1000px;
             height: 320px;
-            margin: 0 auto 24px auto;
+            margin: 0 auto var(--spacing) auto;
             box-shadow: 0 4px 12px rgba(0,0,0,0.2);
             border: 1px solid var(--border-color);
         }
@@ -125,22 +64,10 @@
         .negative { color: #2ecc71; }
         .neutral  { color: var(--accent-color); }
         
-        .badge {
-            display: inline-block;
-            padding: 4px 14px;
-            border-radius: 20px;
-            font-size: 0.9em;
-            font-weight: 600;
-            margin-top: 6px;
-        }
-        .badge-on  { background: #27ae60; color: #fff; }
-        .badge-off { background: #555; color: #ccc; }
-        .badge-force { background: #e67e22; color: #fff; }
-
         /* Collapsible Details Styles */
         details.collapsible-box {
             max-width: 1000px;
-            margin: 0 auto 15px auto;
+            margin: 0 auto var(--spacing) auto;
             background: var(--card-bg);
             border-radius: 8px;
             border: 1px solid var(--border-color);
@@ -158,9 +85,6 @@
             justify-content: space-between;
             align-items: center;
             border-left: 4px solid #f0c040;
-        }
-        details.collapsible-box summary {
-            list-style: none;
         }
         details.collapsible-box summary::-webkit-details-marker { display: none; }
         summary::after {
@@ -191,28 +115,10 @@
             padding: 10px 16px;
             border-radius: 8px;
             text-align: center;
-            margin: 0 auto 16px auto;
+            margin: 0 auto var(--spacing) auto;
             max-width: 1000px;
             display: none;
         }
-        .footer {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            justify-content: center;
-            margin: 24px auto 0 auto;
-            max-width: 1000px;
-        }
-        .footer a {
-            background: #0f3460;
-            color: #eee;
-            padding: 10px 18px;
-            border-radius: 8px;
-            text-decoration: none;
-            font-size: 0.9em;
-            transition: background 0.2s;
-        }
-        .footer a:hover { background: #1a5276; }
         
         /* Tab Styles */
         .tab-container {
@@ -261,8 +167,9 @@
     </style>
 </head>
 <body>
-    <!-- Inject Weather Sprite -->
-    <div id="weatherSpriteContainer" style="display: none;"></div>
+    <div class="content-padding">
+        <!-- Inject Weather Sprite -->
+        <div id="weatherSpriteContainer" style="display: none;"></div>
     <script>
         fetch('/icons/animated/weather-sprite.svg')
             .then(response => response.text())
@@ -277,10 +184,7 @@
         <div style="font-size:0.8em;color:#888;margin-top:10px;">Connexion au système solaire</div>
     </div>
 
-    <div class="header">
-        <h1>Gestion Solaire</h1>
-        <div id="dateTime">--/--/---- --:--</div>
-        <button id="themeToggle" onclick="toggleTheme()">☀️ Mode</button>
+    <div class="header" style="margin-top: 10px;">
         <div style="display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap;">
             <div id="expectedPowerBadge" class="mqtt-badge" style="display: none; background: #27ae60; color: white; gap: 8px; padding: 8px 14px;">
                 <span style="font-size: 1.2em;">⚡</span>
@@ -312,7 +216,7 @@
     </div>
 
     <div id="errorBox" class="error-box"></div>
-    <div id="nightBox" class="error-box" style="background: #2c3e50; border: 1px solid #34495e;">Pas de production solaire possible (Mode Nuit)</div>
+    <div id="nightBox" class="error-box" style="background: #2c3e50; border: 1px solid #34495e; margin-bottom: var(--spacing);">Pas de production solaire possible (Mode Nuit)</div>
 
     <div class="cards">
         <div class="card">
@@ -365,7 +269,7 @@
         </div>
     </div>
 
-    <div id="todaySummary" style="display: none; font-size: 1em; color: #666; text-align: center; margin: 15px auto 0 auto; letter-spacing: 0.10em; opacity: 0.8; max-width: 1000px;">
+    <div id="todaySummary" style="display: none; font-size: 1em; color: #666; text-align: center; margin: 0 auto var(--spacing) auto; letter-spacing: 0.10em; opacity: 0.8; max-width: 1000px;">
         Aujourd'hui : <span id="sumImport" style="color:#e74c3c">—</span> réseau | 
         <span id="sumRedirect" style="color:#2ecc71">—</span> redirigé | 
         <span id="sumExport" style="color:#f1c40f">—</span> injecté
@@ -412,14 +316,10 @@
         </div>
     </details>
 
-    <div class="footer">
-        <a href="/web_config">Configuration</a>
-        <a id="statsLink" href="/stats" style="background:#f0c040; color:#1a1a2e; font-weight:bold; display:none;">Statistiques</a>
-        <a href="/RESET_device" onclick="return confirm('Redémarrer le device ?')">Reset</a>
-    </div>
-    <div style="text-align: center; font-size: 0.7em; color: #aaa; margin-top: 15px;">
+    <div style="text-align: center;" class="footer-text">
         <a href="https://github.com/aginies/domotique/tree/main/solar_cpp" target="_blank" style="background:none; color:inherit; padding:0;">Version <span id="footerVersion">...</span></a> | Build: <span id="footerBuild">...</span>
     </div>
+    </div> <!-- end content-padding -->
 
     <script>
         let powerChart = null;
@@ -467,13 +367,6 @@
             document.getElementById('tabSys').classList.toggle('active', mode === 'sys');
             document.getElementById('tabData').classList.toggle('active', mode === 'data');
             updateLog();
-        }
-
-        function updateDateTime() {
-            const now = new Date();
-            const dateStr = now.toLocaleDateString('fr-FR');
-            const timeStr = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-            document.getElementById('dateTime').textContent = dateStr + ' ' + timeStr;
         }
 
         function applyStatus(d) {
@@ -727,8 +620,8 @@
                 if (fv && d.version) fv.textContent = d.version;
                 var fb = document.getElementById('footerBuild');
                 if (fb && d.build_time) fb.textContent = d.build_time;
-                var sl = document.getElementById('statsLink');
-                if (sl && d.stats_enabled) sl.style.display = '';
+                var sl = document.getElementById('navStatsLink');
+                if (sl && d.stats_enabled) sl.style.display = 'inline-block';
                 var ts = document.getElementById('todaySummary');
                 if (ts) ts.style.display = d.stats_enabled ? 'block' : 'none';
                 if (!d.history_enabled) { var cc2 = document.getElementById('chartCard'); if (cc2) cc2.style.display = 'none'; }
@@ -765,26 +658,10 @@
                     statusInterval = setInterval(updateStatus, delay);
                     console.log("Polling adjusted to " + delay + "ms (" + newMode + " mode)");
                 }
-            } catch(e) { console.error("UpdateStatus error:", e); }
-        }
+                } catch(e) { console.error("UpdateStatus error:", e); }
+                }
 
-        function toggleTheme() {
-            const body = document.body;
-            const btn = document.getElementById('themeToggle');
-            const isLight = body.classList.toggle('light-mode');
-            btn.textContent = isLight ? '🌙 Dark' : '☀️ Light';
-            localStorage.setItem('theme', isLight ? 'light' : 'dark');
-            if (powerChart) updateChartStyle();
-        }
-
-        // Initialize theme
-        if (localStorage.getItem('theme') === 'light') {
-            document.body.classList.add('light-mode');
-            document.getElementById('themeToggle').textContent = '🌙 Dark';
-        }
-
-        function updateChartStyle() {
-            if (lastStatus) updateChart(lastStatus);
+                function updateChartStyle() {            if (lastStatus) updateChart(lastStatus);
         }
 
         async function updateLog() {
@@ -875,7 +752,6 @@
         }
 
         updateStatus(); // Initial call starts the interval chain
-        updateDateTime();
         setTimeout(function() {
             updateLog();
             setInterval(updateLog, 15000);

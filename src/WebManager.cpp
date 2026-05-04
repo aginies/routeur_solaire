@@ -266,6 +266,16 @@ void WebManager::setupRoutes() {
         response->addHeader("Cache-Control", "public, max-age=86400");
         request->send(response);
     });
+    _server.on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request) {
+        AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/style.css.gz", "text/css");
+        response->addHeader("Content-Encoding", "gzip");
+        request->send(response);
+    });
+    _server.on("/main.js", HTTP_GET, [](AsyncWebServerRequest *request) {
+        AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/main.js.gz", "application/javascript");
+        response->addHeader("Content-Encoding", "gzip");
+        request->send(response);
+    });
     _server.on("/help.json", HTTP_GET, [](AsyncWebServerRequest *request) {
         AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/help.json.gz", "application/json");
         response->addHeader("Content-Encoding", "gzip");
@@ -367,9 +377,9 @@ void WebManager::setupRoutes() {
             uploadStatus = -1;
             if (uploadFile) uploadFile.close();
             Logger::info("Importing stats: " + filename);
-            uploadFile = LittleFS.open("/stats.json.tmp", "w");
+            uploadFile = LittleFS.open("/stats_upload.json", "w");
             if (!uploadFile) {
-                Logger::error("Stats upload: cannot open /stats.json.tmp");
+                Logger::error("Stats upload: cannot open /stats_upload.json");
                 setStatus(2);
                 return;
             }
@@ -380,7 +390,7 @@ void WebManager::setupRoutes() {
         uploadedBytes += len;
         if (uploadedBytes > MAX_STATS_UPLOAD_BYTES) {
             uploadFile.close();
-            LittleFS.remove("/stats.json.tmp");
+            LittleFS.remove("/stats_upload.json");
             Logger::error("Stats upload rejected: file too large");
             setStatus(1);
             return;
@@ -390,7 +400,7 @@ void WebManager::setupRoutes() {
             size_t written = uploadFile.write(data, len);
             if (written != len) {
                 uploadFile.close();
-                LittleFS.remove("/stats.json.tmp");
+                LittleFS.remove("/stats_upload.json");
                 Logger::error("Stats upload write failed");
                 setStatus(2);
                 return;
@@ -401,12 +411,12 @@ void WebManager::setupRoutes() {
             uploadFile.close();
             // Atomic replace of stats.json
             LittleFS.remove("/stats.json");
-            if (LittleFS.rename("/stats.json.tmp", "/stats.json")) {
+            if (LittleFS.rename("/stats_upload.json", "/stats.json")) {
                 Logger::info("Stats upload complete (" + String(uploadedBytes) + " bytes)");
                 setStatus(0);
             } else {
                 Logger::error("Stats upload: rename failed");
-                LittleFS.remove("/stats.json.tmp");
+                LittleFS.remove("/stats_upload.json");
                 setStatus(2);
             }
         }

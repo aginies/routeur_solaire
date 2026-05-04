@@ -5,14 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='20' fill='%23f0c040'/><g stroke='%23f0c040' stroke-width='4' stroke-linecap='round'><line x1='50' y1='10' x2='50' y2='22'/><line x1='50' y1='78' x2='50' y2='90'/><line x1='10' y1='50' x2='22' y2='50'/><line x1='78' y1='50' x2='90' y2='50'/><line x1='22' y1='22' x2='30' y2='30'/><line x1='70' y1='70' x2='78' y2='78'/><line x1='78' y1='22' x2='70' y2='30'/><line x1='30' y1='70' x2='22' y2='78'/></g></svg>">
     <title>Configuration Solaire</title>
+    <link rel="stylesheet" href="/style.css">
+    <script src="/main.js"></script>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #1a1a2e;
-            color: #eee;
-        }
         h1, h2 { color: #f0c040; margin: 0; }
         .form-container {
             background-color: #16213e;
@@ -20,7 +15,7 @@
             border-radius: 12px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.4);
             max-width: 700px;
-            margin: 20px auto;
+            margin: var(--spacing) auto;
         }
         .form-group { margin-bottom: 18px; }
         label {
@@ -47,7 +42,7 @@
         details {
             background-color: #1a1a2e;
             border-radius: 8px;
-            margin-bottom: 15px;
+            margin-bottom: var(--spacing);
             border: 1px solid #333;
             overflow: hidden;
         }
@@ -108,16 +103,6 @@
             font-size: 16px;
             font-weight: 600;
         }
-        .reset-button {
-            background-color: #c0392b;
-            color: #fff;
-            padding: 12px 20px;
-            border-radius: 8px;
-            text-decoration: none;
-            display: inline-block;
-            font-size: 16px;
-            font-weight: 600;
-        }
         .reboot-banner {
             background-color: #e67e22;
             color: #fff;
@@ -156,15 +141,12 @@
             border: none; color: #888; font-size: 1.4em; cursor: pointer;
         }
         .modal-close:hover { color: #f0c040; }
-        .form-help { font-size: 0.8em; color: #888; margin-top: 4px; }
     </style>
 </head>
-<body>
+<body style="padding:0;">
+    <div style="padding: 20px;">
     <div class="form-container">
-        <div class="header">
-            <h1>Configuration <span id="headerName">...</span> (<span id="headerVersion">...</span>)</h1>
-        </div>
-        
+
         <form id="configForm" action="/save_config" method="POST">
             <div class="form-group" style="padding: 0 10px;">
                 <label for="NAME">Nom du système</label>
@@ -728,10 +710,11 @@
             </div>
         </form>
 
-        <div style="text-align: center; font-size: 0.7em; color: #aaa; margin-top: 15px;">
+        <div class="footer-text">
             Version <span id="footerVersion">...</span> | Build: <span id="footerBuild">...</span>
         </div>
     </div>
+    </div> <!-- end content-padding -->
 
     <div id="helpModal" class="modal-overlay" onclick="if(event.target===this)this.style.display='none'">
         <div class="modal-content">
@@ -759,8 +742,6 @@
         fetch('/get_config').then(r=>r.json()).then(c=>{
             function setVal(id,v){var e=document.getElementById(id);if(e){if(e.tagName==='SELECT')e.value=String(v);else e.value=v;}}
             function setBool(id,v){var e=document.getElementById(id);if(e)e.value=v?'True':'False';}
-            document.getElementById('headerName').textContent=c.name;
-            document.getElementById('headerVersion').textContent='...';
             setVal('NAME',c.name);
             setVal('TIMEZONE',c.timezone);
             setBool('E_WIFI',c.e_wifi);
@@ -840,9 +821,8 @@
             setVal('WEB_USER',c.web_user);
             setVal('WEB_PASSWORD',c.web_password);
         }).then(()=>fetch('/status').then(r=>r.json()).then(s=>{
-            document.getElementById('headerVersion').textContent=s.version;
-            document.getElementById('footerVersion').textContent=s.version;
-            document.getElementById('footerBuild').textContent=s.build_time;
+            var fv = document.getElementById('footerVersion'); if(fv) fv.textContent=s.version;
+            var fb = document.getElementById('footerBuild'); if(fb) fb.textContent=s.build_time;
         }));
         
         async function testShelly(target, btn) {
@@ -937,5 +917,6 @@
             xhr.send(formData);
         }
     </script>
+    </div> <!-- end padding div -->
 </body>
 </html>
