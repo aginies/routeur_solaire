@@ -317,7 +317,7 @@
     <div class="cards">
         <div class="card">
             <div class="label">
-                <span>Puissance réseau</span>
+                <span>⚡ Puissance réseau</span>
                 <span id="gridSource" style="text-transform:none; font-size:0.9em; color:#888;">(...)</span>
             </div>
             <div class="value" id="gridPower">—<span class="unit">W</span></div>
@@ -332,13 +332,13 @@
             </div>
             <!-- Équipement 2 -->
             <div id="eq2Row" style="display: none; border-top: 1px solid var(--border-color); padding-top: 10px; margin-top: 4px; position: relative;">
-                <div class="label"><a href="/web_equip2" id="eq2Link" style="color: inherit; text-decoration: none;"><span id="eq2NameLabel">Équipement 2</span></a></div>
+                <div class="label"><a href="/web_equip2" id="eq2Link" style="color: inherit; text-decoration: none;"><span>🔌 <span id="eq2NameLabel">Équipement 2</span></span></a></div>
                 <div id="eq2BypassBadge" style="display:none; background: #7f8c8d; color: #fff; font-size: 0.65em; padding: 2px 8px; border-radius: 4px; font-weight: bold; width: fit-content; margin: 0 auto 4px auto;">NUAGES (PAUSE)</div>
                 <div class="value" id="equip2Power">—<span class="unit">W</span></div>
             </div>
         </div>
         <div class="card" id="ssrTempCard">
-            <div class="label"><span>Temp SSR</span></div>
+            <div class="label"><span>🌡️ Temp SSR</span></div>
             <div class="value" id="ssrTemp">—<span class="unit">°C</span></div>
             <div id="fanStatus" style="margin-top: 8px; display: none;">
                 <span class="badge badge-on" id="fanBadge">Ventilateur: 0%</span>
@@ -346,7 +346,6 @@
         </div>
         <div class="card">
             <div class="label" style="flex-direction: row; align-items: center; justify-content: center; gap: 8px;">
-                <span>FORCE</span>
                 <span id="forceMode"><span class="badge badge-off">Inactif</span></span>
             </div>
 
@@ -856,6 +855,10 @@
                         W: { auto: true },
                         temp: { auto: true },
                     },
+                    cursor: {
+                        drag: { setScale: true, x: true, y: false }
+                    },
+                    select: { show: true },
                     axes: [
                         { stroke: textColor, grid: { stroke: gridColor }, ticks: { stroke: gridColor },
                           values: (u, vals) => vals.map(v => { var d = new Date(v * 1000); return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0'); }) },
