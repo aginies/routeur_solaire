@@ -501,6 +501,10 @@
                 <summary><span class="help-btn" data-section="force_night">?</span>Mode Forcé & Nuit</summary>
                 <div class="section-content">
                     <div class="form-group">
+                        <label for="BOOST_MINUTES">Durée du boost manuel par défaut (min):</label>
+                        <input type="number" min="1" max="1440" id="BOOST_MINUTES" name="BOOST_MINUTES">
+                    </div>
+                    <div class="form-group">
                         <label for="FORCE_EQUIPMENT">Activer le mode forcé manuel:</label>
                         <select id="FORCE_EQUIPMENT" name="FORCE_EQUIPMENT">
                             <option value="True" >True</option>
@@ -801,6 +805,7 @@
             setVal('DELTANEG',c.deltaneg);
             setVal('COMPENSATION',c.compensation);
             setVal('DYNAMIC_THRESHOLD_W',c.dynamic_threshold_w);
+            setVal('BOOST_MINUTES',c.boost_minutes);
             setBool('FORCE_EQUIPMENT',c.force_equipment);
             setBool('E_FORCE_WINDOW',c.e_force_window);
             setVal('FORCE_START',c.force_start);
