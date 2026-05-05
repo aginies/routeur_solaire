@@ -1,5 +1,6 @@
 #include "ConfigManager.h"
 #include "Logger.h"
+#include "PinCapabilities.h"
 #include <Preferences.h>
 
 const char* ConfigManager::CONFIG_FILE = "/config.json";
@@ -30,11 +31,12 @@ static int clampInt(int v, int lo, int hi, int dflt, const char* name) {
     return v;
 }
 
-static int validateGpio(int pin, int dflt, const char* name) {
-    // ESP32-S3 has GPIO 0-21 and 26-48 usable. Be loose: 0..48 inclusive, reject negatives
-    // and clearly-wrong values. -1 is treated as "unset" (some legacy configs use it).
+static int validatePinRole(int pin, int dflt, PinRole role) {
     if (pin == -1) return dflt;
-    return clampInt(pin, 0, 48, dflt, name);
+    if (isPinValidForRole(pin, role)) return pin;
+    Logger::warn(String("ConfigManager: invalid ") + pinRoleName(role) + " (" + pin + "): " + pinValidationReason(pin, role)
+                 + ", using default " + dflt);
+    return dflt;
 }
 
 static int validateCpuFreq(int f, int dflt) {
@@ -95,7 +97,7 @@ Config ConfigManager::load() {
     if (has(doc, "timezone")) config.timezone = doc["timezone"].as<String>();
     // Bug #5: cpu_freq must be one of the three supported steps on ESP32-S3.
     if (has(doc, "cpu_freq")) config.cpu_freq = validateCpuFreq(doc["cpu_freq"].as<int>(), config.cpu_freq);
-    if (has(doc, "internal_led_pin")) config.internal_led_pin = validateGpio(doc["internal_led_pin"].as<int>(), config.internal_led_pin, "internal_led_pin");
+    if (has(doc, "internal_led_pin")) config.internal_led_pin = validatePinRole(doc["internal_led_pin"].as<int>(), config.internal_led_pin, PinRole::INTERNAL_LED);
     if (has(doc, "max_esp32_temp")) config.max_esp32_temp = doc["max_esp32_temp"];
 
     // WiFi
@@ -116,11 +118,11 @@ Config ConfigManager::load() {
     if (has(doc, "ap_ip")) config.ap_ip = doc["ap_ip"].as<String>();
 
     // Hardware — Bug #5: GPIO bounds-check critical pins.
-    if (has(doc, "ssr_pin"))     config.ssr_pin     = validateGpio(doc["ssr_pin"].as<int>(),     config.ssr_pin,     "ssr_pin");
-    if (has(doc, "relay_pin"))   config.relay_pin   = validateGpio(doc["relay_pin"].as<int>(),   config.relay_pin,   "relay_pin");
-    if (has(doc, "ds18b20_pin")) config.ds18b20_pin = validateGpio(doc["ds18b20_pin"].as<int>(), config.ds18b20_pin, "ds18b20_pin");
-    if (has(doc, "fan_pin"))     config.fan_pin     = validateGpio(doc["fan_pin"].as<int>(),     config.fan_pin,     "fan_pin");
-    if (has(doc, "zx_pin"))      config.zx_pin      = validateGpio(doc["zx_pin"].as<int>(),      config.zx_pin,      "zx_pin");
+    if (has(doc, "ssr_pin"))     config.ssr_pin     = validatePinRole(doc["ssr_pin"].as<int>(),     config.ssr_pin,     PinRole::SSR);
+    if (has(doc, "relay_pin"))   config.relay_pin   = validatePinRole(doc["relay_pin"].as<int>(),   config.relay_pin,   PinRole::RELAY);
+    if (has(doc, "ds18b20_pin")) config.ds18b20_pin = validatePinRole(doc["ds18b20_pin"].as<int>(), config.ds18b20_pin, PinRole::DS18B20);
+    if (has(doc, "fan_pin"))     config.fan_pin     = validatePinRole(doc["fan_pin"].as<int>(),     config.fan_pin,     PinRole::FAN_PWM);
+    if (has(doc, "zx_pin"))      config.zx_pin      = validatePinRole(doc["zx_pin"].as<int>(),      config.zx_pin,      PinRole::ZX_INPUT);
 
     // Shelly
     if (has(doc, "shelly_em_ip")) config.shelly_em_ip = doc["shelly_em_ip"].as<String>();
@@ -204,8 +206,8 @@ Config ConfigManager::load() {
     // JSY
     if (has(doc, "e_jsy")) config.e_jsy = doc["e_jsy"];
     if (has(doc, "jsy_uart_id")) config.jsy_uart_id = clampInt(doc["jsy_uart_id"].as<int>(), 0, 2, config.jsy_uart_id, "jsy_uart_id");
-    if (has(doc, "jsy_tx")) config.jsy_tx = validateGpio(doc["jsy_tx"].as<int>(), config.jsy_tx, "jsy_tx");
-    if (has(doc, "jsy_rx")) config.jsy_rx = validateGpio(doc["jsy_rx"].as<int>(), config.jsy_rx, "jsy_rx");
+    if (has(doc, "jsy_tx")) config.jsy_tx = validatePinRole(doc["jsy_tx"].as<int>(), config.jsy_tx, PinRole::JSY_TX);
+    if (has(doc, "jsy_rx")) config.jsy_rx = validatePinRole(doc["jsy_rx"].as<int>(), config.jsy_rx, PinRole::JSY_RX);
 
     // SSR Control
     if (has(doc, "control_mode")) config.control_mode = doc["control_mode"].as<String>();

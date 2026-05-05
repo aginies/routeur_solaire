@@ -13,6 +13,7 @@
 #include "Equipment2Manager.h"
 #include "Shelly1PMManager.h"
 #include "Utils.h"
+#include "PinCapabilities.h"
 #include <HTTPClient.h>
 #include <LittleFS.h>
 #include <Update.h>
@@ -58,17 +59,13 @@ void WebManager::applyRequestParams(AsyncWebServerRequest *request, Config &cfg)
     // Bug #5: helpers to clamp/validate user-supplied values before persisting them.
     auto clampInt = [](int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); };
     auto clampFloat = [](float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); };
-    auto isValidGpio = [](int p) {
-        if (p < 0 || p > 48) return false;
-        // ESP32-S3 strapping / USB / flash pins to avoid
-        switch (p) {
-            case 0: case 19: case 20: case 26: case 27: case 28: case 29:
-            case 30: case 31: case 32: case 45: case 46:
-                return false;
+    auto setRolePin = [&](int& dest, int v, PinRole role) {
+        if (isPinValidForRole(v, role)) {
+            dest = v;
+        } else {
+            Logger::warn(String("Rejected ") + pinRoleName(role) + "=" + v + " (" + pinValidationReason(v, role) + ")");
         }
-        return true;
     };
-    auto setGpio = [&](int& dest, int v) { if (isValidGpio(v)) dest = v; else Logger::warn("Rejected invalid GPIO " + String(v)); };
 
     // System
     if (has("NAME")) cfg.name = get("NAME").substring(0, 64);
@@ -134,16 +131,16 @@ void WebManager::applyRequestParams(AsyncWebServerRequest *request, Config &cfg)
     if (has("MAX_DUTY_PERCENT")) cfg.max_duty_percent = clampFloat(get("MAX_DUTY_PERCENT").toFloat(), 0.0f, 100.0f);
 
     // Hardware
-    if (has("SSR_PIN")) setGpio(cfg.ssr_pin, get("SSR_PIN").toInt());
-    if (has("RELAY_PIN")) setGpio(cfg.relay_pin, get("RELAY_PIN").toInt());
-    if (has("DS18B20_PIN")) setGpio(cfg.ds18b20_pin, get("DS18B20_PIN").toInt());
-    if (has("I_LED_PIN")) setGpio(cfg.internal_led_pin, get("I_LED_PIN").toInt());
-    if (has("FAN_PIN")) setGpio(cfg.fan_pin, get("FAN_PIN").toInt());
+    if (has("SSR_PIN")) setRolePin(cfg.ssr_pin, get("SSR_PIN").toInt(), PinRole::SSR);
+    if (has("RELAY_PIN")) setRolePin(cfg.relay_pin, get("RELAY_PIN").toInt(), PinRole::RELAY);
+    if (has("DS18B20_PIN")) setRolePin(cfg.ds18b20_pin, get("DS18B20_PIN").toInt(), PinRole::DS18B20);
+    if (has("I_LED_PIN")) setRolePin(cfg.internal_led_pin, get("I_LED_PIN").toInt(), PinRole::INTERNAL_LED);
+    if (has("FAN_PIN")) setRolePin(cfg.fan_pin, get("FAN_PIN").toInt(), PinRole::FAN_PWM);
     if (has("FAN_TEMP_OFFSET")) cfg.fan_temp_offset = clampInt(get("FAN_TEMP_OFFSET").toInt(), -50, 50);
     if (has("E_FAN")) cfg.e_fan = (get("E_FAN") == "True");
     if (has("E_SSR_TEMP")) cfg.e_ssr_temp = (get("E_SSR_TEMP") == "True");
     if (has("SSR_MAX_TEMP")) cfg.ssr_max_temp = clampFloat(get("SSR_MAX_TEMP").toFloat(), 30.0f, 150.0f);
-    if (has("ZX_PIN")) setGpio(cfg.zx_pin, get("ZX_PIN").toInt());
+    if (has("ZX_PIN")) setRolePin(cfg.zx_pin, get("ZX_PIN").toInt(), PinRole::ZX_INPUT);
     if (has("CONTROL_MODE")) cfg.control_mode = get("CONTROL_MODE").substring(0, 32);
 
     // Force / Night
@@ -565,6 +562,7 @@ void WebManager::setupRoutes() {
         doc["solar_panel_azimuth"] = _config->solar_panel_azimuth;
         doc["solar_panel_tilt"] = _config->solar_panel_tilt;
         doc["solar_loss_factor"] = _config->solar_loss_factor;
+        doc["boost_minutes"] = _config->boost_minutes;
         doc["vacation_until"] = _config->vacation_until;
         doc["fake_shelly"] = _config->fake_shelly;
         doc["web_user"] = _config->web_user;
@@ -852,6 +850,28 @@ void WebManager::streamStatusJson(AsyncWebServerRequest *request) {
     doc["equip2_bypassed"] = Equipment2Manager::isBypassedByCloud();
     doc["equip2_max_power"] = _config->equip2_max_power;
     doc["night_mode"] = SolarMonitor::isNight(Utils::getCurrentMinutes());
+
+    JsonObject pinValidation = doc["pin_validation"].to<JsonObject>();
+    bool allPinsValid = true;
+    auto addPinValidation = [&](const char* key, int pin, PinRole role) {
+        JsonObject p = pinValidation[key].to<JsonObject>();
+        bool valid = isPinValidForRole(pin, role);
+        p["pin"] = pin;
+        p["valid"] = valid;
+        if (!valid) {
+            p["reason"] = pinValidationReason(pin, role);
+            allPinsValid = false;
+        }
+    };
+    addPinValidation("ssr_pin", _config->ssr_pin, PinRole::SSR);
+    addPinValidation("relay_pin", _config->relay_pin, PinRole::RELAY);
+    addPinValidation("fan_pin", _config->fan_pin, PinRole::FAN_PWM);
+    addPinValidation("zx_pin", _config->zx_pin, PinRole::ZX_INPUT);
+    addPinValidation("ds18b20_pin", _config->ds18b20_pin, PinRole::DS18B20);
+    addPinValidation("internal_led_pin", _config->internal_led_pin, PinRole::INTERNAL_LED);
+    addPinValidation("jsy_tx", _config->jsy_tx, PinRole::JSY_TX);
+    addPinValidation("jsy_rx", _config->jsy_rx, PinRole::JSY_RX);
+    doc["pin_validation_ok"] = allPinsValid;
     
     time_t t_now_epoch;
     time(&t_now_epoch);

@@ -2,6 +2,7 @@
 #include "Logger.h"
 #include "SafetyManager.h"
 #include "ActuatorManager.h"
+#include "PinCapabilities.h"
 #ifndef NATIVE_TEST
 #include <esp_task_wdt.h>
 #endif
@@ -36,11 +37,6 @@ static const int FAULT_LATCH_LIMIT = 5;   // updates currentSsrTemp only when be
 static const int FAULT_TRIP_LEVEL = 10;   // forces -999 (SafetyManager EMERGENCY)
 static const int FAULT_MAX = 20;
 
-// Bug #3: ESP32-S3 valid GPIO ranges
-static inline bool isValidS3Gpio(int p) {
-    return (p >= 0 && p <= 21) || (p >= 26 && p <= 48);
-}
-
 void TemperatureManager::init(const Config& config) {
     // Bug #6: stop the task before deleting sensors/onewire it may be touching.
     stopTask();
@@ -52,8 +48,8 @@ void TemperatureManager::init(const Config& config) {
     if (!config.e_ssr_temp) return;
 
     // Bug #3: validate GPIO before instantiating OneWire
-    if (!isValidS3Gpio(config.ds18b20_pin)) {
-        Logger::error("DS18B20: invalid pin " + String(config.ds18b20_pin) + " (ESP32-S3 GPIO 0-21 or 26-48)");
+    if (!isPinValidForRole(config.ds18b20_pin, PinRole::DS18B20)) {
+        Logger::error("DS18B20: invalid pin " + String(config.ds18b20_pin) + " (" + pinValidationReason(config.ds18b20_pin, PinRole::DS18B20) + ")");
         return;
     }
 

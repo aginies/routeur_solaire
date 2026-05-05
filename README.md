@@ -461,6 +461,8 @@ Default values are shown. All fields are editable via the Web UI.
 - `digitalWrite(ssr_pin, LOW)` = SSR **ON** (power to load)
 - The relay (pin 13) is active-LOW: `LOW` closes the SSR circuit, `HIGH` opens it.
 
+**Pin validation:** The firmware now validates GPIO by **role + board target** (ESP32-S3 vs ESP32-WROOM), not only by numeric range. Some pins are rejected for SSR/relay/fan/ZX roles because of boot strapping, USB, flash/PSRAM, input-only restrictions, or board-specific caveats.
+
 ## Getting Started
 
 1.  **Installation**: Install [PlatformIO](https://platformio.org/).

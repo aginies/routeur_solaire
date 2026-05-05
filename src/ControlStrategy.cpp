@@ -2,6 +2,7 @@
 #include "ActuatorManager.h"
 #include "GridSensorService.h"
 #include "Logger.h"
+#include "PinCapabilities.h"
 #include <esp_task_wdt.h>
 #include <soc/gpio_struct.h>
 
@@ -97,8 +98,9 @@ void ControlStrategy::startTasks() {
     if (!_config) return;
 
     // Bug #5: validate critical params before starting any task.
-    if (_config->zx_pin < 0 || _config->zx_pin > 48) {
-        Logger::error("ControlStrategy: invalid zx_pin " + String(_config->zx_pin) + " - tasks not started");
+    if (!isPinValidForRole(_config->zx_pin, PinRole::ZX_INPUT)) {
+        Logger::error("ControlStrategy: invalid zx_pin " + String(_config->zx_pin)
+                      + " (" + pinValidationReason(_config->zx_pin, PinRole::ZX_INPUT) + ") - tasks not started");
         return;
     }
 

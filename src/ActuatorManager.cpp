@@ -3,6 +3,7 @@
 #include "SafetyManager.h"
 #include "GridSensorService.h"
 #include "ControlStrategy.h"
+#include "PinCapabilities.h"
 #include <cmath>
 
 // Bug #7: avoid hardcoding LEDC channel literal
@@ -36,18 +37,33 @@ void ActuatorManager::init(const Config& config) {
     }
 
     _config = &config;
-    ssrPin = config.ssr_pin;
+    ssrPin = -1;
 
-    pinMode(config.ssr_pin, OUTPUT);
-    digitalWrite(config.ssr_pin, LOW);
+    if (isPinValidForRole(config.ssr_pin, PinRole::SSR)) {
+        ssrPin = config.ssr_pin;
+        pinMode(config.ssr_pin, OUTPUT);
+        digitalWrite(config.ssr_pin, LOW);
+    } else {
+        Logger::error("ActuatorManager: invalid ssr_pin " + String(config.ssr_pin) + " (" + pinValidationReason(config.ssr_pin, PinRole::SSR) + ") - SSR disabled");
+    }
 
-    pinMode(config.relay_pin, OUTPUT);
-    digitalWrite(config.relay_pin, LOW); // Relay ON (Normal Closed)
+    if (isPinValidForRole(config.relay_pin, PinRole::RELAY)) {
+        pinMode(config.relay_pin, OUTPUT);
+        digitalWrite(config.relay_pin, LOW); // Relay ON (Normal Closed)
+    } else {
+        Logger::error("ActuatorManager: invalid relay_pin " + String(config.relay_pin) + " (" + pinValidationReason(config.relay_pin, PinRole::RELAY) + ") - relay control disabled");
+    }
 
     if (config.e_fan) {
-        ledcSetup(FAN_LEDC_CHANNEL, 10000, 10);
-        ledcAttachPin(config.fan_pin, FAN_LEDC_CHANNEL);
-        ledcWrite(FAN_LEDC_CHANNEL, 0);
+        if (isPinValidForRole(config.fan_pin, PinRole::FAN_PWM)) {
+            ledcSetup(FAN_LEDC_CHANNEL, 10000, 10);
+            ledcAttachPin(config.fan_pin, FAN_LEDC_CHANNEL);
+            ledcWrite(FAN_LEDC_CHANNEL, 0);
+        } else {
+            Logger::error("ActuatorManager: invalid fan_pin " + String(config.fan_pin) + " (" + pinValidationReason(config.fan_pin, PinRole::FAN_PWM) + ") - fan disabled");
+            fanActive = false;
+            fanPercent = 0;
+        }
     }
 
     _initialized = true;
@@ -77,15 +93,20 @@ void ActuatorManager::setDuty(float duty) {
 }
 
 void ActuatorManager::openRelay() {
-    if (_config) digitalWrite(_config->relay_pin, HIGH);
+    if (_config && isPinValidForRole(_config->relay_pin, PinRole::RELAY)) {
+        digitalWrite(_config->relay_pin, HIGH);
+    }
 }
 
 void ActuatorManager::closeRelay() {
-    if (_config) digitalWrite(_config->relay_pin, LOW);
+    if (_config && isPinValidForRole(_config->relay_pin, PinRole::RELAY)) {
+        digitalWrite(_config->relay_pin, LOW);
+    }
 }
 
 bool ActuatorManager::setFanSpeed(int percent, bool isTest) {
     if (!_config || !_config->e_fan) return false;
+    if (!isPinValidForRole(_config->fan_pin, PinRole::FAN_PWM)) return false;
     if (percent < 0) percent = 0;
     if (percent > 100) percent = 100;
     if (percent == fanPercent && !isTest) return true;
