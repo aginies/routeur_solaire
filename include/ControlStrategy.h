@@ -17,6 +17,16 @@ public:
 
     // Command from Monitor Task
     static void setDutyMilli(uint32_t dutyMilli);
+    static uint32_t getZxCounter();
+    static uint32_t getLastZxTimeUs();
+    static float getEstimatedGridHz();
+    static bool isTrameModeActive();
+    static bool isPhaseModeActive();
+    static bool getTrameFireFullCycle();
+    static uint32_t getCurrentFullCycleIndex();
+    static uint32_t getTrameDecisionAgeMs();
+    static bool isPhaseTimerArmPending();
+    static uint32_t getPhaseLastRequestedWaitUs();
 
 private:
     static void burstControlTask(void* pvParameters);

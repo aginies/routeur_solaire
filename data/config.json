@@ -20,15 +20,16 @@
     "ap_ip": "192.168.66.1",
 
     "ssr_pin": 17,
-    "relay_pin": 15,
+    "relay_pin": 6,
     "ds18b20_pin": 16,
     "fan_pin": 5,
-    "zx_pin": 19,
+    "zx_pin": 15,
 
     "shelly_em_ip": "10.0.10.60",
     "shelly_em_index": 0,
     "e_shelly_mqtt": true,
     "shelly_mqtt_topic": "shellies/homeassistant/emeter/0/power",
+    "grid_measure_source": "shelly",
     "fake_shelly": false,
     "poll_interval": 1,
     "shelly_timeout": 4,
@@ -36,12 +37,12 @@
 
     "equip1_name": "Ballon",
     "equip1_max_power": 2300.0,
-    "export_setpoint": 0.0,
-    "e_equip1": false,
+    "e_equip1": true,
     "equip1_shelly_ip": "10.0.10.63",
     "equip1_shelly_index": 0,
     "e_equip1_mqtt": false,
     "equip1_mqtt_topic": "",
+    "equip1_measure_source": "shelly",
 
     "e_equip2": false,
     "equip2_name": "Piscine",
@@ -54,6 +55,7 @@
     "equip2_min_on_time": 15,
     "equip2_schedule": 0,
 
+    "export_setpoint": 0.0,
     "delta": 100.0,
     "deltaneg": -75.0,
     "compensation": 50.0,
@@ -81,9 +83,10 @@
     "e_fan": true,
     "fan_temp_offset": 10,
 
-    "e_jsy": false,
     "jsy_uart_id": 2,
-    "jsy_tx": 13,
+    "jsy_grid_channel": 1,
+    "jsy_equip1_channel": 2,
+    "jsy_tx": 20,
     "jsy_rx": 18,
 
     "control_mode": "trame",

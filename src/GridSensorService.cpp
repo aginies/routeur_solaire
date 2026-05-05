@@ -7,6 +7,7 @@
 static constexpr float SENSOR_ERROR_VALUE = -99999.0f;
 
 float GridSensorService::currentGridPower = 0.0;
+float GridSensorService::currentEquip1PowerFromJsy = 0.0;
 float GridSensorService::currentGridVoltage = 230.0;
 bool GridSensorService::hasFreshData = false;
 const Config* GridSensorService::_config = nullptr;
@@ -16,11 +17,12 @@ HTTPClient GridSensorService::_http;
 
 void GridSensorService::init(const Config& config) {
     _config = &config;
+    _jsySerial = nullptr;
     _http.setConnectTimeout(2000);
     // Bug #5: cast to uint32_t before *1000 to avoid overflow above ~32 s.
     _http.setTimeout((uint32_t)_config->shelly_timeout * 1000UL);
 
-    if (config.e_jsy) {
+    if (isGridSourceJsy() || isEquip1SourceJsy()) {
         if (config.jsy_uart_id == 1) _jsySerial = &Serial1;
         else if (config.jsy_uart_id == 2) _jsySerial = &Serial2;
 
@@ -36,7 +38,15 @@ void GridSensorService::init(const Config& config) {
 }
 
 bool GridSensorService::isJsyActive() {
-    return _config && _config->e_jsy;
+    return _config && (isGridSourceJsy() || isEquip1SourceJsy());
+}
+
+bool GridSensorService::isGridSourceJsy() {
+    return _config && _config->grid_measure_source == "jsy";
+}
+
+bool GridSensorService::isEquip1SourceJsy() {
+    return _config && _config->equip1_measure_source == "jsy";
 }
 
 bool GridSensorService::fetchGridData() {
@@ -48,8 +58,8 @@ bool GridSensorService::fetchGridData() {
     float gridPower = SENSOR_ERROR_VALUE;
     bool fresh = false;
 
-    // JSY Priority (Fast wired method)
-    if (_config->e_jsy) {
+    // JSY source for grid
+    if (isGridSourceJsy()) {
         gridPower = readJSY();
         if (gridPower != SENSOR_ERROR_VALUE) {
             fresh = true;
@@ -96,9 +106,10 @@ bool GridSensorService::fetchGridData() {
 float GridSensorService::readJSY() {
     if (!_jsySerial) return SENSOR_ERROR_VALUE;
 
-    // Modbus RTU Request for registers 0x0000 (Voltage, Current, Power, Energy...)
-    // Address 01, Function 03, Start 0000, Count 0006
-    uint8_t query[] = {0x01, 0x03, 0x00, 0x00, 0x00, 0x06, 0xC5, 0xC8};
+    // JSY-MK-194G: read block starting at 0x0048 (14 registers).
+    // Ch1 active power at 0x004A (u32, W = DATA/10000)
+    // Ch2 active power at 0x0052 (u32, W = DATA/10000)
+    uint8_t query[] = {0x01, 0x03, 0x00, 0x48, 0x00, 0x0E, 0x44, 0x18};
 
     // Bug #8: cap clear-buffer loop to avoid infinite spin under RX storm.
     {
@@ -109,13 +120,9 @@ float GridSensorService::readJSY() {
     _jsySerial->write(query, 8);
     _jsySerial->flush();
 
-    // Expected response: 1 (addr) + 1 (func) + 1 (bytecount) + 12 (data) + 2 (CRC) = 17 bytes
-    // (older code used 19 incorrectly; JSY-MK-194 with 6 regs returns 17.)
-    // We keep 19-byte expectation here because the original parsing offsets assume that
-    // length and rather than rewrite the parser I'm leaving the framing as-is and only
-    // adding CRC + addr resync on top.
-    const int EXPECTED_LEN = 19;
-    uint8_t response[25];
+    // Expected response: addr(1)+func(1)+bytecount(1)+data(28)+crc(2)=33 bytes
+    const int EXPECTED_LEN = 33;
+    uint8_t response[40];
     uint32_t startTime = millis();
     int idx = 0;
     bool synced = false;
@@ -151,16 +158,25 @@ float GridSensorService::readJSY() {
         return SENSOR_ERROR_VALUE;
     }
 
-    // Parsing JSY-MK-194 response (Big Endian)
-    uint16_t v_raw = (response[3] << 8) | response[4];
-    uint16_t p_raw = (response[7] << 8) | response[8];
+    // Parse active power channels.
+    // Data payload begins at response[3]. Each register is BE 16-bit.
+    // 0x004A is 2 regs after start(0x0048), so byte offset = 2 * 2 = 4.
+    // 0x0052 is 10 regs after start(0x0048), so byte offset = 10 * 2 = 20.
+    const int dataBase = 3;
+    auto readU32 = [&](int byteOffset) -> uint32_t {
+        return ((uint32_t)response[dataBase + byteOffset] << 24)
+             | ((uint32_t)response[dataBase + byteOffset + 1] << 16)
+             | ((uint32_t)response[dataBase + byteOffset + 2] << 8)
+             |  (uint32_t)response[dataBase + byteOffset + 3];
+    };
 
-    currentGridVoltage = v_raw / 10.0f;
-    float power = (float)p_raw;
+    uint32_t p1_raw = readU32(4);   // 0x004A
+    uint32_t p2_raw = readU32(20);  // 0x0052
+    float p1 = (float)p1_raw / 10000.0f;
+    float p2 = (float)p2_raw / 10000.0f;
 
-    // Handle Sign
-    uint16_t p_dir = (response[9] << 8) | response[10];
-    if (p_dir == 1) power = -power;
+    currentEquip1PowerFromJsy = (_config->jsy_equip1_channel == 2) ? p2 : p1;
+    float power = (_config->jsy_grid_channel == 2) ? p2 : p1;
 
     return power;
 }

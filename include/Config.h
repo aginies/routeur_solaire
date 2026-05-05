@@ -86,6 +86,7 @@ struct Config {
     int shelly_em_index = 0; // 0 or 1
     bool e_shelly_mqtt = true;
     String shelly_mqtt_topic = "shellies/homeassistant/emeter/0/power";
+    String grid_measure_source = "shelly"; // shelly | jsy
     bool fake_shelly = false;
     int poll_interval = 1;
 
@@ -101,6 +102,7 @@ struct Config {
     int equip1_shelly_index = 0;
     bool e_equip1_mqtt = false;
     String equip1_mqtt_topic = "";
+    String equip1_measure_source = "shelly"; // shelly | jsy
 
     // Equipment 2 (PAC / Shelly 1PM)
     bool e_equip2 = false;
@@ -164,8 +166,9 @@ struct Config {
     int safety_timeout = 10;
 
     // JSY-MK-194
-    bool e_jsy = false;
     int jsy_uart_id = 2;
+    int jsy_grid_channel = 1;
+    int jsy_equip1_channel = 2;
     int jsy_tx = 17;
     int jsy_rx = 16;
 

@@ -12,6 +12,9 @@ public:
     static float getShellyPower();
     static bool fetchGridData();
     static bool isJsyActive();
+    static bool isGridSourceJsy();
+    static bool isEquip1SourceJsy();
+    static float currentEquip1PowerFromJsy;
 
     // Bug #4 (header audit) — REVERTED: marking these `volatile` broke ArduinoJson
     // template overload resolution (`doc["grid_power"] = currentGridPower` produced

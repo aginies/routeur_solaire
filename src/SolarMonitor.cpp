@@ -178,7 +178,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
             // Bug #21: Unsubscribe from WDT around network-dependent polls.
             // If DNS is broken or a Shelly is hung, the HTTP stack can block for >30s,
             // which exceeds the watchdog timeout even if we pet it before.
-            bool isNetworkPoll = !_config->e_jsy && !_config->e_shelly_mqtt;
+            bool isNetworkPoll = (_config->grid_measure_source == "shelly") && !_config->e_shelly_mqtt;
             if (isNetworkPoll) esp_task_wdt_delete(NULL);
             
             bool pollOk = GridSensorService::fetchGridData();
@@ -329,7 +329,8 @@ void SolarMonitor::monitorTask(void* pvParameters) {
             lastShelly1PMUpdate = now;
             
             // Bug #21: Shelly1PMManager::update() does blocking HTTP/DNS
-            bool shellyPollActive = (!_config->e_equip1_mqtt && _config->equip1_shelly_ip.length() > 0) ||
+            bool eq1ShellySource = (_config->equip1_measure_source == "shelly");
+            bool shellyPollActive = (eq1ShellySource && !_config->e_equip1_mqtt && _config->equip1_shelly_ip.length() > 0) ||
                                    (!_config->e_equip2_mqtt && _config->equip2_shelly_ip.length() > 0);
             if (shellyPollActive) esp_task_wdt_delete(NULL);
             
@@ -338,8 +339,14 @@ void SolarMonitor::monitorTask(void* pvParameters) {
             if (shellyPollActive) esp_task_wdt_add(NULL);
             esp_task_wdt_reset();
             
-            if (_config->e_equip1 && Shelly1PMManager::hasValidEq1Data()) {
-                ActuatorManager::equipmentPower = Shelly1PMManager::getPowerEq1();
+            if (_config->e_equip1) {
+                if (_config->equip1_measure_source == "shelly") {
+                    if (Shelly1PMManager::hasValidEq1Data()) {
+                        ActuatorManager::equipmentPower = Shelly1PMManager::getPowerEq1();
+                    }
+                } else if (_config->equip1_measure_source == "jsy") {
+                    ActuatorManager::equipmentPower = GridSensorService::currentEquip1PowerFromJsy;
+                }
             }
             esp_task_wdt_reset();
         }

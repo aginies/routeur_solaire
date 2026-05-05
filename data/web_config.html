@@ -193,7 +193,7 @@
 
             <!-- 1. PARTIE CONNECTIVITÉ -->
             <details>
-                <summary><span class="help-btn" data-section="connectivity">?</span>Connectivité (WiFi, Shelly, MQTT)</summary>
+                <summary><span class="help-btn" data-section="connectivity">?</span>Connectivité (WiFi, Mesure Réseau, MQTT)</summary>
                 <div class="section-content">
                     <h3>WiFi</h3>
                     <div class="form-group">
@@ -229,8 +229,19 @@
                     </div>
                     <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
 
-                    <h3>Mesure de la consommation réseau</h3>
-                    <p style="font-size: 0.85em; color: #888; margin-bottom: 15px;">Choisissez le capteur utilisé pour mesurer la puissance du réseau : Shelly EM (WiFi) ou JSY-MK-194 (câblé UART).</p>
+                    <h3>Mesure reseau</h3>
+                    <p style="font-size: 0.85em; color: #888; margin-bottom: 15px;">Choisissez la source de mesure du reseau : <b>shelly</b> (WiFi) ou <b>jsy</b> (UART). Une seule source reseau est active a la fois.</p>
+
+                    <div class="form-group">
+                        <label for="GRID_SENSOR_SOURCE">Source mesure reseau:</label>
+                        <select id="GRID_SENSOR_SOURCE" name="GRID_MEASURE_SOURCE">
+                            <option value="shelly">Shelly EM (WiFi)</option>
+                            <option value="jsy">JSY-MK-194 (UART)</option>
+                        </select>
+                        <p class="form-help">Les champs non affiches sont conserves (pas d'effacement automatique).</p>
+                    </div>
+
+                    <div id="gridSourceShelly">
 
                     <h3>Shelly EM</h3>
                     <div class="form-group">
@@ -273,28 +284,32 @@
                         <p class="form-help">Le système s'arrête si aucune donnée n'est reçue pendant ce délai.</p>
                     </div>
                     <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
+                    </div>
 
-                    <h3>JSY-MK-194 (mesure câblée UART)</h3>
+                    <div id="gridSourceJsy">
+
+                    <h3>JSY-MK-194 (mesure UART)</h3>
                     <div class="form-group">
-                        <label for="E_JSY">Activer JSY (UART):</label>
-                        <select id="E_JSY" name="E_JSY">
-                            <option value="True" >Activé</option>
-                            <option value="False">Désactivé</option>
+                        <label for="JSY_UART_ID">UART ID:</label>
+                        <input type="number" min="1" max="2" id="JSY_UART_ID" name="JSY_UART_ID">
+                    </div>
+                    <div class="form-group">
+                        <label for="JSY_GRID_CHANNEL">Canal JSY reseau:</label>
+                        <select id="JSY_GRID_CHANNEL" name="JSY_GRID_CHANNEL">
+                            <option value="1">Canal 1 (0x004A, DATA/10000)</option>
+                            <option value="2">Canal 2 (0x0052, DATA/10000)</option>
                         </select>
                     </div>
                     <div class="form-group">
-                        <label for="JSY_UART_ID">UART ID:</label>
-                        <input type="number" min="0" max="3" id="JSY_UART_ID" name="JSY_UART_ID">
-                    </div>
-                    <div class="form-group">
                         <label for="JSY_TX">GPIO Pin TX:</label>
-                        <input type="number" min="0" max="39" id="JSY_TX" name="JSY_TX">
+                        <input type="number" min="0" max="48" id="JSY_TX" name="JSY_TX">
                     </div>
                     <div class="form-group">
                         <label for="JSY_RX">GPIO Pin RX:</label>
-                        <input type="number" min="0" max="39" id="JSY_RX" name="JSY_RX">
+                        <input type="number" min="0" max="48" id="JSY_RX" name="JSY_RX">
                     </div>
                     <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
+                    </div>
 
                     <h3>MQTT (Status & Discovery)</h3>
                     <div class="form-group">
@@ -331,7 +346,7 @@
             <details>
                 <summary><span class="help-btn" data-section="equipment">?</span>Equipment(s)</summary>
                 <div class="section-content">
-                    <h3>Equipement 1 (+Mesure)</h3>
+                    <h3>Equipement 1 (+mesure)</h3>
                     <div class="form-group">
                         <label for="EQUIP1_NAME">Nom de l'équipement:</label>
                         <input type="text" id="EQUIP1_NAME" name="EQUIP1_NAME">
@@ -345,12 +360,23 @@
                         <input type="number" step="1" min="0" max="100" id="MAX_DUTY_PERCENT" name="MAX_DUTY_PERCENT">
                     </div>
                     <div class="form-group">
-                        <label for="E_EQUIP1">Utiliser un Shelly pour mesurer Eq 1:</label>
+                        <label for="E_EQUIP1">Activer Eq1:</label>
                         <select id="E_EQUIP1" name="E_EQUIP1">
-                            <option value="True" >Oui (Utiliser un Shelly pour le retour de puissance)</option>
-                            <option value="False">Non (Calculer la puissance via le Duty Cycle)</option>
+                            <option value="True" >Oui</option>
+                            <option value="False">Non</option>
                         </select>
+                        <p class="form-help">Ce champ active/desactive Eq1 uniquement. La source de mesure est configuree separement.</p>
                     </div>
+                    <div class="form-group">
+                        <label for="EQUIP1_MEASURE_SOURCE">Source mesure Eq1:</label>
+                        <select id="EQUIP1_MEASURE_SOURCE" name="EQUIP1_MEASURE_SOURCE">
+                            <option value="shelly">Shelly</option>
+                            <option value="jsy">JSY-MK-194</option>
+                        </select>
+                        <p class="form-help">Choisir `shelly` ou `jsy` pour la mesure de puissance Eq1.</p>
+                    </div>
+
+                    <div id="equip1SourceShelly">
                     <div class="form-group">
                         <label for="EQUIP1_SHELLY_IP">IP du Shelly (Mesure EQ1):</label>
                         <input type="text" id="EQUIP1_SHELLY_IP" name="EQUIP1_SHELLY_IP" pattern="^(\d{1,3}\.){3}\d{1,3}$" placeholder="ex: 192.168.1.61">
@@ -375,6 +401,17 @@
                         <label for="EQUIP1_MQTT_TOPIC">Topic MQTT puissance (Eq 1):</label>
                         <input type="text" id="EQUIP1_MQTT_TOPIC" name="EQUIP1_MQTT_TOPIC" placeholder="ex: shellyplus1pm-XXID/status/switch:0">
                         <p class="form-help">Le payload JSON (apower) ou float simple sont supportés.</p>
+                    </div>
+                    </div>
+
+                    <div id="equip1SourceJsy">
+                    <div class="form-group">
+                        <label for="JSY_EQUIP1_CHANNEL">Canal JSY Eq1:</label>
+                        <select id="JSY_EQUIP1_CHANNEL" name="JSY_EQUIP1_CHANNEL">
+                            <option value="1">Canal 1 (0x004A, DATA/10000)</option>
+                            <option value="2">Canal 2 (0x0052, DATA/10000)</option>
+                        </select>
+                    </div>
                     </div>
 
                     <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
@@ -464,7 +501,8 @@
                     <h3>Mode de contrôle SSR</h3>
                     <div class="form-group">
                         <label for="ZX_PIN">GPIO Pin ZX (Zero-Crossing):</label>
-                        <input type="number" min="0" max="39" id="ZX_PIN" name="ZX_PIN">
+                        <input type="number" min="0" max="48" id="ZX_PIN" name="ZX_PIN">
+                        <p class="form-help">Plage autorisée par formulaire: 0-48. La validation finale depend du modele ESP32 et du role (certaines broches sont refusees).</p>
                     </div>
                     <div class="form-group">
                         <label for="CONTROL_MODE">Mode de régulation SSR:</label>
@@ -533,7 +571,7 @@
                     </div>
                     <div class="form-group">
                         <label for="FAN_PIN">Pin GPIO Ventilateur:</label>
-                        <input type="number" min="0" max="39" id="FAN_PIN" name="FAN_PIN">
+                        <input type="number" min="0" max="48" id="FAN_PIN" name="FAN_PIN">
                     </div>
                     <div class="form-group">
                         <label for="FAN_TEMP_OFFSET">Seuil activation (°C sous max SSR):</label>
@@ -560,7 +598,7 @@
                     </div>
                     <div class="form-group">
                         <label for="DS18B20_PIN">GPIO Pin Sonde DS18B20:</label>
-                        <input type="number" min="0" max="39" id="DS18B20_PIN" name="DS18B20_PIN">
+                        <input type="number" min="0" max="48" id="DS18B20_PIN" name="DS18B20_PIN">
                     </div>
                     <div class="form-group">
                         <label for="SSR_MAX_TEMP">Température max sécurité SSR (°C):</label>
@@ -581,15 +619,15 @@
                     </div>
                     <div class="form-group">
                         <label for="I_LED_PIN">Internal LED Pin:</label>
-                        <input type="number" min="0" max="39" id="I_LED_PIN" name="I_LED_PIN">
+                        <input type="number" min="0" max="48" id="I_LED_PIN" name="I_LED_PIN">
                     </div>
                     <div class="form-group">
                         <label for="SSR_PIN">SSR Pin (PWM):</label>
-                        <input type="number" min="0" max="39" id="SSR_PIN" name="SSR_PIN">
+                        <input type="number" min="0" max="48" id="SSR_PIN" name="SSR_PIN">
                     </div>
                     <div class="form-group">
                         <label for="RELAY_PIN">Relay Pin (enable circuit):</label>
-                        <input type="number" min="0" max="39" id="RELAY_PIN" name="RELAY_PIN">
+                        <input type="number" min="0" max="48" id="RELAY_PIN" name="RELAY_PIN">
                     </div>
                 </div>
             </details>
@@ -711,7 +749,7 @@
         </form>
 
         <div class="footer-text">
-            Version <span id="footerVersion">...</span> | Build: <span id="footerBuild">...</span>
+            Version <span id="footerVersion">...</span> | Build: <span id="footerBuild">...</span> | <a href="/web_dev" style="color:inherit;">Dev Telemetry</a>
         </div>
     </div>
     </div> <!-- end content-padding -->
@@ -736,6 +774,37 @@
         document.querySelectorAll('.help-btn').forEach(b => {
             b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); showHelp(b.dataset.section); });
         });
+
+        function updateGridSourceUI() {
+            var srcEl = document.getElementById('GRID_SENSOR_SOURCE');
+            var shellyBox = document.getElementById('gridSourceShelly');
+            var jsyBox = document.getElementById('gridSourceJsy');
+            if (!srcEl || !shellyBox || !jsyBox) return;
+
+            var useJsy = (srcEl.value === 'jsy');
+            shellyBox.style.display = useJsy ? 'none' : '';
+            jsyBox.style.display = useJsy ? '' : 'none';
+        }
+
+        function updateEquip1SourceUI() {
+            var srcEl = document.getElementById('EQUIP1_MEASURE_SOURCE');
+            var shellyBox = document.getElementById('equip1SourceShelly');
+            var jsyBox = document.getElementById('equip1SourceJsy');
+            if (!srcEl || !shellyBox || !jsyBox) return;
+
+            var src = srcEl.value;
+            shellyBox.style.display = (src === 'shelly') ? '' : 'none';
+            jsyBox.style.display = (src === 'jsy') ? '' : 'none';
+        }
+
+        var gridSourceEl = document.getElementById('GRID_SENSOR_SOURCE');
+        if (gridSourceEl) {
+            gridSourceEl.addEventListener('change', updateGridSourceUI);
+        }
+        var equip1SourceEl = document.getElementById('EQUIP1_MEASURE_SOURCE');
+        if (equip1SourceEl) {
+            equip1SourceEl.addEventListener('change', updateEquip1SourceUI);
+        }
 
         const configForm = document.getElementById('configForm');
 
@@ -768,6 +837,7 @@
             setVal('EQUIP1_MAX_POWER',c.equip1_max_power);
             setVal('MAX_DUTY_PERCENT',c.max_duty_percent);
             setBool('E_EQUIP1',c.e_equip1);
+            setVal('EQUIP1_MEASURE_SOURCE', c.equip1_measure_source !== undefined ? c.equip1_measure_source : 'shelly');
             setVal('EQUIP1_SHELLY_IP',c.equip1_shelly_ip);
             setVal('EQUIP1_SHELLY_INDEX',String(c.equip1_shelly_index));
             setBool('E_EQUIP1_MQTT',c.e_equip1_mqtt);
@@ -793,8 +863,10 @@
             setVal('FORCE_START',c.force_start);
             setVal('FORCE_END',c.force_end);
             setVal('NIGHT_POLL_INTERVAL',c.night_poll_interval);
-            setBool('E_JSY',c.e_jsy);
+            setVal('GRID_SENSOR_SOURCE', c.grid_measure_source !== undefined ? c.grid_measure_source : 'shelly');
             setVal('JSY_UART_ID',c.jsy_uart_id);
+            setVal('JSY_GRID_CHANNEL', c.jsy_grid_channel !== undefined ? c.jsy_grid_channel : 1);
+            setVal('JSY_EQUIP1_CHANNEL', c.jsy_equip1_channel !== undefined ? c.jsy_equip1_channel : 2);
             setVal('JSY_TX',c.jsy_tx);
             setVal('JSY_RX',c.jsy_rx);
             setVal('ZX_PIN',c.zx_pin);
@@ -820,6 +892,8 @@
             setBool('FAKE_SHELLY',c.fake_shelly);
             setVal('WEB_USER',c.web_user);
             setVal('WEB_PASSWORD',c.web_password);
+            updateGridSourceUI();
+            updateEquip1SourceUI();
         }).then(()=>fetch('/status').then(r=>r.json()).then(s=>{
             var fv = document.getElementById('footerVersion'); if(fv) fv.textContent=s.version;
             var fb = document.getElementById('footerBuild'); if(fb) fb.textContent=s.build_time;

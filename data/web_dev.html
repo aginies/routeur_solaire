@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solaire - Dev Telemetry</title>
+    <link rel="stylesheet" href="/style.css">
+    <script src="/main.js"></script>
+    <style>
+        .container { max-width: 1000px; margin: 0 auto; }
+        .header { text-align: center; margin-bottom: var(--spacing); }
+        .dev-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+            margin-bottom: var(--spacing);
+        }
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 14px;
+        }
+        .label {
+            font-size: 0.8em;
+            color: var(--muted-text);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        .mini-help {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 1px solid #f0c040;
+            background: rgba(240,192,64,0.2);
+            color: #f0c040;
+            font-size: 0.65rem;
+            font-weight: 700;
+            cursor: help;
+            flex: 0 0 auto;
+        }
+        .value { font-size: 1.35em; font-weight: bold; color: var(--text-color); }
+        .ok { color: #2ecc71; }
+        .ko { color: #e74c3c; }
+        details {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            margin-bottom: var(--spacing);
+            overflow: hidden;
+        }
+        summary {
+            cursor: pointer;
+            padding: 12px 14px;
+            font-weight: 700;
+            color: var(--accent-color);
+            background: rgba(255,255,255,0.03);
+        }
+        pre {
+            margin: 0;
+            padding: 12px;
+            overflow-x: auto;
+            font-size: 12px;
+            line-height: 1.4;
+            color: #d8dde7;
+            background: #0b1220;
+        }
+    </style>
+</head>
+<body>
+    <div class="content-padding">
+    <div class="container">
+        <div class="header">
+            <h1>Dev Telemetry</h1>
+            <p style="margin:6px 0 0 0; color: var(--muted-text);">Inspection temps reel de la telemetrie controle et validation broches</p>
+        </div>
+
+        <div class="dev-grid">
+            <div class="card"><div class="label"><span>Mode Controle</span><span class="mini-help" title="Mode de regulation SSR actif (burst, trame, cycle_stealing ou phase).">?</span></div><div class="value" id="vMode">-</div></div>
+            <div class="card"><div class="label"><span>Frequence Reseau</span><span class="mini-help" title="Frequence secteur estimee a partir de l'intervalle entre interruptions zero-crossing.">?</span></div><div class="value" id="vHz">-</div></div>
+            <div class="card"><div class="label"><span>ZX Counter</span><span class="mini-help" title="Compteur total des evenements zero-crossing detectes depuis le demarrage. Peut devenir grand, c'est normal.">?</span></div><div class="value" id="vZxCount">-</div></div>
+            <div class="card"><div class="label"><span>Half Cycle</span><span class="mini-help" title="Parite du demi-cycle AC courant: odd/even. En trame, la decision est prise sur odd.">?</span></div><div class="value" id="vParity">-</div></div>
+            <div class="card"><div class="label"><span>Full Cycle Index</span><span class="mini-help" title="Index du cycle complet AC (approx. ZX Counter / 2).">?</span></div><div class="value" id="vFullIdx">-</div></div>
+            <div class="card"><div class="label"><span>Trame Fire Cycle</span><span class="mini-help" title="Etat de commande trame pour le cycle complet courant: ON=SSR activee pour ce cycle, OFF=cycle coupe.">?</span></div><div class="value" id="vFire">-</div></div>
+            <div class="card"><div class="label"><span>Decision Age</span><span class="mini-help" title="Age en millisecondes depuis la derniere decision trame. Doit rester faible quand le ZX est present.">?</span></div><div class="value" id="vDecAge">-</div></div>
+            <div class="card"><div class="label"><span>Phase Arm Pending</span><span class="mini-help" title="En mode phase: indique si une demande d'armement timer est en attente de traitement par la tache.">?</span></div><div class="value" id="vArmPending">-</div></div>
+            <div class="card"><div class="label"><span>Phase Wait us</span><span class="mini-help" title="En mode phase: delai demande (microsecondes) avant impulsion SSR apres zero-crossing.">?</span></div><div class="value" id="vWaitUs">-</div></div>
+            <div class="card"><div class="label"><span>Pins OK</span><span class="mini-help" title="Validation globale des broches configurees (role + cible carte). ON = toutes valides.">?</span></div><div class="value" id="vPinsOk">-</div></div>
+        </div>
+
+        <details>
+            <summary>Pin Validation Details</summary>
+            <pre id="pinJson">{}</pre>
+        </details>
+
+        <details>
+            <summary>Raw /status JSON</summary>
+            <pre id="rawJson">{}</pre>
+        </details>
+
+    </div>
+    </div>
+
+    <script>
+        function byId(id) { return document.getElementById(id); }
+        function fmt(v, d) { return (v === undefined || v === null || Number.isNaN(v)) ? d : v; }
+        function setBool(id, val) {
+            const el = byId(id);
+            if (!el) return;
+            const ok = !!val;
+            el.textContent = ok ? 'ON' : 'OFF';
+            el.className = 'value ' + (ok ? 'ok' : 'ko');
+        }
+        function setText(id, txt) {
+            const el = byId(id);
+            if (!el) return;
+            el.textContent = txt;
+            el.className = 'value';
+        }
+
+        async function refresh() {
+            try {
+                const r = await fetch('/status', { cache: 'no-store' });
+                if (!r.ok) return;
+                const d = await r.json();
+
+                setText('vMode', fmt(d.control_mode, '-'));
+
+                const ac = d.ac || {};
+                const hz = Number(ac.grid_hz_est || 0);
+                setText('vHz', hz > 0 ? hz.toFixed(2) + ' Hz' : '-');
+                setText('vZxCount', String(fmt(ac.zx_counter, '-')));
+                setText('vParity', fmt(ac.half_cycle_parity, '-'));
+                setText('vFullIdx', String(fmt(ac.full_cycle_index, '-')));
+
+                const tr = d.trame || {};
+                setBool('vFire', tr.fire_full_cycle);
+                setText('vDecAge', String(fmt(tr.decision_age_ms, '-')) + ' ms');
+
+                const ph = d.phase || {};
+                setBool('vArmPending', ph.timer_arm_pending);
+                setText('vWaitUs', String(fmt(ph.last_requested_wait_us, '-')) + ' us');
+
+                setBool('vPinsOk', d.pin_validation_ok);
+
+                byId('pinJson').textContent = JSON.stringify(d.pin_validation || {}, null, 2);
+                byId('rawJson').textContent = JSON.stringify(d, null, 2);
+            } catch (_) {
+            }
+        }
+
+        refresh();
+        setInterval(refresh, 1000);
+    </script>
+</body>
+</html>

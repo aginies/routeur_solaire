@@ -14,6 +14,9 @@ volatile uint32_t ControlStrategy::_accumulator = 0;
 volatile bool ControlStrategy::_fireFullCycle = false;
 static volatile bool _isTrameMode = false;
 static portMUX_TYPE _controlMux = portMUX_INITIALIZER_UNLOCKED;
+static volatile bool _isPhaseMode = false;
+static volatile uint32_t _lastZxIntervalUs = 0;
+static volatile uint32_t _lastTrameDecisionUs = 0;
 static volatile uint32_t _phaseRequestedWaitUs = 0;
 static volatile bool _phaseArmPending = false;
 static volatile bool _phaseCancelPending = false;
@@ -47,6 +50,92 @@ void ControlStrategy::init(const Config& config) {
     _dutyMilli = 0;
     _accumulator = 0;
     _fireFullCycle = false;
+    _lastZxIntervalUs = 0;
+    _lastTrameDecisionUs = 0;
+    _isPhaseMode = false;
+}
+
+uint32_t ControlStrategy::getZxCounter() {
+    uint32_t v;
+    portENTER_CRITICAL(&_controlMux);
+    v = _zxCounter;
+    portEXIT_CRITICAL(&_controlMux);
+    return v;
+}
+
+uint32_t ControlStrategy::getLastZxTimeUs() {
+    uint32_t v;
+    portENTER_CRITICAL(&_controlMux);
+    v = _zxTime;
+    portEXIT_CRITICAL(&_controlMux);
+    return v;
+}
+
+float ControlStrategy::getEstimatedGridHz() {
+    uint32_t intervalUs;
+    portENTER_CRITICAL(&_controlMux);
+    intervalUs = _lastZxIntervalUs;
+    portEXIT_CRITICAL(&_controlMux);
+    if (intervalUs < 100 || intervalUs > 20000) return 0.0f;
+    return 1000000.0f / (2.0f * (float)intervalUs);
+}
+
+bool ControlStrategy::isTrameModeActive() {
+    bool v;
+    portENTER_CRITICAL(&_controlMux);
+    v = _isTrameMode;
+    portEXIT_CRITICAL(&_controlMux);
+    return v;
+}
+
+bool ControlStrategy::isPhaseModeActive() {
+    bool v;
+    portENTER_CRITICAL(&_controlMux);
+    v = _isPhaseMode;
+    portEXIT_CRITICAL(&_controlMux);
+    return v;
+}
+
+bool ControlStrategy::getTrameFireFullCycle() {
+    bool v;
+    portENTER_CRITICAL(&_controlMux);
+    v = _fireFullCycle;
+    portEXIT_CRITICAL(&_controlMux);
+    return v;
+}
+
+uint32_t ControlStrategy::getCurrentFullCycleIndex() {
+    uint32_t c;
+    portENTER_CRITICAL(&_controlMux);
+    c = _zxCounter;
+    portEXIT_CRITICAL(&_controlMux);
+    return c / 2;
+}
+
+uint32_t ControlStrategy::getTrameDecisionAgeMs() {
+    uint32_t lastUs;
+    portENTER_CRITICAL(&_controlMux);
+    lastUs = _lastTrameDecisionUs;
+    portEXIT_CRITICAL(&_controlMux);
+    if (lastUs == 0) return 0;
+    uint32_t nowUs = micros();
+    return (nowUs - lastUs) / 1000U;
+}
+
+bool ControlStrategy::isPhaseTimerArmPending() {
+    bool v;
+    portENTER_CRITICAL(&_controlMux);
+    v = _phaseArmPending;
+    portEXIT_CRITICAL(&_controlMux);
+    return v;
+}
+
+uint32_t ControlStrategy::getPhaseLastRequestedWaitUs() {
+    uint32_t v;
+    portENTER_CRITICAL(&_controlMux);
+    v = _phaseRequestedWaitUs;
+    portEXIT_CRITICAL(&_controlMux);
+    return v;
 }
 
 void ControlStrategy::setDutyMilli(uint32_t dutyMilli) {
@@ -88,6 +177,9 @@ void ControlStrategy::stopTasks() {
     _accumulator = 0;
     _dutyMilli = 0;
     _isTrameMode = false;
+    _isPhaseMode = false;
+    _lastZxIntervalUs = 0;
+    _lastTrameDecisionUs = 0;
     _phaseRequestedWaitUs = 0;
     _phaseArmPending = false;
     _phaseCancelPending = false;
@@ -107,8 +199,11 @@ void ControlStrategy::startTasks() {
     stopTasks();
     portENTER_CRITICAL(&_controlMux);
     _isTrameMode = (_config->control_mode == "trame");
+    _isPhaseMode = (_config->control_mode == "phase");
     _accumulator = 0;
     _fireFullCycle = false;
+    _lastZxIntervalUs = 0;
+    _lastTrameDecisionUs = 0;
     portEXIT_CRITICAL(&_controlMux);
 
     if (_config->control_mode == "burst") {
@@ -146,8 +241,13 @@ void ControlStrategy::startTasks() {
 void IRAM_ATTR ControlStrategy::handleZxInterrupt() {
     // Bug #4: guard against ISR firing before init() created the event group.
     if (!_zxEventGroup) return;
-    _zxTime = micros();
+    uint32_t nowUs = micros();
+    uint32_t prevUs = _zxTime;
+    _zxTime = nowUs;
     _zxCounter++;
+    if (prevUs != 0) {
+        _lastZxIntervalUs = nowUs - prevUs;
+    }
     
     // Performance Fix: Process PDM/Bresenham directly in ISR for microsecond precision.
     // This addresses "bad phase timing" noise reports by ensuring the SSR trigger
@@ -164,6 +264,7 @@ void IRAM_ATTR ControlStrategy::handleZxInterrupt() {
                 } else {
                     _fireFullCycle = false;
                 }
+                _lastTrameDecisionUs = nowUs;
             }
             ssrSetFromIsr(ActuatorManager::ssrPin, _fireFullCycle);
             ActuatorManager::equipmentActive = _fireFullCycle;
@@ -273,8 +374,13 @@ void IRAM_ATTR ControlStrategy::handlePhaseZxInterrupt() {
     // Keep counter / timestamp / event bit updated for the watchdog task and
     // for any other consumer (e.g. status JSON, logs).
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    _zxTime = micros();
+    uint32_t nowUs = micros();
+    uint32_t prevUs = _zxTime;
+    _zxTime = nowUs;
     _zxCounter++;
+    if (prevUs != 0) {
+        _lastZxIntervalUs = nowUs - prevUs;
+    }
     xEventGroupSetBitsFromISR(_zxEventGroup, 0x01, &xHigherPriorityTaskWoken);
 
     if (ActuatorManager::ssrPin < 0) {

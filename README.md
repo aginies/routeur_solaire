@@ -89,11 +89,13 @@ The system can be fully configured via the web interface. Below is a detailed br
 ### General & Connectivity
 - **System Name & Timezone**: Basic identification and local time synchronization (crucial for logs and night mode).
 - **WiFi Setup**: Support for Client mode (connecting to your router) or Access Point mode. Supports Static IP configuration.
-- **Power Meter (Shelly EM)**:
-    - **Shelly IP**: The target meter address.
-    - **MQTT Mode**: If enabled, uses low-latency pushes instead of HTTP polling.
-    - **Poll Interval**: Frequency of data requests when in standard HTTP mode.
-- **Equipment 1 (+Mesure)**: Optional Shelly Plus 1PM for real power measurement of the diverted load (HTTP or MQTT).
+- **Grid Measure Source (`grid_measure_source`)**:
+    - `shelly`: Shelly EM (WiFi HTTP/MQTT)
+    - `jsy`: JSY-MK-194 (wired UART)
+- **Equipment 1 Measure Source (`equip1_measure_source`)**:
+    - `shelly`: measured by Shelly Plus 1PM
+    - `jsy`: measured by JSY channel
+- **Equipment 1 Enable (`e_equip1`)**: On/off for Eq1 logic only (not a measurement-source selector).
 - **Equipment 2 (+Gestion Marche/Arrêt)**: Optional Shelly Plus 1PM for on/off relay control of a secondary equipment.
 - **MQTT Broker**: Connection details for integration with Home Assistant or other automation tools.
 
@@ -316,6 +318,7 @@ Default values are shown. All fields are editable via the Web UI.
 | `shelly_em_index` | int | `0` | Shelly EM meter index (0 or 1) |
 | `e_shelly_mqtt` | bool | `true` | Use MQTT for grid sensor data |
 | `shelly_mqtt_topic` | String | `"shellies/homeassistant/emeter/0/power"` | MQTT topic for grid power |
+| `grid_measure_source` | String | `"shelly"` | Source mesure reseau: `shelly` or `jsy` |
 | `fake_shelly` | bool | `false` | Simulate Shelly with random data (for testing) |
 | `poll_interval` | int | `1` | Polling interval in seconds |
 | `shelly_timeout` | int | `2` | Shelly HTTP request timeout (seconds) |
@@ -327,11 +330,12 @@ Default values are shown. All fields are editable via the Web UI.
 | `equip1_name` | String | `"Ballon"` | Equipment 1 display name |
 | `equip1_max_power` | float | `2300.0` | Max rated power in watts |
 | `export_setpoint` | float | `0.0` | Target grid balance (W) |
-| `e_equip1` | bool | `false` | Enable equipment 1 |
+| `e_equip1` | bool | `false` | Activer Eq1 (enable/disable only) |
 | `equip1_shelly_ip` | String | `""` | Eq1 power measurement Shelly IP |
 | `equip1_shelly_index` | int | `0` | Eq1 Shelly meter index |
 | `e_equip1_mqtt` | bool | `false` | Use MQTT for Eq1 power data |
 | `equip1_mqtt_topic` | String | `""` | Eq1 MQTT power topic |
+| `equip1_measure_source` | String | `"shelly"` | Source mesure Eq1: `shelly` or `jsy` |
 
 ### Equipment 2 (Secondary)
 | Field | Type | Default | Description |
@@ -385,11 +389,12 @@ Default values are shown. All fields are editable via the Web UI.
 | `e_fan` | bool | `true` | Enable automatic fan control |
 | `fan_temp_offset` | int | `10` | Fan start temp below ssr_max (°C) |
 
-### JSY-MK-194 (Wired Grid Sensor)
+### JSY-MK-194 (Wired Measurement)
 | Field | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `e_jsy` | bool | `false` | Enable JSY-MK-194 Modbus RTU |
 | `jsy_uart_id` | int | `2` | UART peripheral (1 or 2) |
+| `jsy_grid_channel` | int | `1` | Canal JSY reseau (used when `grid_measure_source = jsy`) |
+| `jsy_equip1_channel` | int | `2` | Canal JSY Eq1 (used when `equip1_measure_source = jsy`) |
 | `jsy_tx` | int | `17` | UART TX pin |
 | `jsy_rx` | int | `16` | UART RX pin |
 

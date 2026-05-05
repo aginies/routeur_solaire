@@ -6,6 +6,7 @@
 #include "GridSensorService.h"
 #include "StatsManager.h"
 #include "ActuatorManager.h"
+#include "ControlStrategy.h"
 #include "TemperatureManager.h"
 #include "SafetyManager.h"
 #include "HistoryBuffer.h"
@@ -91,6 +92,10 @@ void WebManager::applyRequestParams(AsyncWebServerRequest *request, Config &cfg)
     if (has("SHELLY_EM_INDEX")) cfg.shelly_em_index = clampInt(get("SHELLY_EM_INDEX").toInt(), 0, 7);
     if (has("E_SHELLY_MQTT")) cfg.e_shelly_mqtt = (get("E_SHELLY_MQTT") == "True");
     if (has("SHELLY_MQTT_TOPIC")) cfg.shelly_mqtt_topic = get("SHELLY_MQTT_TOPIC").substring(0, 128);
+    if (has("GRID_MEASURE_SOURCE")) {
+        String s = get("GRID_MEASURE_SOURCE");
+        if (s == "jsy" || s == "shelly") cfg.grid_measure_source = s;
+    }
     // Bug #15: these four fields are in SECONDS (code multiplies by 1000 before
     // comparing against millis()/setTimeout()). The previous clamp ranges
     // assumed milliseconds and silently rewrote valid user values on every save
@@ -108,6 +113,10 @@ void WebManager::applyRequestParams(AsyncWebServerRequest *request, Config &cfg)
     if (has("EQUIP1_SHELLY_INDEX")) cfg.equip1_shelly_index = clampInt(get("EQUIP1_SHELLY_INDEX").toInt(), 0, 7);
     if (has("E_EQUIP1_MQTT")) cfg.e_equip1_mqtt = (get("E_EQUIP1_MQTT") == "True");
     if (has("EQUIP1_MQTT_TOPIC")) cfg.equip1_mqtt_topic = get("EQUIP1_MQTT_TOPIC").substring(0, 128);
+    if (has("EQUIP1_MEASURE_SOURCE")) {
+        String s = get("EQUIP1_MEASURE_SOURCE");
+        if (s == "shelly" || s == "jsy") cfg.equip1_measure_source = s;
+    }
 
     // Equipment 2
     if (has("E_EQUIP2")) cfg.e_equip2 = (get("E_EQUIP2") == "True");
@@ -142,6 +151,11 @@ void WebManager::applyRequestParams(AsyncWebServerRequest *request, Config &cfg)
     if (has("SSR_MAX_TEMP")) cfg.ssr_max_temp = clampFloat(get("SSR_MAX_TEMP").toFloat(), 30.0f, 150.0f);
     if (has("ZX_PIN")) setRolePin(cfg.zx_pin, get("ZX_PIN").toInt(), PinRole::ZX_INPUT);
     if (has("CONTROL_MODE")) cfg.control_mode = get("CONTROL_MODE").substring(0, 32);
+    if (has("JSY_UART_ID")) cfg.jsy_uart_id = clampInt(get("JSY_UART_ID").toInt(), 1, 2);
+    if (has("JSY_GRID_CHANNEL")) cfg.jsy_grid_channel = clampInt(get("JSY_GRID_CHANNEL").toInt(), 1, 2);
+    if (has("JSY_EQUIP1_CHANNEL")) cfg.jsy_equip1_channel = clampInt(get("JSY_EQUIP1_CHANNEL").toInt(), 1, 2);
+    if (has("JSY_TX")) setRolePin(cfg.jsy_tx, get("JSY_TX").toInt(), PinRole::JSY_TX);
+    if (has("JSY_RX")) setRolePin(cfg.jsy_rx, get("JSY_RX").toInt(), PinRole::JSY_RX);
 
     // Force / Night
     if (has("BOOST_MINUTES")) cfg.boost_minutes = get("BOOST_MINUTES").toInt();
@@ -434,6 +448,13 @@ void WebManager::setupRoutes() {
         request->send(response);
     });
 
+    _server.on("/web_dev", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
+        AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/web_dev.html.gz", "text/html");
+        response->addHeader("Content-Encoding", "gzip");
+        request->send(response);
+    });
+
     _server.on("/save_config_eq2", HTTP_POST, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
         
@@ -513,6 +534,7 @@ void WebManager::setupRoutes() {
         doc["shelly_em_index"] = _config->shelly_em_index;
         doc["e_shelly_mqtt"] = _config->e_shelly_mqtt;
         doc["shelly_mqtt_topic"] = _config->shelly_mqtt_topic;
+        doc["grid_measure_source"] = _config->grid_measure_source;
         doc["poll_interval"] = _config->poll_interval;
         doc["shelly_timeout"] = _config->shelly_timeout;
         doc["safety_timeout"] = _config->safety_timeout;
@@ -530,6 +552,7 @@ void WebManager::setupRoutes() {
         doc["equip1_shelly_index"] = _config->equip1_shelly_index;
         doc["e_equip1_mqtt"] = _config->e_equip1_mqtt;
         doc["equip1_mqtt_topic"] = _config->equip1_mqtt_topic;
+        doc["equip1_measure_source"] = _config->equip1_measure_source;
         doc["delta"] = _config->delta;
         doc["deltaneg"] = _config->deltaneg;
         doc["compensation"] = _config->compensation;
@@ -540,8 +563,9 @@ void WebManager::setupRoutes() {
         doc["force_start"] = _config->force_start;
         doc["force_end"] = _config->force_end;
         doc["night_poll_interval"] = _config->night_poll_interval;
-        doc["e_jsy"] = _config->e_jsy;
         doc["jsy_uart_id"] = _config->jsy_uart_id;
+        doc["jsy_grid_channel"] = _config->jsy_grid_channel;
+        doc["jsy_equip1_channel"] = _config->jsy_equip1_channel;
         doc["jsy_tx"] = _config->jsy_tx;
         doc["jsy_rx"] = _config->jsy_rx;
         doc["zx_pin"] = _config->zx_pin;
@@ -816,7 +840,11 @@ void WebManager::streamStatusJson(AsyncWebServerRequest *request) {
 
     doc["esp_temp"] = cachedEspTemp;
 
-    doc["grid_source"] = _config->e_shelly_mqtt ? "MQTT" : "HTTP";
+    if (_config->grid_measure_source == "jsy") {
+        doc["grid_source"] = "JSY";
+    } else {
+        doc["grid_source"] = _config->e_shelly_mqtt ? "MQTT" : "HTTP";
+    }
     doc["shelly_link"] = (SafetyManager::currentState != SystemState::STATE_SAFE_TIMEOUT);
     doc["shelly_error"] = (SafetyManager::currentState == SystemState::STATE_SAFE_TIMEOUT);
     doc["shelly_mqtt_enabled"] = _config->e_shelly_mqtt;
@@ -850,6 +878,29 @@ void WebManager::streamStatusJson(AsyncWebServerRequest *request) {
     doc["equip2_bypassed"] = Equipment2Manager::isBypassedByCloud();
     doc["equip2_max_power"] = _config->equip2_max_power;
     doc["night_mode"] = SolarMonitor::isNight(Utils::getCurrentMinutes());
+
+    doc["control_mode"] = _config->control_mode;
+    doc["is_phase_mode"] = ControlStrategy::isPhaseModeActive();
+    doc["is_trame_mode"] = ControlStrategy::isTrameModeActive();
+
+    JsonObject ac = doc["ac"].to<JsonObject>();
+    uint32_t zxCounter = ControlStrategy::getZxCounter();
+    ac["zx_counter"] = zxCounter;
+    ac["zx_last_us"] = ControlStrategy::getLastZxTimeUs();
+    ac["half_cycle_parity"] = (zxCounter % 2U) ? "odd" : "even";
+    ac["full_cycle_index"] = ControlStrategy::getCurrentFullCycleIndex();
+    ac["grid_hz_est"] = ControlStrategy::getEstimatedGridHz();
+
+    JsonObject trame = doc["trame"].to<JsonObject>();
+    trame["enabled"] = ControlStrategy::isTrameModeActive();
+    trame["fire_full_cycle"] = ControlStrategy::getTrameFireFullCycle();
+    trame["decision_on_odd_cross"] = true;
+    trame["decision_age_ms"] = ControlStrategy::getTrameDecisionAgeMs();
+
+    JsonObject phase = doc["phase"].to<JsonObject>();
+    phase["enabled"] = ControlStrategy::isPhaseModeActive();
+    phase["timer_arm_pending"] = ControlStrategy::isPhaseTimerArmPending();
+    phase["last_requested_wait_us"] = ControlStrategy::getPhaseLastRequestedWaitUs();
 
     JsonObject pinValidation = doc["pin_validation"].to<JsonObject>();
     bool allPinsValid = true;

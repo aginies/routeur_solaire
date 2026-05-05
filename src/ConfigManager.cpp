@@ -129,6 +129,7 @@ Config ConfigManager::load() {
     if (has(doc, "shelly_em_index")) config.shelly_em_index = doc["shelly_em_index"];
     if (has(doc, "e_shelly_mqtt")) config.e_shelly_mqtt = doc["e_shelly_mqtt"];
     if (has(doc, "shelly_mqtt_topic")) config.shelly_mqtt_topic = doc["shelly_mqtt_topic"].as<String>();
+    if (has(doc, "grid_measure_source")) config.grid_measure_source = doc["grid_measure_source"].as<String>();
     if (has(doc, "fake_shelly")) config.fake_shelly = doc["fake_shelly"];
     if (has(doc, "poll_interval")) config.poll_interval = doc["poll_interval"];
     if (has(doc, "shelly_timeout")) config.shelly_timeout = doc["shelly_timeout"];
@@ -149,6 +150,7 @@ Config ConfigManager::load() {
     if (has(doc, "equip1_shelly_index")) config.equip1_shelly_index = doc["equip1_shelly_index"];
     if (has(doc, "e_equip1_mqtt")) config.e_equip1_mqtt = doc["e_equip1_mqtt"];
     if (has(doc, "equip1_mqtt_topic")) config.equip1_mqtt_topic = doc["equip1_mqtt_topic"].as<String>();
+    if (has(doc, "equip1_measure_source")) config.equip1_measure_source = doc["equip1_measure_source"].as<String>();
 
     // Equipment 2
     if (has(doc, "e_equip2")) config.e_equip2 = doc["e_equip2"];
@@ -204,8 +206,9 @@ Config ConfigManager::load() {
     if (has(doc, "fan_temp_offset")) config.fan_temp_offset = doc["fan_temp_offset"];
 
     // JSY
-    if (has(doc, "e_jsy")) config.e_jsy = doc["e_jsy"];
-    if (has(doc, "jsy_uart_id")) config.jsy_uart_id = clampInt(doc["jsy_uart_id"].as<int>(), 0, 2, config.jsy_uart_id, "jsy_uart_id");
+    if (has(doc, "jsy_uart_id")) config.jsy_uart_id = clampInt(doc["jsy_uart_id"].as<int>(), 1, 2, config.jsy_uart_id, "jsy_uart_id");
+    if (has(doc, "jsy_grid_channel")) config.jsy_grid_channel = clampInt(doc["jsy_grid_channel"].as<int>(), 1, 2, config.jsy_grid_channel, "jsy_grid_channel");
+    if (has(doc, "jsy_equip1_channel")) config.jsy_equip1_channel = clampInt(doc["jsy_equip1_channel"].as<int>(), 1, 2, config.jsy_equip1_channel, "jsy_equip1_channel");
     if (has(doc, "jsy_tx")) config.jsy_tx = validatePinRole(doc["jsy_tx"].as<int>(), config.jsy_tx, PinRole::JSY_TX);
     if (has(doc, "jsy_rx")) config.jsy_rx = validatePinRole(doc["jsy_rx"].as<int>(), config.jsy_rx, PinRole::JSY_RX);
 
@@ -274,6 +277,7 @@ bool ConfigManager::save(const Config& config) {
     doc["shelly_em_index"] = config.shelly_em_index;
     doc["e_shelly_mqtt"] = config.e_shelly_mqtt;
     doc["shelly_mqtt_topic"] = config.shelly_mqtt_topic;
+    doc["grid_measure_source"] = config.grid_measure_source;
     doc["fake_shelly"] = config.fake_shelly;
     doc["poll_interval"] = config.poll_interval;
     doc["shelly_timeout"] = config.shelly_timeout;
@@ -286,6 +290,7 @@ bool ConfigManager::save(const Config& config) {
     doc["equip1_shelly_index"] = config.equip1_shelly_index;
     doc["e_equip1_mqtt"] = config.e_equip1_mqtt;
     doc["equip1_mqtt_topic"] = config.equip1_mqtt_topic;
+    doc["equip1_measure_source"] = config.equip1_measure_source;
 
     // Equipment 2
     doc["e_equip2"] = config.e_equip2;
@@ -331,8 +336,9 @@ bool ConfigManager::save(const Config& config) {
     doc["ssr_max_temp"] = config.ssr_max_temp;
     doc["e_fan"] = config.e_fan;
     doc["fan_temp_offset"] = config.fan_temp_offset;
-    doc["e_jsy"] = config.e_jsy;
     doc["jsy_uart_id"] = config.jsy_uart_id;
+    doc["jsy_grid_channel"] = config.jsy_grid_channel;
+    doc["jsy_equip1_channel"] = config.jsy_equip1_channel;
     doc["jsy_tx"] = config.jsy_tx;
     doc["jsy_rx"] = config.jsy_rx;
     doc["control_mode"] = config.control_mode;

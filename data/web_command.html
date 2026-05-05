@@ -320,6 +320,7 @@
 
     <div style="text-align: center;" class="footer-text">
         <a href="https://github.com/aginies/domotique/tree/main/solar_cpp" target="_blank" style="background:none; color:inherit; padding:0;">Version <span id="footerVersion">...</span></a> | Build: <span id="footerBuild">...</span>
+        | <a href="/web_dev" style="background:none; color:inherit; padding:0;" title="Page de diagnostic avance: visualise en temps reel la telemetrie de controle (trame/phase, frequence reseau estimee, compteur zero-crossing et validation des broches).">Dev Telemetry</a>
     </div>
     </div> <!-- end content-padding -->
 
@@ -510,12 +511,12 @@
                         ss.textContent = 'SOLAR SAFETY: ' + reason;
                         ss.style.display = 'block';
                     } else if (d.safe_state) {
-                        ss.textContent = 'SAFE STATE: Shelly EM offline';
+                        ss.textContent = 'SAFE STATE: mesure reseau offline';
                         ss.style.display = 'block';
                     } else ss.style.display = 'none';
                 }
 
-                // Status Badges (Shelly & MQTT)
+                // Status Badges (source reseau & MQTT)
                 const wb = document.getElementById('weatherBadge');
                 if (wb) {
                     if (d.e_weather) {
@@ -585,7 +586,7 @@
                 if (shEl) {
                     if (d.shelly_mqtt_enabled) {
                         shEl.style.display = "inline-flex";
-                        shEl.textContent = d.shelly_link ? "Shelly MQTT: OK" : "Shelly MQTT: ERR";
+                        shEl.textContent = d.shelly_link ? "Mesure reseau MQTT: OK" : "Mesure reseau MQTT: ERR";
                         shEl.className = d.shelly_link ? "mqtt-badge mqtt-ok" : "mqtt-badge mqtt-err";
                     } else { shEl.style.display = "none"; }
                 }
