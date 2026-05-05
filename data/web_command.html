@@ -167,7 +167,7 @@
     </style>
 </head>
 <body>
-    <div class="content-padding">
+    <div class="content-padding" style="padding-top: 5px;">
         <!-- Inject Weather Sprite -->
         <div id="weatherSpriteContainer" style="display: none;"></div>
     <script>
@@ -184,7 +184,7 @@
         <div style="font-size:0.8em;color:#888;margin-top:10px;">Connexion au système solaire</div>
     </div>
 
-    <div class="header" style="margin-top: 10px;">
+    <div class="header">
         <div style="display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap;">
             <div id="expectedPowerBadge" class="mqtt-badge" style="display: none; background: #27ae60; color: white; gap: 8px; padding: 8px 14px;">
                 <span style="font-size: 1.2em;">⚡</span>
@@ -230,7 +230,7 @@
             <!-- Équipement 1 -->
             <div style="margin-bottom: 8px;">
                 <div class="label">
-                    <span>Redirigé vers <span id="eq1NameLabel">...</span></span>
+                    <span>⚡ Redirigé vers <span id="eq1NameLabel">...</span></span>
                 </div>
                 <div class="value" id="equipmentPower">—<span class="unit">W</span></div>
             </div>
@@ -269,12 +269,14 @@
         </div>
     </div>
 
-    <div id="todaySummary" style="display: none; font-size: 1em; color: #666; text-align: center; margin: 0 auto var(--spacing) auto; letter-spacing: 0.10em; opacity: 0.8; max-width: 1000px;">
-        Aujourd'hui : <span id="sumImport" style="color:#e74c3c">—</span> réseau | 
-        <span id="sumRedirect" style="color:#2ecc71">—</span> redirigé | 
-        <span id="sumExport" style="color:#f1c40f">—</span> injecté
+    <div id="todaySummary" class="card" style="display: none; max-width: 1000px; width: 100%; margin: 0 auto 12px auto; padding: 12px; font-size: 0.8em; flex: none;">
+        <div style="font-weight: bold; color: var(--accent-color); margin-bottom: 4px; font-size: 0.9em; letter-spacing: 1px;">AUJOURD'HUI</div>
+        <div style="display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; color: var(--muted-text);">
+            <span>Réseau: <span id="sumImport" style="color:#e74c3c; font-weight:bold;">—</span></span>
+            <span>Redirigé: <span id="sumRedirect" style="color:#2ecc71; font-weight:bold;">—</span></span>
+            <span>Injecté: <span id="sumExport" style="color:#f1c40f; font-weight:bold;">—</span></span>
+        </div>
     </div>
-
     <div id="chartCard" class="chart-card" style="display: none;">
         <div id="powerChart" style="width:100%;"></div>
     </div>
@@ -462,9 +464,15 @@
                 const ssrEl = document.getElementById('ssrTemp');
                 if (ssrEl) {
                     if (d.ssr_temp !== null && d.ssr_temp !== undefined) {
-                        ssrEl.innerHTML = num(d.ssr_temp) + '<span class="unit">°C</span>';
+                        const t = parseFloat(d.ssr_temp);
+                        ssrEl.innerHTML = num(t) + '<span class="unit">°C</span>';
+                        // Color interpolation: 18C (white) to 65C (red)
+                        const ratio = Math.max(0, Math.min(1, (t - 18) / (65 - 18)));
+                        const gb = Math.round(255 - (ratio * 178)); // 255 -> 77
+                        ssrEl.style.color = `rgb(255, ${gb}, ${gb})`;
                     } else {
                         ssrEl.innerHTML = '—<span class="unit">°C</span>';
+                        ssrEl.style.color = '';
                     }
                     const fanEl = document.getElementById('fanStatus');
                     const fanBadge = document.getElementById('fanBadge');
