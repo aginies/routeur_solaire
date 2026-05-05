@@ -47,10 +47,10 @@ This C++ version is a **migration from the original MicroPython implementation f
         │  Core 1 (Application Core), Priority 5                 │
         │  ┌─────────────────────────────────────────────────┐   │
         │  │  ControlStrategy (task depends on mode):         │   │
-        │  │  burst  → burstControlTask                      │   │
-        │  │  trame  → trameControlTask (Bresenham PWM)      │   │
-        │  │  phase  → phaseControlTask (angle delay)        │   │
-        │  │  cycle_stealing → cycleStealingTask             │   │
+        │  │  burst  → burstControlTask                       │   │
+        │  │  trame  → cycleStealingTask (ISR Bresenham)      │   │
+        │  │  phase  → phaseControlTask (+ ISR notify/timer)  │   │
+        │  │  cycle_stealing → cycleStealingTask              │   │
         │  └─────────────────────────────────────────────────┘   │
         └────────────────────────────────────────────────────────┘
         
@@ -136,16 +136,18 @@ The ESP32 partitions its internal flash into three regions:
 
 ## Control Modes
 
-The firmware supports four SSR control strategies. Choose based on your SSR hardware type:
+The firmware supports four SSR control strategies (`zero_crossing` is an alias of `cycle_stealing`). Choose based on your SSR hardware type:
 
 | Mode | How It Works | Best For | Notes |
 | :--- | :--- | :--- | :--- |
 | **burst** | Fixed-period PWM (e.g., 500 ms ON/OFF). Duty cycle determines ON portion. No zero-crossing awareness. | SSRs with **optical isolation** that can switch at any voltage point. | ⚠️ Does not use ZX pin. Can cause EMI if SSR lacks zero-crossing. Simplest mode. |
-| **trame** | Bresenham line algorithm — distributes SSR pulses evenly across each AC zero-crossing cycle. | **Most SSRs** (recommended default). | ✅ Optimized distribution. No flicker. Uses ZX interrupt. |
-| **phase** | Phase-angle control — delays turn-on within each half-cycle by `(1-duty) * half_period_us` microseconds. | SSRs rated for **random-phase** (triac) triggering. | Requires SSR with fast gate. Produces harmonic distortion. |
+| **trame** | Bresenham line algorithm in ZX ISR. Decision is made once per full AC cycle, then applied on both half-cycles. | **Most SSRs** (recommended default). | ✅ Reduced DC bias/hum. Uses the shared `cycleStealingTask` watchdog task. |
+| **phase** | Phase-angle control — ZX ISR computes target delay and notifies `phaseControlTask`, which arms `esp_timer` from task context. | SSRs rated for **random-phase** (triac) triggering. | No `esp_timer` API calls inside ISR. Requires fast gate; produces harmonic distortion. |
 | **cycle_stealing** | Toggles SSR ON at every zero-crossing event based on running duty accumulator. | SSRs that can switch instantaneously at zero-crossing. | ✅ No phase offset delays. Pure on/off per half-cycle. |
 
 **Important:** `burst` mode ignores the ZX pin entirely. Using burst mode with a zero-crossing SSR will still work but offers no advantage over `trame`. Using burst mode with a random-phase SSR on a noisy grid can produce audible hum and reduce SSR lifespan.
+
+`trame`, `cycle_stealing`, and `zero_crossing` share the same ISR-driven control path (`handleZxInterrupt`) and watchdog task (`cycleStealingTask`), with different switching semantics between trame and cycle stealing.
 
 ## Power Redirection Logic
 
@@ -395,10 +397,10 @@ Default values are shown. All fields are editable via the Web UI.
 | Field | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `control_mode` | String | `"trame"` | `burst`, `trame`, `phase`, `cycle_stealing` |
-| `half_period_us` | int | `9900` | AC half-cycle duration in microseconds |
-| `zx_busypoll_us` | int | `1000` | Zero-crossing busy-wait microsecond delay |
-| `zx_timeout_ms` | int | `500` | ZX event timeout before SSR forced off (ms) |
-| `debug_phase` | bool | `false` | Enable debug logging for phase mode |
+| `half_period_us` | int | `9900` | Legacy field (currently not used by runtime phase control path) |
+| `zx_busypoll_us` | int | `1000` | Legacy field from previous busy-wait phase implementation |
+| `zx_timeout_ms` | int | `500` | Legacy config field; watchdog timeout is currently fixed in control task |
+| `debug_phase` | bool | `false` | Reserved/legacy phase debug switch |
 
 ### MQTT
 | Field | Type | Default | Description |

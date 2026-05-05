@@ -3,6 +3,7 @@
 #include "GridSensorService.h"
 #include "Logger.h"
 #include <esp_task_wdt.h>
+#include <soc/gpio_struct.h>
 
 const Config* ControlStrategy::_config = nullptr;
 volatile uint32_t ControlStrategy::_zxCounter = 0;
@@ -12,9 +13,30 @@ volatile uint32_t ControlStrategy::_accumulator = 0;
 volatile bool ControlStrategy::_fireFullCycle = false;
 static volatile bool _isTrameMode = false;
 static portMUX_TYPE _controlMux = portMUX_INITIALIZER_UNLOCKED;
+static volatile uint32_t _phaseRequestedWaitUs = 0;
+static volatile bool _phaseArmPending = false;
+static volatile bool _phaseCancelPending = false;
 EventGroupHandle_t ControlStrategy::_zxEventGroup = nullptr;
 TaskHandle_t ControlStrategy::_currentTaskHandle = nullptr;
 esp_timer_handle_t ControlStrategy::_phaseTimer = nullptr;
+
+static inline void IRAM_ATTR ssrSetFromIsr(int pin, bool on) {
+    if (pin < 0) return;
+    if (pin < 32) {
+        if (on) {
+            GPIO.out_w1ts = (1UL << pin);
+        } else {
+            GPIO.out_w1tc = (1UL << pin);
+        }
+    } else {
+        uint32_t mask = (1UL << (pin - 32));
+        if (on) {
+            GPIO.out1_w1ts.val = mask;
+        } else {
+            GPIO.out1_w1tc.val = mask;
+        }
+    }
+}
 
 void ControlStrategy::init(const Config& config) {
     _config = &config;
@@ -65,6 +87,9 @@ void ControlStrategy::stopTasks() {
     _accumulator = 0;
     _dutyMilli = 0;
     _isTrameMode = false;
+    _phaseRequestedWaitUs = 0;
+    _phaseArmPending = false;
+    _phaseCancelPending = false;
     portEXIT_CRITICAL(&_controlMux);
 }
 
@@ -106,9 +131,10 @@ void ControlStrategy::startTasks() {
             Logger::error("phase: esp_timer_create failed - SSR will stay OFF");
             return;
         }
-        attachInterrupt(digitalPinToInterrupt(_config->zx_pin), handlePhaseZxInterrupt, RISING);
-        // Slim watchdog task: only checks for mains loss, never busy-waits.
+
+        // Start task before enabling ISR so notifications always have a valid target.
         xTaskCreatePinnedToCore(phaseControlTask, "phaseTask", 2048, NULL, 5, &_currentTaskHandle, 1);
+        attachInterrupt(digitalPinToInterrupt(_config->zx_pin), handlePhaseZxInterrupt, RISING);
     } else {
         // Bug #8: unrecognized control_mode silently leaves SSR dead. Warn loudly.
         Logger::warn("ControlStrategy: unknown control_mode '" + _config->control_mode + "' - SSR will remain OFF");
@@ -137,7 +163,7 @@ void IRAM_ATTR ControlStrategy::handleZxInterrupt() {
                     _fireFullCycle = false;
                 }
             }
-            digitalWrite(ActuatorManager::ssrPin, _fireFullCycle ? HIGH : LOW);
+            ssrSetFromIsr(ActuatorManager::ssrPin, _fireFullCycle);
             ActuatorManager::equipmentActive = _fireFullCycle;
         } else {
             // "Cycle Stealing" Mode: Half Cycle switching for maximum resolution.
@@ -148,7 +174,7 @@ void IRAM_ATTR ControlStrategy::handleZxInterrupt() {
                 _accumulator -= 1000;
                 on = true;
             }
-            digitalWrite(ActuatorManager::ssrPin, on ? HIGH : LOW);
+            ssrSetFromIsr(ActuatorManager::ssrPin, on);
             ActuatorManager::equipmentActive = on;
         }
     }
@@ -236,10 +262,9 @@ void ControlStrategy::cycleStealingTask(void* pvParameters) {
     }
 }
 
-// Bug #12: phase-mode ISR. Runs from the AC zero-cross interrupt and either
-// drives the SSR latch high/low immediately (full-on / full-off endpoints) or
-// arms the one-shot esp_timer to fire the SSR pulse `waitUs` microseconds
-// later. NO busy-wait, NO blocking call -> no CPU starvation, no IWDT trip.
+// Phase-mode ISR. Runs from the AC zero-cross interrupt and only performs
+// IRAM-safe GPIO updates plus scheduling requests for the phase task.
+// Any esp_timer API call is deferred to task context.
 void IRAM_ATTR ControlStrategy::handlePhaseZxInterrupt() {
     if (!_zxEventGroup) return;
 
@@ -266,24 +291,38 @@ void IRAM_ATTR ControlStrategy::handlePhaseZxInterrupt() {
 
     if (duty >= 0.99f) {
         // Full-on: latch high, no timer needed.
-        digitalWrite(ActuatorManager::ssrPin, HIGH);
+        ssrSetFromIsr(ActuatorManager::ssrPin, true);
+        portENTER_CRITICAL_ISR(&_controlMux);
+        _phaseCancelPending = true;
+        _phaseArmPending = false;
+        portEXIT_CRITICAL_ISR(&_controlMux);
     } else if (duty <= 0.01f) {
         // Full-off.
-        digitalWrite(ActuatorManager::ssrPin, LOW);
+        ssrSetFromIsr(ActuatorManager::ssrPin, false);
+        portENTER_CRITICAL_ISR(&_controlMux);
+        _phaseCancelPending = true;
+        _phaseArmPending = false;
+        portEXIT_CRITICAL_ISR(&_controlMux);
     } else {
         uint32_t waitUs = (uint32_t)((1.0f - duty) * halfPeriodUs);
-        // esp_timer dispatch overhead is ~30-50us; if requested delay is below
-        // that floor, fire immediately to avoid missing the half-cycle.
+        // If requested delay is too small, fire immediately from ISR.
         if (waitUs < 50) {
-            digitalWrite(ActuatorManager::ssrPin, HIGH);
-            // Fall through; phaseFireSsr won't run, but the SSR is already
-            // latched. The watchdog task or the next ZX will drop it again.
-        } else if (_phaseTimer != nullptr) {
-            // Cancel any still-pending shot from the previous half-cycle so we
-            // never double-fire if the previous timer hasn't run yet.
-            esp_timer_stop(_phaseTimer);
-            esp_timer_start_once(_phaseTimer, waitUs);
+            ssrSetFromIsr(ActuatorManager::ssrPin, true);
+            portENTER_CRITICAL_ISR(&_controlMux);
+            _phaseCancelPending = true;
+            _phaseArmPending = false;
+            portEXIT_CRITICAL_ISR(&_controlMux);
+        } else {
+            portENTER_CRITICAL_ISR(&_controlMux);
+            _phaseRequestedWaitUs = waitUs;
+            _phaseCancelPending = true;
+            _phaseArmPending = true;
+            portEXIT_CRITICAL_ISR(&_controlMux);
         }
+    }
+
+    if (_currentTaskHandle != nullptr) {
+        vTaskNotifyGiveFromISR(_currentTaskHandle, &xHigherPriorityTaskWoken);
     }
 
     if (xHigherPriorityTaskWoken) portYIELD_FROM_ISR();
@@ -299,11 +338,9 @@ void ControlStrategy::phaseFireSsr(void* /*arg*/) {
 }
 
 void ControlStrategy::phaseControlTask(void* pvParameters) {
-    // Bug #12: this task no longer does any phase-angle work itself. The ZX
-    // ISR + esp_timer one-shot handle the precise SSR firing. This task is now
-    // just a slim mains-loss watchdog: if no zero-cross was seen for >500ms
-    // it forces the SSR off so we don't leave the load energised after the AC
-    // signal disappears.
+    // Phase control task:
+    // 1) apply phase firing requests posted by ISR using esp_timer APIs
+    // 2) keep mains-loss watchdog behavior
     if (!_config) { vTaskDelete(NULL); return; }
     esp_task_wdt_add(NULL);
 
@@ -318,8 +355,30 @@ void ControlStrategy::phaseControlTask(void* pvParameters) {
 
     while (true) {
         esp_task_wdt_reset();
-        // Wake on ZX event OR timeout. Timeout caps the WDT-feed latency.
-        xEventGroupWaitBits(_zxEventGroup, 0x01, pdTRUE, pdFALSE, pdMS_TO_TICKS(200));
+
+        // Wake quickly on ISR requests; timeout bounds watchdog feed latency.
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(50));
+
+        bool cancelPending = false;
+        bool armPending = false;
+        uint32_t waitUs = 0;
+
+        portENTER_CRITICAL(&_controlMux);
+        cancelPending = _phaseCancelPending;
+        armPending = _phaseArmPending;
+        waitUs = _phaseRequestedWaitUs;
+        _phaseCancelPending = false;
+        _phaseArmPending = false;
+        portEXIT_CRITICAL(&_controlMux);
+
+        if (_phaseTimer != nullptr) {
+            if (cancelPending) {
+                esp_timer_stop(_phaseTimer);
+            }
+            if (armPending) {
+                esp_timer_start_once(_phaseTimer, waitUs);
+            }
+        }
 
         uint32_t nowMs = millis();
         if ((int32_t)(nowMs - lastCheck) > 500) {
