@@ -7,6 +7,11 @@
 const Config* ControlStrategy::_config = nullptr;
 volatile uint32_t ControlStrategy::_zxCounter = 0;
 volatile uint32_t ControlStrategy::_zxTime = 0;
+volatile uint32_t ControlStrategy::_dutyMilli = 0;
+volatile uint32_t ControlStrategy::_accumulator = 0;
+volatile bool ControlStrategy::_fireFullCycle = false;
+static volatile bool _isTrameMode = false;
+static portMUX_TYPE _controlMux = portMUX_INITIALIZER_UNLOCKED;
 EventGroupHandle_t ControlStrategy::_zxEventGroup = nullptr;
 TaskHandle_t ControlStrategy::_currentTaskHandle = nullptr;
 esp_timer_handle_t ControlStrategy::_phaseTimer = nullptr;
@@ -16,9 +21,23 @@ void ControlStrategy::init(const Config& config) {
     if (!_zxEventGroup) _zxEventGroup = xEventGroupCreate();
     _zxCounter = 0;
     _zxTime = 0;
+    _dutyMilli = 0;
+    _accumulator = 0;
+    _fireFullCycle = false;
+}
+
+void ControlStrategy::setDutyMilli(uint32_t dutyMilli) {
+    if (dutyMilli > 1000) dutyMilli = 1000;
+    portENTER_CRITICAL(&_controlMux);
+    _dutyMilli = dutyMilli;
+    portEXIT_CRITICAL(&_controlMux);
 }
 
 void ControlStrategy::stopTasks() {
+    if (_config) {
+        detachInterrupt(digitalPinToInterrupt(_config->zx_pin));
+    }
+
     if (_currentTaskHandle != nullptr) {
         Logger::info("Stopping previous ControlStrategy task");
         esp_task_wdt_delete(_currentTaskHandle);
@@ -41,10 +60,12 @@ void ControlStrategy::stopTasks() {
     // Bug #6: clear stale equipmentActive so a freshly-started strategy doesn't
     // inherit "on" state.
     ActuatorManager::equipmentActive = false;
-
-    if (_config) {
-        detachInterrupt(digitalPinToInterrupt(_config->zx_pin));
-    }
+    portENTER_CRITICAL(&_controlMux);
+    _fireFullCycle = false;
+    _accumulator = 0;
+    _dutyMilli = 0;
+    _isTrameMode = false;
+    portEXIT_CRITICAL(&_controlMux);
 }
 
 void ControlStrategy::startTasks() {
@@ -57,17 +78,18 @@ void ControlStrategy::startTasks() {
     }
 
     stopTasks();
+    portENTER_CRITICAL(&_controlMux);
+    _isTrameMode = (_config->control_mode == "trame");
+    _accumulator = 0;
+    _fireFullCycle = false;
+    portEXIT_CRITICAL(&_controlMux);
 
     if (_config->control_mode == "burst") {
         xTaskCreatePinnedToCore(burstControlTask, "burstTask", 2048, NULL, 5, &_currentTaskHandle, 1);
-    } else if (_config->control_mode == "cycle_stealing" || _config->control_mode == "zero_crossing") {
+    } else if (_config->control_mode == "cycle_stealing" || _config->control_mode == "zero_crossing" || _config->control_mode == "trame") {
         pinMode(_config->zx_pin, INPUT_PULLUP);
         attachInterrupt(digitalPinToInterrupt(_config->zx_pin), handleZxInterrupt, RISING);
         xTaskCreatePinnedToCore(cycleStealingTask, "cycleTask", 4096, NULL, 5, &_currentTaskHandle, 1);
-    } else if (_config->control_mode == "trame") {
-        pinMode(_config->zx_pin, INPUT_PULLUP);
-        attachInterrupt(digitalPinToInterrupt(_config->zx_pin), handleZxInterrupt, RISING);
-        xTaskCreatePinnedToCore(trameControlTask, "trameTask", 4096, NULL, 5, &_currentTaskHandle, 1);
     } else if (_config->control_mode == "phase") {
         pinMode(_config->zx_pin, INPUT_PULLUP);
         // Bug #12: create the one-shot hardware timer used to fire the SSR at
@@ -96,9 +118,42 @@ void ControlStrategy::startTasks() {
 void IRAM_ATTR ControlStrategy::handleZxInterrupt() {
     // Bug #4: guard against ISR firing before init() created the event group.
     if (!_zxEventGroup) return;
-    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     _zxTime = micros();
     _zxCounter++;
+    
+    // Performance Fix: Process PDM/Bresenham directly in ISR for microsecond precision.
+    // This addresses "bad phase timing" noise reports by ensuring the SSR trigger
+    // happens exactly at the zero-crossing instead of waiting for task wake-up.
+    if (ActuatorManager::ssrPin >= 0) {
+        if (_isTrameMode) {
+            // "Trame" Mode: Full Cycle switching to eliminate DC component hum.
+            // We make a decision at the start of every full cycle (odd count).
+            if (_zxCounter % 2 != 0) {
+                _accumulator += _dutyMilli;
+                if (_accumulator >= 1000) {
+                    _accumulator -= 1000;
+                    _fireFullCycle = true;
+                } else {
+                    _fireFullCycle = false;
+                }
+            }
+            digitalWrite(ActuatorManager::ssrPin, _fireFullCycle ? HIGH : LOW);
+            ActuatorManager::equipmentActive = _fireFullCycle;
+        } else {
+            // "Cycle Stealing" Mode: Half Cycle switching for maximum resolution.
+            // Note: can create DC offset hum on some grids/transformers.
+            _accumulator += _dutyMilli;
+            bool on = false;
+            if (_accumulator >= 1000) {
+                _accumulator -= 1000;
+                on = true;
+            }
+            digitalWrite(ActuatorManager::ssrPin, on ? HIGH : LOW);
+            ActuatorManager::equipmentActive = on;
+        }
+    }
+
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     xEventGroupSetBitsFromISR(_zxEventGroup, 0x01, &xHigherPriorityTaskWoken);
     if (xHigherPriorityTaskWoken) {
         portYIELD_FROM_ISR();
@@ -151,75 +206,34 @@ void ControlStrategy::cycleStealingTask(void* pvParameters) {
     if (!_config) { vTaskDelete(NULL); return; }
     esp_task_wdt_add(NULL);
 
-    uint32_t localZxCount = _zxCounter;
-    float accumulator = 0;
-
     // Bug #12: avoid heap-fragmenting String concatenation; use snprintf.
     {
-        char buf[64];
-        snprintf(buf, sizeof(buf), "Cycle Stealing Task Started on pin %d", _config->zx_pin);
+        char buf[80];
+        snprintf(buf, sizeof(buf), "Synchronized Cycle Task Started on pin %d (ISR-driven)", _config->zx_pin);
         Logger::info(String(buf));
     }
 
     // Bug #7: lastCheck/lastCount were function-static; would persist across task
     // restarts. Move them into the task's stack so they reset cleanly.
     uint32_t lastCheck = millis();
-    uint32_t lastCount = localZxCount;
+    uint32_t lastCount = _zxCounter;
 
     while (true) {
         esp_task_wdt_reset();
-        // Wait for Zero-Crossing interrupt bit
-        xEventGroupWaitBits(_zxEventGroup, 0x01, pdTRUE, pdFALSE, pdMS_TO_TICKS(100));
+        // Wait for Zero-Crossing interrupt bit (allows task to sleep while ISR does the work)
+        xEventGroupWaitBits(_zxEventGroup, 0x01, pdTRUE, pdFALSE, pdMS_TO_TICKS(200));
 
-        // Bug #2: rollover-safe comparison instead of `localZxCount < _zxCounter`.
-        // Snapshot once to avoid ISR race within the inner loop (Bug #9).
-        uint32_t zxSnap = _zxCounter;
-        while ((int32_t)(zxSnap - localZxCount) > 0) {
-            localZxCount++;
-            esp_task_wdt_reset();
-
-            // Bug #3: clamp duty defensively
-            float duty = ActuatorManager::currentDuty;
-            if (duty < 0.0f) duty = 0.0f;
-            if (duty > 1.0f) duty = 1.0f;
-
-            if (duty >= 1.0f) {
-                digitalWrite(ActuatorManager::ssrPin, HIGH);
-                ActuatorManager::equipmentActive = true;
-                accumulator = 0;
-            } else if (duty <= 0.0f) {
-                digitalWrite(ActuatorManager::ssrPin, LOW);
-                ActuatorManager::equipmentActive = false;
-                accumulator = 0;
-            } else {
-                accumulator += duty;
-                if (accumulator >= 1.0f) {
-                    digitalWrite(ActuatorManager::ssrPin, HIGH);
-                    accumulator -= 1.0f;
-                    ActuatorManager::equipmentActive = true;
-                } else {
-                    digitalWrite(ActuatorManager::ssrPin, LOW);
-                }
-            }
-        }
-
-        // Safety watchdog: Turn off if no interrupts for 500ms
+        // Safety watchdog: Turn off if no interrupts for 500ms (MAINS LOSS)
         uint32_t nowMs = millis();
         if ((int32_t)(nowMs - lastCheck) > 500) {
             if (_zxCounter == lastCount) {
-                digitalWrite(ActuatorManager::ssrPin, LOW);
+                if (ActuatorManager::ssrPin >= 0) digitalWrite(ActuatorManager::ssrPin, LOW);
                 ActuatorManager::equipmentActive = false;
             }
             lastCount = _zxCounter;
             lastCheck = nowMs;
         }
     }
-}
-
-void ControlStrategy::trameControlTask(void* pvParameters) {
-    // Bug #11: implementation is identical to cycleStealingTask. Delegate to
-    // avoid drift / duplicated bug fixes.
-    cycleStealingTask(pvParameters);
 }
 
 // Bug #12: phase-mode ISR. Runs from the AC zero-cross interrupt and either

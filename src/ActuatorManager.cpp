@@ -2,6 +2,8 @@
 #include "Logger.h"
 #include "SafetyManager.h"
 #include "GridSensorService.h"
+#include "ControlStrategy.h"
+#include <cmath>
 
 // Bug #7: avoid hardcoding LEDC channel literal
 #define FAN_LEDC_CHANNEL 4
@@ -56,10 +58,12 @@ void ActuatorManager::setDuty(float duty) {
     // arriving during early boot). Without this we deref a null _config.
     if (!_config) {
         currentDuty = duty;
+        ControlStrategy::setDutyMilli((uint32_t)lroundf(duty * 1000.0f));
         equipmentPower = 0.0f;
         return;
     }
     currentDuty = duty;
+    ControlStrategy::setDutyMilli((uint32_t)lroundf(duty * 1000.0f));
 
     // Bug #3: clamp grid voltage to a sane range. A failed sensor (returning 0
     // or a wild value) would otherwise make equipmentPower meaningless. Fall
