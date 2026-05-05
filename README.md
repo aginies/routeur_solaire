@@ -20,47 +20,49 @@ This C++ version is a **migration from the original MicroPython implementation f
 ## Architecture
 
 ```
-                          ┌─────────────┐
-                          │  monitorTask │ Core 0, Priority 3
-                          │ (32KB stack) │
-                          └──────┬──────┘
-                                 │ reads shared state
-        ┌────────────────────────┼────────────────────────┐
-        │                        │                        │
-        ▼                        ▼                        ▼
-  ┌───────────┐          ┌─────────────┐         ┌──────────────┐
-  │ GridSensor │          │ SolarMonitor │         │ Incremental  │
-  │ Service    │          │ Safety       │         │ Controller   │
-  │ HTTP/MQTT/ │          │ PID Control  │         │ (delta/delta │
-  │ JSY UART   │          │ Eq2 logic    │         │  neg)        │
-  └───────────┘          └──────┬──────┘         └──────────────┘
-                                │
-                    ┌───────────┼───────────┐
-                    ▼           ▼           ▼
-             ┌──────────┐ ┌────────┐ ┌──────────┐
-             │ Eq2Mgr   │ │ Stats  │ │ History  │
-             │ (PAC/Pool│ │ (NVS + │ │ (PSRAM/  │
-             │  schedule)│ │  LFS)  │ │  LFS)    │
-             └──────────┘ └────────┘ └──────────┘
+                                  Core 1 (Application), Priority 3
+                                 ┌─────────────┐
+                                 │  monitorTask │
+                                 │ (8KB stack)  │
+                                 └──────┬──────┘
+                                        │ reads shared state
+        ┌───────────────────────────────┼───────────────────────────────┐
+        │                               │                               │
+        ▼                               ▼                               ▼
+  ┌───────────┐                 ┌─────────────┐                ┌──────────────┐
+  │ GridSensor │                 │ SolarMonitor │                │ Incremental  │
+  │ Service    │                 │ Safety       │                │ Controller   │
+  │ HTTP/MQTT/ │                 │ PID Control  │                │ (delta/delta │
+  │ JSY UART   │                 │ Eq2 logic    │                │  neg)        │
+  └───────────┘                 └──────┬──────┘                └──────────────┘
+                                       │
+                           ┌───────────┼───────────┐
+                           ▼           ▼           ▼
+                    ┌───────────┐ ┌────────┐ ┌──────────┐
+                    │ Eq2Mgr    │ │ Stats  │ │ History  │
+                    │ (PAC/Pool │ │ (NVS + │ │ (PSRAM/  │
+                    │  schedule)│ │  LFS)  │ │  LFS)    │
+                    └───────────┘ └────────┘ └──────────┘
         
-        ┌────────────────────────────────────────────────────────┐
-        │  Core 1 (Application Core), Priority 5                 │
-        │  ┌─────────────────────────────────────────────────┐   │
-        │  │  ControlStrategy (task depends on mode):         │   │
-        │  │  burst  → burstControlTask                       │   │
-        │  │  trame  → cycleStealingTask (ISR Bresenham)      │   │
-        │  │  phase  → phaseControlTask (+ ISR notify/timer)  │   │
-        │  │  cycle_stealing → cycleStealingTask              │   │
-        │  └─────────────────────────────────────────────────┘   │
-        └────────────────────────────────────────────────────────┘
+        ┌───────────────────────────────────────────────────────────────┐
+        │  Core 1 (Application Core), Priority 5                        │
+        │  ┌────────────────────────────────────────────────────────┐   │
+        │  │  ControlStrategy (task depends on mode):                │   │
+        │  │  burst  → burstControlTask                             │   │
+        │  │  trame  → cycleStealingTask (ISR Bresenham)            │   │
+        │  │  phase  → phaseControlTask (+ ISR notify/timer)        │   │
+        │  │  cycle_stealing → cycleStealingTask                    │   │
+        │  └────────────────────────────────────────────────────────┘   │
+        └───────────────────────────────────────────────────────────────┘
         
   ┌─────────────┐  ┌─────────────┐  ┌────────────┐  ┌───────────┐
-  │ tempTask   │  │ ledTask    │  │ statsTask  │  │weatherTask│
-  │ Core 0/prim1│  │ Core 0/prim1│  │ Core 0/prim2│  │Core 1/prim1│
+  │ tempTask    │  │ ledTask     │  │ statsTask  │  │weatherTask│
+  │ Core 0/prim1│  │ Core 0/prim1│  │ Core 0/prim2│  │Core 0/prim1│
   └─────────────┘  └─────────────┘  └────────────┘  └───────────┘
   
   ┌────────────────────────────────────────────────────────────────┐
-  │  ESPAsyncWebServer (port 80) · MQTT (espMqttClient) · WiFi │
+  │  ESPAsyncWebServer (port 80) · MQTT (espMqttClient) · WiFi     │
+  │  (Runs on Core 0 via ESP-IDF / Arduino System Tasks)           │
   └────────────────────────────────────────────────────────────────┘
 ```
 
@@ -73,7 +75,7 @@ This project supports two primary ESP32 architectures, each optimized for differ
 - **Performance**: High-speed processing and native support for modern features.
 - **Memory**: Supports various Flash/PSRAM combinations (e.g., N8R2, N16R8) via dynamic build-time selection.
 - **Data Retention**: Configured to store up to **365 days** of historical statistics (`MAX_STATS_DAYS=365`).
-- **Hardware**: Uses specialized pins (e.g., RGB Internal LED on Pin 48).
+- **Hardware**: Uses specialized pins (e.g., RGB Internal LED on Pin 2).
 
 ### ESP32-WROOM / ESP32-DevKit (Standard & Reliable)
 - **Environment**: `esp32dev`
@@ -100,6 +102,9 @@ The system can be fully configured via the web interface. Below is a detailed br
 - **MQTT Broker**: Connection details for integration with Home Assistant or other automation tools.
 
 ### Regulation Logic
+
+⚠️ **Expert Settings**: The parameters below define the core behavior of the diversion algorithm. It is highly recommended to keep the default values. Only the current default parameters have been extensively tested for stability.
+
 - **Diverter Parameters**:
     - **Equipment Power**: The rating of your resistive load (e.g., 2000W).
     - **Export Setpoint**: Target grid balance (e.g., 0W for zero export).
@@ -112,8 +117,9 @@ The system can be fully configured via the web interface. Below is a detailed br
 
 ### Hardware & Safety
 - **Regulation Modes**:
-    - **Trame (Bresenham)**: Optimized distribution of power cycles (Recommended).
-    - **Burst**: Fixed-period cycles.
+    - **Trame (Bresenham)**: Optimized distribution of power cycles (Recommended). Decision per full AC cycle.
+    - **Cycle Stealing**: Decision per half-cycle for maximum resolution (can cause DC bias).
+    - **Burst**: Fixed-period cycles (Slow PWM, not synchronized with ZX).
     - **Phase Control**: Smooth dimming (requires a Random SSR).
 - **Cooling & Safety**:
     - **Fan Control**: Automated SSR heatsink cooling.
@@ -142,14 +148,14 @@ The firmware supports four SSR control strategies (`zero_crossing` is an alias o
 
 | Mode | How It Works | Best For | Notes |
 | :--- | :--- | :--- | :--- |
-| **burst** | Fixed-period PWM (e.g., 500 ms ON/OFF). Duty cycle determines ON portion. No zero-crossing awareness. | SSRs with **optical isolation** that can switch at any voltage point. | ⚠️ Does not use ZX pin. Can cause EMI if SSR lacks zero-crossing. Simplest mode. |
-| **trame** | Bresenham line algorithm in ZX ISR. Decision is made once per full AC cycle, then applied on both half-cycles. | **Most SSRs** (recommended default). | ✅ Reduced DC bias/hum. Uses the shared `cycleStealingTask` watchdog task. |
+| **trame** | Bresenham line algorithm directly in ZX ISR. Decision is made once per full AC cycle, then applied on both half-cycles. | **Most SSRs** (recommended default). | ✅ Eliminates DC bias/hum. Uses the shared `cycleStealingTask` watchdog task. |
+| **cycle_stealing** | Toggles SSR at every zero-crossing event based on running duty accumulator. | SSRs that can switch instantaneously at zero-crossing. | ✅ Highest resolution (half-cycle). Can cause DC offset hum. |
 | **phase** | Phase-angle control — ZX ISR computes target delay and notifies `phaseControlTask`, which arms `esp_timer` from task context. | SSRs rated for **random-phase** (triac) triggering. | No `esp_timer` API calls inside ISR. Requires fast gate; produces harmonic distortion. |
-| **cycle_stealing** | Toggles SSR ON at every zero-crossing event based on running duty accumulator. | SSRs that can switch instantaneously at zero-crossing. | ✅ No phase offset delays. Pure on/off per half-cycle. |
+| **burst** | Fixed-period slow PWM (e.g., 500 ms ON/OFF). Not synchronized with mains zero-crossing. | Basic SSRs where flicker/EMI is not a concern. | ⚠️ Does not use ZX pin. Simplest mode, purely task-driven. |
 
-**Important:** `burst` mode ignores the ZX pin entirely. Using burst mode with a zero-crossing SSR will still work but offers no advantage over `trame`. Using burst mode with a random-phase SSR on a noisy grid can produce audible hum and reduce SSR lifespan.
+**Important:** `burst` mode ignores the ZX pin entirely. Using burst mode with a zero-crossing SSR will still work but offers no advantage over `trame`.
 
-`trame`, `cycle_stealing`, and `zero_crossing` share the same ISR-driven control path (`handleZxInterrupt`) and watchdog task (`cycleStealingTask`), with different switching semantics between trame and cycle stealing.
+`trame`, `cycle_stealing`, and `zero_crossing` share the same ISR-driven control path (`handleZxInterrupt`) and watchdog task (`cycleStealingTask`), with different switching semantics.
 
 ## Power Redirection Logic
 
@@ -200,7 +206,13 @@ The data is used for several decisions:
 - **Radiation-based cloud impact**: `shortwave_radiation_instant` is compared with a realistic clear-sky ground reference derived from `terrestrial_radiation_instant` to estimate usable sunlight right now.
 - **Cloud layer fallback**: Low, mid, and high cloud cover are still fetched and combined as a fallback/stabilizer when radiation data is missing or not usable.
 - **Equipment 2 start condition (percentage mode)**: When `solar_panel_power = 0`, Equipment 2 can start only when the solar confidence reaches the configured `weather_cloud_threshold` percentage, unless it is inside a forced schedule.
-- **Equipment 2 start condition (power estimation mode)**: When `solar_panel_power > 0`, the system estimates the expected solar production using: `expected_power = solar_panel_power × time_factor × (solar_confidence / 100)`. The time factor is a sine curve from sunrise to sunset (0 at sunrise, 1.0 at solar noon, 0 at sunset), adjusted by panel azimuth — east-facing panels (90°) peak in the morning, south-facing (180°) at noon, west-facing (270°) in the afternoon. Equipment 2 starts only when `expected_power >= equip2_max_power`.
+- **Equipment 2 start condition (power estimation mode)**: When `solar_panel_power > 0`, the system estimates the expected solar production using an advanced incidence model:
+    - **Solar Position**: Estimates sun elevation and azimuth based on time of day.
+    - **Incidence Factor**: Calculates the cosine of the angle between the sun and the panel's normal, using `solar_panel_azimuth` and `solar_panel_tilt`.
+    - **Diffuse vs Direct**: Blends direct beam radiation and diffuse sky radiation based on current cloud cover and the panel's view of the sky (`skyViewFactor`).
+    - **Losses**: Applies system losses configured via `solar_loss_factor`.
+    - **Cloud Penalty**: Applies a non-linear penalty for heavy cloud cover to account for spectrum shifts.
+    - **Result**: Equipment 2 starts only when `expected_power >= equip2_max_power`.
 - **Automatic night mode**: `daily=sunrise,sunset` with `timezone=auto` provides local sunrise and sunset times. When available, these values define night mode instead of the manual `night_start` / `night_end` settings.
 
 Manual night start/end values remain as a fallback when weather support is disabled or sunrise/sunset data has not been received yet.
@@ -252,6 +264,7 @@ All endpoints except `/update` and `/RESET_device` respect the configured `web_u
 | GET | `/get_config` | Yes | Export full configuration as JSON. |
 | GET | `/web_config` | Yes | Config web page (`web_config.html.gz`). |
 | GET | `/web_equip2` | Yes | Equipment 2 config page (`web_equip2.html.gz`). |
+| GET | `/web_dev` | Yes | Dev Telemetry page (`web_dev.html.gz`). |
 | GET | `/stats` | Yes | Stats web page (`web_stats.html.gz`). |
 | GET | `/get_stats` | Yes | Statistics JSON (`stats.json` content). |
 | POST | `/save_config` | Yes | Save config from form parameters. Reboots after save. |
@@ -363,6 +376,7 @@ Default values are shown. All fields are editable via the Web UI.
 | `min_power_threshold` | float | `10.0` | Min power to consider valid (W) |
 | `min_off_time` | int | `1` | Minimum SSR off time (seconds) |
 | `boost_minutes` | int | `60` | Default manual boost duration |
+| `vacation_until` | uint32 | `0` | Epoch timestamp until when vacation mode is active |
 
 ### Force / Night / Weather
 | Field | Type | Default | Description |
@@ -380,6 +394,8 @@ Default values are shown. All fields are editable via the Web UI.
 | `weather_cloud_threshold` | int | `40` | Min solar confidence % for Eq2 (used when `solar_panel_power = 0`) |
 | `solar_panel_power` | int | `0` | Solar panel peak power in watts (e.g. 3000 for 3kWc). When > 0, enables power-based Eq2 decision instead of percentage threshold |
 | `solar_panel_azimuth` | int | `180` | Panel orientation in degrees: 0=North, 90=East, 180=South, 270=West |
+| `solar_panel_tilt` | int | `35` | Panel tilt in degrees (0=horizontal, 90=vertical) |
+| `solar_loss_factor` | int | `14` | Percentage of system losses (cables, inverter, dirt) |
 
 ### Temperature / Fan
 | Field | Type | Default | Description |
@@ -440,31 +456,31 @@ Default values are shown. All fields are editable via the Web UI.
 | Component | Model | Role |
 | :--- | :--- | :--- |
 | **Grid Sensor** | JSY-MK-194 (Modbus RTU) or Shelly EM | Measures grid power (import/export) |
-| **Equipment 1 Meter** | Shelly Plus 1PM (or MQTT topic) | Real power measurement of redirected load |
+| **Equipment 1 Meter** | JSY-MK-194 (second channel) or Shelly Plus 1PM | Real power measurement of redirected load |
 | **Equipment 2 Control** | Shelly Plus 1PM (or MQTT topic) | On/off relay for secondary equipment |
 | **Microcontroller** | ESP32-S3-DevKitC-1 | Main controller with PSRAM |
 | **SSR** | ZS3S16 (zero-crossing) or B3RA (random-phase) | Switches the resistive load |
 | **DS18B20** | Any one-wire temperature sensor | SSR heatsink monitoring |
-| **Fan** | 12V PWM computer fan | SSR heatsink cooling |
+| **Fan** | 5V PWM computer fan | SSR heatsink cooling |
 
 ## Wiring Guide
 
-| ESP32 Pin | Signal | Connect To |
-| :--- | :--- | :--- |
-| `12` | SSR control | SSR control input |
-| `13` | Relay coil | Relay coil (active-LOW, closes SSR circuit) |
-| `14` | 1-Wire data | DS18B20 DQ pin (+ 4.7K pull-up to 3.3V) |
-| `5` | PWM fan | Fan PWM input (LEDC ch4, 10 kHz) |
-| `15` | Zero-crossing | ZX sensor output (open-collector, pull-up to 3.3V) |
-| `GND` | Common ground | All sensor grounds |
-| `3.3V` / `5V` | Power | SSR control, relay, ZX (as rated) |
-| `16/17` | UART2 RX/TX | JSY-MK-194 RX/TX (4800 baud, 8N1) |
-| `48` | NeoPixel | Onboard WS2812 LED (S3 only) |
+| Signal | ESP32-S3 Pin | ESP32-WROOM Pin | Connect To |
+| :--- | :--- | :--- | :--- |
+| **SSR control** | `17` | `22` | SSR control input |
+| **Relay coil** | `6` | `17` | Relay coil (active-LOW, closes SSR circuit) |
+| **1-Wire data** | `16` | `23` | DS18B20 DQ pin (+ 4.7K pull-up to 3.3V) |
+| **PWM fan** | `5` | `5` | Fan PWM input (LEDC ch4, 10 kHz) |
+| **Zero-crossing** | `15` | `19` | ZX sensor output (open-collector, pull-up to 3.3V) |
+| **Common ground** | `GND` | `GND` | All sensor grounds |
+| **Power** | `3.3V` / `5V` | `3.3V` / `5V` | SSR control, relay, ZX (as rated) |
+| **UART2 RX/TX** | `18/20` | `18/15` | JSY-MK-194 RX/TX (4800 baud, 8N1) |
+| **NeoPixel** | `2` | `2` | Onboard WS2812 LED |
 
-**Note:** The SSR control logic is inverted compared to many home projects:
-- `digitalWrite(ssr_pin, HIGH)` = SSR **OFF** (no power to load)
-- `digitalWrite(ssr_pin, LOW)` = SSR **ON** (power to load)
-- The relay (pin 13) is active-LOW: `LOW` closes the SSR circuit, `HIGH` opens it.
+**Note:** The control logic uses standard active-HIGH for the SSR and active-LOW for the safety relay:
+- `digitalWrite(ssr_pin, HIGH)` = SSR **ON** (power to load)
+- `digitalWrite(ssr_pin, LOW)` = SSR **OFF** (no power to load)
+- The relay (pin 6 on S3, pin 17 on WROOM) is active-LOW: `LOW` closes the SSR circuit (normal), `HIGH` opens it (safety cut-off).
 
 **Pin validation:** The firmware now validates GPIO by **role + board target** (ESP32-S3 vs ESP32-WROOM), not only by numeric range. Some pins are rejected for SSR/relay/fan/ZX roles because of boot strapping, USB, flash/PSRAM, input-only restrictions, or board-specific caveats.
 
@@ -530,7 +546,6 @@ Serial log shows `STATE CHANGE: NORMAL -> SAFE_TIMEOUT (Shelly Timeout!)`. Check
 
 ### MQTT Disconnect / No HA Entities
 Home Assistant entities not appearing after enabling MQTT:
-- Reboot the device to re-send Home Assistant auto-discovery messages (discovery is only sent once on first MQTT connect).
 - Verify `mqtt_ip` and `mqtt_port` are correct.
 - Check that the MQTT broker allows anonymous connections if `mqtt_user`/`mqtt_password` are empty.
 
@@ -541,9 +556,9 @@ Home Assistant entities not appearing after enabling MQTT:
 4. Check ZX pin if using `trame`/`phase`/`cycle_stealing` mode — no ZX signal means SSR stays OFF.
 
 ### Random Reboots
-Check serial log for `task_wdt: Task watchdog got triggered`. See [WDT_EXPLANATION.md](WDT_EXPLANATION.md) for details. Common causes:
+Check serial log for `task_wdt: Task watchdog got triggered`. This usually means a task exceeded its 60-second execution window. Common causes:
 - Shelly HTTP timeout too long (use `--erase` to reset to defaults).
-- `MAX_STATS_DAYS` very large (365) — stats.json save can take several seconds.
+- `MAX_STATS_DAYS` very large (365) — `stats.json` save can take several seconds.
 - Network instability causing `WiFi.reconnect()` to flood (default is every 1 second).
 
 ### Eq2 Never Turns On
@@ -558,7 +573,6 @@ If Equipment 2 (priority=1) never activates:
 ## Known Limitations
 
 - **Controller Deadzone**: When `max_duty_percent < 95%`, Equipment 2 priority-1 mode (water heater first) is unreachable since the equation heater can never reach 95% duty cycle.
-- **MQTT Discovery Reconnect**: After a broker restart, Home Assistant auto-discovery entities may not be re-registered. A firmware reboot is required to re-send discovery messages.
 - **Stats JSON Iteration**: Historical stats loaded from `stats.json` on boot use JSON key iteration order which is not guaranteed chronological. The oldest-by-key entries survive, not necessarily the oldest-by-time entries.
 - **Burst Mode SSR Compatibility**: Burst mode ignores zero-crossing — use only with true zero-crossing SSRs to avoid EMI and contact wear.
 - **WROOM Feature Parity**: The WROOM environment (`esp32dev`) completely disables stats, history, and data logging. Use ESP32-S3 for full feature set.
