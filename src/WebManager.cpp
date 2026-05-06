@@ -19,6 +19,7 @@
 #include <LittleFS.h>
 #include <Update.h>
 #include <ArduinoJson.h>
+#include <AsyncJson.h>
 AsyncWebServer WebManager::_server(80);
 WiFiClient WebManager::_client;
 HTTPClient WebManager::_http;
@@ -151,7 +152,15 @@ void WebManager::applyRequestParams(AsyncWebServerRequest *request, Config &cfg)
     if (has("SSR_MAX_TEMP")) cfg.ssr_max_temp = clampFloat(get("SSR_MAX_TEMP").toFloat(), 30.0f, 150.0f);
     if (has("ZX_PIN")) setRolePin(cfg.zx_pin, get("ZX_PIN").toInt(), PinRole::ZX_INPUT);
     if (has("CONTROL_MODE")) cfg.control_mode = get("CONTROL_MODE").substring(0, 32);
-    if (has("JSY_UART_ID")) cfg.jsy_uart_id = clampInt(get("JSY_UART_ID").toInt(), 1, 2);
+
+    // Phase-angle calibration (valid only when control_mode == "phase")
+    if (has("PHASE_CALIBRATE")) cfg.phase_calibrate = (get("PHASE_CALIBRATE") == "True");
+    if (has("PHASE_CAL_MIN_US")) cfg.phase_cal_min_us = clampInt(get("PHASE_CAL_MIN_US").toInt(), 10, 9990);
+    if (has("PHASE_CAL_MAX_US")) cfg.phase_cal_max_us = clampInt(get("PHASE_CAL_MAX_US").toInt(), 20, 10000);
+    if (has("PHASE_CAL_STEP_US")) cfg.phase_cal_step_us = clampInt(get("PHASE_CAL_STEP_US").toInt(), 10, 5000);
+    if (has("PHASE_CAL_HOLD_MS")) cfg.phase_cal_hold_ms = clampInt(get("PHASE_CAL_HOLD_MS").toInt(), 1000, 30000);
+
+    // JSY
     if (has("JSY_GRID_CHANNEL")) cfg.jsy_grid_channel = clampInt(get("JSY_GRID_CHANNEL").toInt(), 1, 2);
     if (has("JSY_EQUIP1_CHANNEL")) cfg.jsy_equip1_channel = clampInt(get("JSY_EQUIP1_CHANNEL").toInt(), 1, 2);
     if (has("JSY_TX")) setRolePin(cfg.jsy_tx, get("JSY_TX").toInt(), PinRole::JSY_TX);
@@ -448,6 +457,66 @@ void WebManager::setupRoutes() {
         request->send(response);
     });
 
+    _server.on("/web_phase_cal", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
+        AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/web_phase_cal.html.gz", "text/html");
+        response->addHeader("Content-Encoding", "gzip");
+        request->send(response);
+    });
+
+    // Phase cal POST handler (replaces the _server.on HTTP_POST handler below)
+    auto phaseCalHandler = new AsyncCallbackJsonWebHandler("/api/phase_cal",
+        [authRequired](AsyncWebServerRequest *request, JsonVariant &json) {
+        if (!authRequired(request)) return;
+        const char* action = json["action"] | "";
+        const int jumpTo = json["jumpTo"] | -1;
+
+        if (strcmp(action, "start") == 0) {
+            // Start calibration sweep (will launch task on next config-save + reboot)
+            Config newCfg = *_config;
+            newCfg.phase_calibrate = true;
+            newCfg.phase_cal_min_us = json["min"] | newCfg.phase_cal_min_us;
+            newCfg.phase_cal_max_us = json["max"] | newCfg.phase_cal_max_us;
+            newCfg.phase_cal_step_us = json["step"] | newCfg.phase_cal_step_us;
+            newCfg.phase_cal_hold_ms = json["hold"] | newCfg.phase_cal_hold_ms;
+            ConfigManager::save(newCfg);
+            request->send(200, "application/json", "{\"ok\":true}");
+            _rebootRequested = true;
+        } else if (strcmp(action, "exit") == 0) {
+            // Exit calibration mode (SSR goes off)
+            Config newCfg = *_config;
+            newCfg.phase_calibrate = false;
+            ConfigManager::save(newCfg);
+            request->send(200, "application/json", "{\"ok\":true}");
+            _rebootRequested = true;
+        } else if (strcmp(action, "pause") == 0) {
+            ControlStrategy::setPhaseCalCommand("pause", -1);
+            request->send(200, "application/json", "{\"ok\":true,\"paused\":true}");
+        } else if (strcmp(action, "resume") == 0) {
+            ControlStrategy::setPhaseCalCommand("resume", -1);
+            request->send(200, "application/json", "{\"ok\":true,\"paused\":false}");
+        } else if (strcmp(action, "jump") == 0) {
+            ControlStrategy::setPhaseCalCommand("jump", jumpTo);
+            request->send(200, "application/json", "{\"ok\":true}");
+        } else if (strcmp(action, "status") == 0) {
+            // return live calibration status
+            bool active = ControlStrategy::getPhaseCalActive();
+            JsonDocument resp;
+            resp["active"] = active;
+            resp["paused"] = ControlStrategy::getPhaseCalPaused();
+            resp["delay_us"] = active ? ControlStrategy::getPhaseCalCurrentDelayUs() : 0;
+            resp["gridPower"] = active ? ControlStrategy::getPhaseCalGridPower() : 0;
+            resp["equipPower"] = active ? ControlStrategy::getPhaseCalEquipmentPower() : 0;
+            resp["progress"] = active ? ControlStrategy::getPhaseCalProgress() : 0;
+            String buf;
+            serializeJson(resp, buf);
+            request->send(200, "application/json", buf);
+        } else {
+            request->send(400, "application/json", "{\"error\":\"unknown action\"}");
+        }
+    });
+    _server.addHandler(phaseCalHandler);
+
     _server.on("/web_dev", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
         AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/web_dev.html.gz", "text/html");
@@ -570,6 +639,13 @@ void WebManager::setupRoutes() {
         doc["jsy_rx"] = _config->jsy_rx;
         doc["zx_pin"] = _config->zx_pin;
         doc["control_mode"] = _config->control_mode;
+        // Phase-angle calibration settings
+        doc["phase_calibrate"] = _config->phase_calibrate;
+        doc["phase_cal_min_us"] = _config->phase_cal_min_us;
+        doc["phase_cal_max_us"] = _config->phase_cal_max_us;
+        doc["phase_cal_step_us"] = _config->phase_cal_step_us;
+        doc["phase_cal_hold_ms"] = _config->phase_cal_hold_ms;
+        // Fan settings
         doc["e_fan"] = _config->e_fan;
         doc["fan_pin"] = _config->fan_pin;
         doc["fan_temp_offset"] = _config->fan_temp_offset;

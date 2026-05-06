@@ -217,7 +217,13 @@ Config ConfigManager::load() {
     if (has(doc, "half_period_us")) config.half_period_us = doc["half_period_us"];
     if (has(doc, "zx_busypoll_us")) config.zx_busypoll_us = doc["zx_busypoll_us"];
     if (has(doc, "zx_timeout_ms")) config.zx_timeout_ms = doc["zx_timeout_ms"];
-    if (has(doc, "debug_phase")) config.debug_phase = doc["debug_phase"];
+
+    // Phase-angle calibration (valid only when control_mode == "phase")
+    if (has(doc, "phase_calibrate")) config.phase_calibrate = doc["phase_calibrate"];
+    if (has(doc, "phase_cal_min_us")) config.phase_cal_min_us = clampInt(doc["phase_cal_min_us"].as<int>(), 10, 9990, config.phase_cal_min_us, "phase_cal_min_us");
+    if (has(doc, "phase_cal_max_us")) config.phase_cal_max_us = clampInt(doc["phase_cal_max_us"].as<int>(), 20, 10000, config.phase_cal_max_us, "phase_cal_max_us");
+    if (has(doc, "phase_cal_step_us")) config.phase_cal_step_us = clampInt(doc["phase_cal_step_us"].as<int>(), 10, 5000, config.phase_cal_step_us, "phase_cal_step_us");
+    if (has(doc, "phase_cal_hold_ms")) config.phase_cal_hold_ms = clampInt(doc["phase_cal_hold_ms"].as<int>(), 1000, 30000, config.phase_cal_hold_ms, "phase_cal_hold_ms");
 
     // MQTT
     if (has(doc, "e_mqtt")) config.e_mqtt = doc["e_mqtt"];
@@ -345,7 +351,12 @@ bool ConfigManager::save(const Config& config) {
     doc["half_period_us"] = config.half_period_us;
     doc["zx_busypoll_us"] = config.zx_busypoll_us;
     doc["zx_timeout_ms"] = config.zx_timeout_ms;
-    doc["debug_phase"] = config.debug_phase;
+    // Phase-angle calibration (persisted so config survives reboot)
+    doc["phase_calibrate"] = config.phase_calibrate;
+    doc["phase_cal_min_us"] = config.phase_cal_min_us;
+    doc["phase_cal_max_us"] = config.phase_cal_max_us;
+    doc["phase_cal_step_us"] = config.phase_cal_step_us;
+    doc["phase_cal_hold_ms"] = config.phase_cal_hold_ms;
     doc["e_mqtt"] = config.e_mqtt;
     doc["mqtt_ip"] = config.mqtt_ip;
     doc["mqtt_port"] = config.mqtt_port;

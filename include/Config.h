@@ -177,7 +177,13 @@ struct Config {
     int half_period_us = 9900;
     int zx_busypoll_us = 1000;
     int zx_timeout_ms = 500;
-    bool debug_phase = false;
+
+    // Phase-angle calibration (valid only when control_mode == "phase")
+    bool phase_calibrate = false;       // true = run automated sweep
+    int phase_cal_min_us = 50;          // minimum delay (microseconds) from ZX
+    int phase_cal_max_us = 9950;        // maximum delay
+    int phase_cal_step_us = 100;        // step size
+    int phase_cal_hold_ms = 5000;       // dwell time per step
 
     // MQTT
     bool e_mqtt = true;

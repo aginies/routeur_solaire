@@ -3,6 +3,7 @@
 #include "GridSensorService.h"
 #include "Logger.h"
 #include "PinCapabilities.h"
+#include "TemperatureManager.h"
 #include <esp_task_wdt.h>
 #include <soc/gpio_struct.h>
 
@@ -23,6 +24,29 @@ static volatile bool _phaseCancelPending = false;
 EventGroupHandle_t ControlStrategy::_zxEventGroup = nullptr;
 TaskHandle_t ControlStrategy::_currentTaskHandle = nullptr;
 esp_timer_handle_t ControlStrategy::_phaseTimer = nullptr;
+
+// Phase-calibration sweep state (always volatile — accessed from multiple tasks)
+static volatile bool _phaseCalActive = false;
+static volatile int _phaseCalCurrentDelayUs = 0;
+static volatile int _phaseCalMinDelay = 0;
+static volatile int _phaseCalMaxDelay = 0;
+static volatile int _phaseCalStep = 0;
+static volatile int _phaseCalHoldMs = 0;
+static volatile float _phaseCalProgress = 0.0f;
+static volatile float _phaseCalGridPower = 0.0f;
+static volatile float _phaseCalEquipPower = 0.0f;
+static volatile int _phaseCalPhaseIdx = 0;  // which step index we're at
+static volatile int _phaseCalTotalSteps = 0;
+static volatile bool _phaseCalPaused = false;
+static portMUX_TYPE _phaseCalMux = portMUX_INITIALIZER_UNLOCKED;
+
+// Command queue for phase calibration
+static volatile const char* _phaseCalCmdAction = nullptr;
+static volatile int _phaseCalCmdJump = -1;
+static portMUX_TYPE _phaseCalCmdMux = portMUX_INITIALIZER_UNLOCKED;
+
+// Forward declaration: esp_timer callback for calibration sweep SSR pulse
+static void phaseCalFire(void* arg);
 
 static inline void IRAM_ATTR ssrSetFromIsr(int pin, bool on) {
     if (pin < 0) return;
@@ -214,24 +238,46 @@ void ControlStrategy::startTasks() {
         xTaskCreatePinnedToCore(cycleStealingTask, "cycleTask", 4096, NULL, 5, &_currentTaskHandle, 1);
     } else if (_config->control_mode == "phase") {
         pinMode(_config->zx_pin, INPUT_PULLUP);
-        // Bug #12: create the one-shot hardware timer used to fire the SSR at
-        // the precise phase angle. Created BEFORE attaching the ISR so the
-        // ISR can never see a NULL handle.
-        const esp_timer_create_args_t targs = {
-            .callback = &phaseFireSsr,
-            .arg = nullptr,
-            .dispatch_method = ESP_TIMER_TASK,
-            .name = "phaseFire",
-            .skip_unhandled_events = true,
-        };
-        if (esp_timer_create(&targs, &_phaseTimer) != ESP_OK) {
-            Logger::error("phase: esp_timer_create failed - SSR will stay OFF");
-            return;
-        }
+        // If phase-calibration was requested, launch the sweep task.
+        if (_config->phase_calibrate) {
+            // Create the timer used by the calibration task to fire the SSR.
+            const esp_timer_create_args_t calArgs = {
+                .callback = &phaseCalFire,
+                .arg = nullptr,
+                .dispatch_method = ESP_TIMER_TASK,
+                .name = "calFire",
+                .skip_unhandled_events = true,
+            };
+            if (esp_timer_create(&calArgs, &_phaseTimer) != ESP_OK) {
+                Logger::error("phase cal: esp_timer_create failed - SSR will stay OFF");
+                return;
+            }
+            // Attach the ZX ISR so the calibration task gets ZX events.
+            attachInterrupt(digitalPinToInterrupt(_config->zx_pin), handlePhaseZxInterrupt, RISING);
+            xTaskCreatePinnedToCore(phaseCalibrateTask, "phaseCal", 4096, NULL, 4, &_currentTaskHandle, 1);
+            portENTER_CRITICAL(&_phaseCalMux);
+            _phaseCalActive = true;
+            portEXIT_CRITICAL(&_phaseCalMux);
+        } else {
+            // Bug #12: create the one-shot hardware timer used to fire the SSR at
+            // the precise phase angle. Created BEFORE attaching the ISR so the
+            // ISR can never see a NULL handle.
+            const esp_timer_create_args_t targs = {
+                .callback = &phaseFireSsr,
+                .arg = nullptr,
+                .dispatch_method = ESP_TIMER_TASK,
+                .name = "phaseFire",
+                .skip_unhandled_events = true,
+            };
+            if (esp_timer_create(&targs, &_phaseTimer) != ESP_OK) {
+                Logger::error("phase: esp_timer_create failed - SSR will stay OFF");
+                return;
+            }
 
-        // Start task before enabling ISR so notifications always have a valid target.
-        xTaskCreatePinnedToCore(phaseControlTask, "phaseTask", 2048, NULL, 5, &_currentTaskHandle, 1);
-        attachInterrupt(digitalPinToInterrupt(_config->zx_pin), handlePhaseZxInterrupt, RISING);
+            // Start task before enabling ISR so notifications always have a valid target.
+            xTaskCreatePinnedToCore(phaseControlTask, "phaseTask", 2048, NULL, 5, &_currentTaskHandle, 1);
+            attachInterrupt(digitalPinToInterrupt(_config->zx_pin), handlePhaseZxInterrupt, RISING);
+        }
     } else {
         // Bug #8: unrecognized control_mode silently leaves SSR dead. Warn loudly.
         Logger::warn("ControlStrategy: unknown control_mode '" + _config->control_mode + "' - SSR will remain OFF");
@@ -501,4 +547,247 @@ void ControlStrategy::phaseControlTask(void* pvParameters) {
             lastCheck = nowMs;
         }
     }
+}
+
+// ─── Phase-angle calibration sweep ────────────────────────────────────────────
+// Steps the SSR delay through the configured range, holding each step long enough
+// for the resistive load to settle and the user to read power/temperature.
+
+// esp_timer callback used DURING calibration sweep to fire the SSR at the
+// current step delay.  The task itself controls when the timer fires.
+static void phaseCalFire(void* /*arg*/) {
+    if (ActuatorManager::ssrPin < 0) return;
+    digitalWrite(ActuatorManager::ssrPin, HIGH);
+    delayMicroseconds(150);
+    digitalWrite(ActuatorManager::ssrPin, LOW);
+}
+
+int ControlStrategy::getPhaseCalCurrentDelayUs() {
+    int v;
+    portENTER_CRITICAL(&_phaseCalMux);
+    v = _phaseCalCurrentDelayUs;
+    portEXIT_CRITICAL(&_phaseCalMux);
+    return v;
+}
+
+float ControlStrategy::getPhaseCalGridPower() {
+    float v;
+    portENTER_CRITICAL(&_phaseCalMux);
+    v = _phaseCalGridPower;
+    portEXIT_CRITICAL(&_phaseCalMux);
+    return v;
+}
+
+float ControlStrategy::getPhaseCalEquipmentPower() {
+    float v;
+    portENTER_CRITICAL(&_phaseCalMux);
+    v = _phaseCalEquipPower;
+    portEXIT_CRITICAL(&_phaseCalMux);
+    return v;
+}
+
+float ControlStrategy::getPhaseCalProgress() {
+    float v;
+    portENTER_CRITICAL(&_phaseCalMux);
+    v = _phaseCalProgress;
+    portEXIT_CRITICAL(&_phaseCalMux);
+    return v;
+}
+
+bool ControlStrategy::getPhaseCalActive() {
+    bool v;
+    portENTER_CRITICAL(&_phaseCalMux);
+    v = _phaseCalActive;
+    portEXIT_CRITICAL(&_phaseCalMux);
+    return v;
+}
+
+bool ControlStrategy::getPhaseCalPaused() {
+    bool v;
+    portENTER_CRITICAL(&_phaseCalMux);
+    v = _phaseCalPaused;
+    portEXIT_CRITICAL(&_phaseCalMux);
+    return v;
+}
+
+void ControlStrategy::setPhaseCalCommand(const char* action, int jumpTo) {
+    if (!action) return;
+    portENTER_CRITICAL(&_phaseCalCmdMux);
+    _phaseCalCmdAction = action;
+    _phaseCalCmdJump = jumpTo;
+    portEXIT_CRITICAL(&_phaseCalCmdMux);
+}
+
+void ControlStrategy::phaseCalibrateTask(void* pvParameters) {
+    if (!_config) { vTaskDelete(NULL); return; }
+    esp_task_wdt_add(NULL);
+
+    int minDelay = _config->phase_cal_min_us;
+    int maxDelay = _config->phase_cal_max_us;
+    int step = _config->phase_cal_step_us;
+    int holdMs = _config->phase_cal_hold_ms;
+    if (step <= 0) step = 100;
+    if (holdMs < 1000) holdMs = 5000;
+    if (minDelay >= maxDelay) { minDelay = 50; maxDelay = 9950; }
+
+    _phaseCalTotalSteps = (maxDelay - minDelay) / step;
+    int currentDelay = minDelay;
+    int progressIdx = 0;
+    bool active = true;
+    bool paused = false;
+
+    Logger::info(String("Phase cal: sweep ") + minDelay + "→" + maxDelay + "us step=" + step + " hold=" + holdMs + "ms");
+
+    while (active) {
+        esp_task_wdt_reset();
+
+        // Check for command from web UI
+        const char* cmdAction = nullptr;
+        int cmdJump = -1;
+        portENTER_CRITICAL(&_phaseCalCmdMux);
+        cmdAction = (const char*)_phaseCalCmdAction;
+        cmdJump = (int)_phaseCalCmdJump;
+        _phaseCalCmdAction = nullptr; // consume
+        _phaseCalCmdJump = -1;
+        portEXIT_CRITICAL(&_phaseCalCmdMux);
+
+        if (cmdAction) {
+            if (strcmp(cmdAction, "pause") == 0) {
+                paused = true;
+                portENTER_CRITICAL(&_phaseCalMux);
+                _phaseCalPaused = true;
+                portEXIT_CRITICAL(&_phaseCalMux);
+                Logger::info("Phase cal: paused");
+            } else if (strcmp(cmdAction, "resume") == 0) {
+                paused = false;
+                portENTER_CRITICAL(&_phaseCalMux);
+                _phaseCalPaused = false;
+                portEXIT_CRITICAL(&_phaseCalMux);
+                Logger::info("Phase cal: resumed");
+            } else if (strcmp(cmdAction, "exit") == 0) {
+                active = false;
+            } else if (strcmp(cmdAction, "jump") == 0 && cmdJump >= 0) {
+                progressIdx = cmdJump;
+                if (progressIdx > _phaseCalTotalSteps) progressIdx = _phaseCalTotalSteps;
+                currentDelay = minDelay + progressIdx * step;
+                Logger::info(String("Phase cal: jump to step ") + progressIdx);
+            }
+        }
+
+        if (!active) break;
+
+        if (paused) {
+            // While paused, stop firing the SSR but keep polling for commands.
+            if (_phaseTimer) esp_timer_stop(_phaseTimer);
+            if (ActuatorManager::ssrPin >= 0) digitalWrite(ActuatorManager::ssrPin, LOW);
+            vTaskDelay(pdMS_TO_TICKS(200));
+            continue;
+        }
+
+        // Set the SSR delay for this sweep step
+        portENTER_CRITICAL(&_phaseCalMux);
+        _phaseCalCurrentDelayUs = currentDelay;
+        _phaseCalProgress = (float)progressIdx / (float)((_phaseCalTotalSteps > 0) ? _phaseCalTotalSteps : 1);
+        _phaseCalPhaseIdx = progressIdx;
+        portEXIT_CRITICAL(&_phaseCalMux);
+
+        // Drive the SSR at `currentDelay` from each ZX for the hold duration.
+        // The ZX ISR posts notifications; we use the phase timer to fire at the right delay.
+        uint32_t startMs = millis();
+        float gridAcc = 0, eqAcc = 0;
+        int reads = 0;
+        bool settleDone = false;
+        constexpr int SETTLE_SAMPLES = 6; // settle before averaging
+        uint32_t lastZxSeen = _zxCounter;
+
+        while (active && (millis() - startMs) < (uint32_t)holdMs) {
+            // Wait for ZX notification (or timeout for safety checks)
+            ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(50));
+            esp_task_wdt_reset();
+
+            // Check for commands during dwell (allows pause/exit mid-step)
+            portENTER_CRITICAL(&_phaseCalCmdMux);
+            const char* midCmd = (const char*)_phaseCalCmdAction;
+            portEXIT_CRITICAL(&_phaseCalCmdMux);
+            if (midCmd) break; // will be consumed at top of outer loop
+
+            // On each ZX, fire the timer at current delay
+            uint32_t nowZx = _zxCounter;
+            if (nowZx != lastZxSeen) {
+                lastZxSeen = nowZx;
+                // Arm the one-shot timer to fire SSR after currentDelay microseconds
+                esp_timer_stop(_phaseTimer);
+                esp_timer_start_once(_phaseTimer, currentDelay);
+                ActuatorManager::equipmentActive = true;
+            }
+
+            // Accumulate power readings after settling
+            if (!settleDone) {
+                reads++;
+                if (reads > SETTLE_SAMPLES) {
+                    // Start accumulating after settle period
+                    gridAcc += GridSensorService::currentGridPower;
+                    eqAcc += ActuatorManager::equipmentPower;
+                }
+                if (reads >= SETTLE_SAMPLES * 2) {
+                    int avgReads = reads - SETTLE_SAMPLES;
+                    float avgGrid = gridAcc / avgReads;
+                    float avgEq = eqAcc / avgReads;
+                    portENTER_CRITICAL(&_phaseCalMux);
+                    _phaseCalGridPower = avgGrid;
+                    _phaseCalEquipPower = avgEq;
+                    portEXIT_CRITICAL(&_phaseCalMux);
+                    settleDone = true;
+                }
+            }
+
+            // Safety: SSR overtemp
+            if (_config->e_ssr_temp && TemperatureManager::currentSsrTemp >= _config->ssr_max_temp + 5.0f) {
+                Logger::warn("Phase cal: SSR overtemp safety exit");
+                active = false;
+                break;
+            }
+
+            // Safety: mains loss — no ZX for >500ms means mains is gone
+            if ((millis() - startMs) > 500 && _zxCounter == lastZxSeen) {
+                Logger::warn("Phase cal: mains loss detected, aborting");
+                active = false;
+                break;
+            }
+        }
+
+        // Sweep finished this step — move to next
+        if (active && progressIdx < _phaseCalTotalSteps) {
+            progressIdx++;
+            currentDelay = minDelay + progressIdx * step;
+        } else if (active && progressIdx >= _phaseCalTotalSteps) {
+            // Sweep complete
+            active = false;
+        }
+
+        portENTER_CRITICAL(&_phaseCalMux);
+        _phaseCalProgress = (float)progressIdx / (float)((_phaseCalTotalSteps > 0) ? _phaseCalTotalSteps : 1);
+        _phaseCalPhaseIdx = progressIdx;
+        portEXIT_CRITICAL(&_phaseCalMux);
+    }
+
+    // Cal sweep complete or interrupted — safe shutdown
+    if (_phaseTimer) {
+        esp_timer_stop(_phaseTimer);
+        esp_timer_delete(_phaseTimer);
+        _phaseTimer = nullptr;
+    }
+    if (ActuatorManager::ssrPin >= 0) {
+        digitalWrite(ActuatorManager::ssrPin, LOW);
+    }
+    ActuatorManager::equipmentActive = false;
+
+    portENTER_CRITICAL(&_phaseCalMux);
+    _phaseCalActive = false;
+    _phaseCalPaused = false;
+    portEXIT_CRITICAL(&_phaseCalMux);
+
+    Logger::info("Phase cal: sweep complete");
+    esp_task_wdt_delete(NULL);
+    vTaskDelete(NULL);
 }

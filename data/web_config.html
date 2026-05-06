@@ -578,6 +578,10 @@
                             <option value="phase">Contrôle de Phase</option>
                         </select>
                     </div>
+                    <div id="phaseCalSection" class="form-group" style="display:none; margin-top: 12px; padding: 12px; background: rgba(240,192,64,0.08); border-radius: 8px; border: 1px solid #f0c040;">
+                        <p style="color: #f0c040; font-size: 0.9em; margin-bottom: 8px;">Mode de phase activé – étalonnage de l'angle de phase:</p>
+                        <a href="/web_phase_cal" class="btn btn-start" style="display: inline-block; padding: 8px 16px; background: #f0c040; color: #1a1a2e; border-radius: 6px; font-weight: 700; text-decoration: none;">🎯 Ouvrir la Calibration</a>
+                    </div>
                 </div>
 
                 <!-- SECTION PLANIFICATION -->
@@ -862,6 +866,13 @@
             box.style.display = (modeEl.value === 'static') ? 'block' : 'none';
         }
 
+        function updateRegulationModeUI() {
+            var modeEl = document.getElementById('CONTROL_MODE');
+            var box = document.getElementById('phaseCalSection');
+            if (!modeEl || !box) return;
+            box.style.display = (modeEl.value === 'phase') ? 'block' : 'none';
+        }
+
         document.getElementById('configForm')?.addEventListener('submit', (e) => {
             var modeEl = document.getElementById('WIFI_IP_MODE');
             if (modeEl && modeEl.value === 'dhcp') {
@@ -875,6 +886,7 @@
 
         document.getElementById('GRID_SENSOR_SOURCE')?.addEventListener('change', updateGridSourceUI);
         document.getElementById('EQUIP1_MEASURE_SOURCE')?.addEventListener('change', updateEquip1SourceUI);
+        document.getElementById('CONTROL_MODE')?.addEventListener('change', updateRegulationModeUI);
 
         window.onload = () => {
             showSection('sec-general');
@@ -950,6 +962,7 @@
                 setVal('JSY_RX',c.jsy_rx);
                 setVal('ZX_PIN',c.zx_pin);
                 setVal('CONTROL_MODE',c.control_mode);
+                updateRegulationModeUI();
                 setBool('E_FAN',c.e_fan);
                 setVal('FAN_PIN',c.fan_pin);
                 setVal('FAN_TEMP_OFFSET',c.fan_temp_offset);
@@ -973,6 +986,7 @@
                 setVal('WEB_PASSWORD',c.web_password);
                 updateGridSourceUI();
                 updateEquip1SourceUI();
+                updateRegulationModeUI();
             }).then(()=>fetch('/status').then(r=>r.json()).then(s=>{
                 var fv = document.getElementById('footerVersion'); if(fv) fv.textContent=s.version;
                 var fb = document.getElementById('footerBuild'); if(fb) fb.textContent=s.build_time;

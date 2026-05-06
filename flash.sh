@@ -34,7 +34,7 @@ usage() {
     echo "  -t, --test  Run unit tests on host (native environment)"
     echo "  -m, --monitor Launch serial monitor after flashing"
     echo "  -u, --usb   Build with native USB-CDC Serial (faster flash, native USB-OTG port);"
-    echo "              default uses UART0 / USB-to-serial bridge (/dev/ttyUSB0)"
+    echo "              (requires ESP32-S3 or similar with native USB; ESP32-DevKit cannot use this)"
     echo "  --erase     Full chip erase (clears NVS/Stats) before upload"
     echo "  --skip-fs   Skip building and uploading filesystem"
     echo "  -h, --help  Show this help message"
