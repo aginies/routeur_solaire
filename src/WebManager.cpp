@@ -161,6 +161,7 @@ void WebManager::applyRequestParams(AsyncWebServerRequest *request, Config &cfg)
     if (has("PHASE_CAL_HOLD_MS")) cfg.phase_cal_hold_ms = clampInt(get("PHASE_CAL_HOLD_MS").toInt(), 1000, 30000);
 
     // JSY
+    if (has("JSY_UART_ID")) cfg.jsy_uart_id = clampInt(get("JSY_UART_ID").toInt(), 1, 2);
     if (has("JSY_GRID_CHANNEL")) cfg.jsy_grid_channel = clampInt(get("JSY_GRID_CHANNEL").toInt(), 1, 2);
     if (has("JSY_EQUIP1_CHANNEL")) cfg.jsy_equip1_channel = clampInt(get("JSY_EQUIP1_CHANNEL").toInt(), 1, 2);
     if (has("JSY_TX")) setRolePin(cfg.jsy_tx, get("JSY_TX").toInt(), PinRole::JSY_TX);

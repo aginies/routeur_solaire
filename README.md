@@ -424,7 +424,11 @@ Default values are shown. All fields are editable via the Web UI.
 | `half_period_us` | int | `9900` | Legacy field (currently not used by runtime phase control path) |
 | `zx_busypoll_us` | int | `1000` | Legacy field from previous busy-wait phase implementation |
 | `zx_timeout_ms` | int | `500` | Legacy config field; watchdog timeout is currently fixed in control task |
-| `debug_phase` | bool | `false` | Reserved/legacy phase debug switch |
+| `phase_calibrate` | bool | `false` | Run automated phase-angle calibration sweep on boot |
+| `phase_cal_min_us` | int | `50` | Calibration sweep minimum delay from ZX (microseconds) |
+| `phase_cal_max_us` | int | `9950` | Calibration sweep maximum delay (microseconds) |
+| `phase_cal_step_us` | int | `100` | Calibration sweep step size (microseconds) |
+| `phase_cal_hold_ms` | int | `5000` | Calibration dwell time per step (milliseconds) |
 
 ### MQTT
 | Field | Type | Default | Description |

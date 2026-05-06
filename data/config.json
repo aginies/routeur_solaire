@@ -93,7 +93,6 @@
     "half_period_us": 9900,
     "zx_busypoll_us": 1000,
     "zx_timeout_ms": 500,
-    "debug_phase": false,
 
     "e_mqtt": true,
     "mqtt_ip": "10.0.10.101",
