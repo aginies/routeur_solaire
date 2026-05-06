@@ -354,7 +354,13 @@ void StatsManager::save() {
     int iCount = 0;
 
     for (auto const& [date, ds] : _history) {
-        if (iCount++ % 5 == 0 && esp_task_wdt_status(NULL) == ESP_OK) esp_task_wdt_reset();
+        // Bug #17: vTaskDelay(1) every 2 days to prevent IWDT on Core 0 during heavy Flash I/O
+        if (iCount % 2 == 0) {
+            vTaskDelay(pdMS_TO_TICKS(1));
+            if (esp_task_wdt_status(NULL) == ESP_OK) esp_task_wdt_reset();
+        }
+        iCount++;
+
         if (!firstDay) file.print(",");
         firstDay = false;
 

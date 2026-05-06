@@ -10,12 +10,13 @@ This C++ version is a **migration from the original MicroPython implementation f
 
 - **High-Speed Diversion**: Implements a highly responsive power diversion algorithm (burst-fire/trame mode) to match excess solar production with a resistive load.
 - **Multi-Source Monitoring**: Supports data acquisition from Shelly EM (via HTTP or MQTT) and JSY-MK-194 (via UART). Equipment power measurement via Shelly Plus 1PM (HTTP or MQTT).
-- **Asynchronous Web Server**: Provides a rich web interface for real-time monitoring (including uptime formatting with days), logging, and configuration without blocking the control loop.
+- **Asynchronous Web Server**: Provides a rich web interface with a **sidebar-based configuration menu** for real-time monitoring, logging, and easy navigation between settings.
 - **Improved Force Mode UI**: Clearly distinguishes between manual "Boost" and scheduled "Mode Forcé (Plage Horaire)" to avoid confusion.
-- **Advanced Statistics**: Tracks and stores daily/hourly energy usage (Import/Export/Redirected) with historical data retention.
+- **Advanced Statistics**: Tracks daily/hourly energy usage with a **compact horizontal distribution bar** and historical data retention.
 - **Safety & Protection**: Includes watchdog timers, temperature monitoring (Internal & SSR heatsink), and automatic fan control.
 - **Weather-Aware Control**: Uses Open-Meteo cloud cover, solar radiation, sunrise, and sunset data to improve equipment decisions. When solar panel power and azimuth are configured, estimates real-time expected production to decide whether Equipment 2 can run. **Requires internet access** for Open-Meteo API calls.
 - **Home Assistant Integration**: MQTT support with auto-discovery for easy integration into smart home systems.
+- **Custom PCB Layout**: Includes a complete hardware design project in the `board/` directory with a KiCad-ready netlist for manufacturing a custom mainboard.
 
 ## Architecture
 
@@ -75,7 +76,7 @@ This project supports two primary ESP32 architectures, each optimized for differ
 - **Performance**: High-speed processing and native support for modern features.
 - **Memory**: Supports various Flash/PSRAM combinations (e.g., N8R2, N16R8) via dynamic build-time selection.
 - **Data Retention**: Configured to store up to **365 days** of historical statistics (`MAX_STATS_DAYS=365`).
-- **Hardware**: Uses specialized pins (e.g., RGB Internal LED on Pin 2).
+- **Hardware**: Uses specialized pins (e.g., RGB Internal LED on Pin 48).
 
 ### ESP32-WROOM / ESP32-DevKit (Standard & Reliable)
 - **Environment**: `esp32dev`
@@ -470,12 +471,14 @@ Default values are shown. All fields are editable via the Web UI.
 | **SSR control** | `17` | `22` | SSR control input |
 | **Relay coil** | `6` | `17` | Relay coil (active-LOW, closes SSR circuit) |
 | **1-Wire data** | `16` | `23` | DS18B20 DQ pin (+ 4.7K pull-up to 3.3V) |
-| **PWM fan** | `5` | `5` | Fan PWM input (LEDC ch4, 10 kHz) |
+| **PWM fan** | `7` | `5` | Fan PWM input (LEDC ch4, 10 kHz) |
 | **Zero-crossing** | `15` | `19` | ZX sensor output (open-collector, pull-up to 3.3V) |
 | **Common ground** | `GND` | `GND` | All sensor grounds |
 | **Power** | `3.3V` / `5V` | `3.3V` / `5V` | SSR control, relay, ZX (as rated) |
-| **UART2 RX/TX** | `18/20` | `18/15` | JSY-MK-194 RX/TX (4800 baud, 8N1) |
-| **NeoPixel** | `2` | `2` | Onboard WS2812 LED |
+| **UART1 RX/TX** | `4/5` | `18/15` | JSY-MK-194 RX/TX (4800 baud, 8N1) |
+| **NeoPixel** | `48` | `2` | Onboard WS2812 LED |
+
+> **Note: Config defaults vs. Wiring.** The Wiring Guide columns show the recommended physical pin assignments for each board target (used on this custom PCB). These differ from the `Config` struct defaults (e.g., `ssr_pin=12`), which are generic starting values for any build. When migrating from one board target to another, update both your wiring **and** the `Config` fields accordingly.
 
 **Note:** The control logic uses standard active-HIGH for the SSR and active-LOW for the safety relay:
 - `digitalWrite(ssr_pin, HIGH)` = SSR **ON** (power to load)
@@ -576,4 +579,4 @@ If Equipment 2 (priority=1) never activates:
 - **Stats JSON Iteration**: Historical stats loaded from `stats.json` on boot use JSON key iteration order which is not guaranteed chronological. The oldest-by-key entries survive, not necessarily the oldest-by-time entries.
 - **Burst Mode SSR Compatibility**: Burst mode ignores zero-crossing — use only with true zero-crossing SSRs to avoid EMI and contact wear.
 - **WROOM Feature Parity**: The WROOM environment (`esp32dev`) completely disables stats, history, and data logging. Use ESP32-S3 for full feature set.
-- **Config Serialization Drift**: Config save/load manually maps ~80 fields between JSON and the `Config` struct. Adding a field to `Config` may require updating both `ConfigManager::load()` and `ConfigManager::save()`.
+- **Config Serialization Drift**: Config save/load manually maps ~100 fields between JSON and the `Config` struct. Adding a field to `Config` may require updating both `ConfigManager::load()` and `ConfigManager::save()`.
