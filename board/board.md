@@ -212,9 +212,9 @@ It sits "in parallel" with your USB lines and must be connected as follows:
       [VBUS] ───────────────-> [ Pin 4 ]                   [VCC]
         |                        |                         |
       [D - ] ──────────┬────-> [ Pin 3 ] ──────────┬─────-> [IO19]
-        |              |         |                |        |
+        |              |         |                 |       |
       [D + ] ──────────┼────-> [ Pin 6 ] ──────────┼─────-> [IO20]
-        |              |         |                |        |
+        |              |         |                 |       |
       [GND ] ──────────┴────-> [ Pin 1 ] ──────────┴─────-> [GND]
 ```
 
