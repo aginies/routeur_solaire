@@ -17,13 +17,17 @@
 #include "Utils.h"
 #include <esp_task_wdt.h>
 
+constexpr uint32_t MONITOR_LOOP_PERIOD_MS = 110;
+
 const Config* SolarMonitor::_config = nullptr;
-IncrementalController* SolarMonitor::_ctrl = nullptr;
-uint32_t SolarMonitor::_lastGoodPoll = 0;
+Config SolarMonitor::_config_copy;
+std::unique_ptr<IncrementalController> SolarMonitor::_ctrl;
+std::atomic<uint32_t> SolarMonitor::_lastGoodPoll{0};
 TaskHandle_t SolarMonitor::_monitorTaskHandle = nullptr;
 
 void SolarMonitor::init(const Config& config) {
-    _config = &config;
+    _config_copy = config;
+    _config = &_config_copy;
     
     // Initialize Sub-Services
     GridSensorService::init(config);
@@ -34,25 +38,19 @@ void SolarMonitor::init(const Config& config) {
     HistoryBuffer::init(config);
     Equipment2Manager::init(config);
 
-    // Bug #1: stop any running tasks before swapping the controller pointer to avoid
-    // a use-after-free in monitorTask between delete and new.
     if (_monitorTaskHandle != nullptr) {
         Logger::warn("SolarMonitor::init called with running task; stopping first");
         stopTasks();
     }
 
-    // Initialize PID Controller — delete previous instance if re-initializing
-    delete _ctrl;
-    _ctrl = new IncrementalController(
+    _ctrl = std::make_unique<IncrementalController>(
         (int32_t)lroundf(config.delta * 1000.0f),
         (int32_t)lroundf(config.deltaneg * 1000.0f),
-        // Bug #23: round instead of truncate to preserve user-entered precision (compensation
-        // is a float in config but the controller takes int32_t)
         (int32_t)lroundf(config.compensation),
         (int32_t)lroundf(config.equip1_max_power * 1000.0f)
     );
     
-    _lastGoodPoll = millis();
+    _lastGoodPoll.store(millis());
 }
 
 void SolarMonitor::stopTasks() {
@@ -101,8 +99,10 @@ void SolarMonitor::monitorTask(void* pvParameters) {
     uint32_t lastStatsUpdate = millis();
     uint32_t lastSolarDataLog = 0;
     uint32_t lastPoll = 0;
-    // Bug #3: hoisted so we can reset it on poll failure or non-NORMAL state from any branch.
-    static int freshDataCounter = 0;
+    int freshDataCounter = 0;
+    uint32_t lastNightCheck = 0;
+    bool nightActive = false;
+    bool ntpSynced = false;
 
     while (true) {
         esp_task_wdt_reset();
@@ -129,9 +129,6 @@ void SolarMonitor::monitorTask(void* pvParameters) {
         TemperatureManager::lastEspTemp = temperatureRead();
 
         // 2. Night Mode & Boost Calculation (cached, changes only on minute boundaries)
-        static uint32_t lastNightCheck = 0;
-        static bool nightActive = false;
-        static bool ntpSynced = false;
         if (now - lastNightCheck >= 60000 || lastNightCheck == 0) {
             lastNightCheck = now;
             time_t t_now;
@@ -153,16 +150,17 @@ void SolarMonitor::monitorTask(void* pvParameters) {
 
         // 3. Keep safety timer alive if MQTT data is flowing
         if (_config->e_shelly_mqtt && MqttManager::hasLatestMqttGridPower) {
-            _lastGoodPoll = now;
+            _lastGoodPoll.store(now);
         }
 
         // 3. Update State Machine
         time_t t_now;
         time(&t_now);
+        uint32_t safeLastGoodPoll = _lastGoodPoll.load();
         SystemState newState = SafetyManager::evaluateState(
             TemperatureManager::lastEspTemp,
             TemperatureManager::currentSsrTemp,
-            _lastGoodPoll,
+            safeLastGoodPoll,
             boostActive,
             forcedWindow,
             nightActive,
@@ -187,7 +185,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
             esp_task_wdt_reset();
 
             if (pollOk) {
-                _lastGoodPoll = now;
+                _lastGoodPoll.store(now);
                 
                 if (SafetyManager::currentState == SystemState::STATE_SAFE_TIMEOUT) {
                     Logger::info("Grid Power Recovered");
@@ -351,7 +349,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
             esp_task_wdt_reset();
         }
 
-        vTaskDelay(pdMS_TO_TICKS(110)); 
+        vTaskDelay(pdMS_TO_TICKS(MONITOR_LOOP_PERIOD_MS)); 
     }
 }
 

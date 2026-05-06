@@ -55,13 +55,14 @@ const char* Logger::levelToString(LogLevel level) {
 }
 
 // Bug #3 helper: enforce buffer cap (must be called with mutex held)
-static inline void capBuffer(std::vector<String>& buf, const char* name) {
+// Returns number of entries dropped; caller should print warning after releasing mutex
+static inline size_t capBuffer(std::vector<String>& buf, const char* name) {
     if (buf.size() > LOGGER_BUFFER_CAP) {
         size_t drop = buf.size() - LOGGER_BUFFER_CAP;
         buf.erase(buf.begin(), buf.begin() + drop);
-        Serial.printf("[WARN] Logger: %s buffer cap reached, dropped %u oldest entries\n",
-                      name, (unsigned)drop);
+        return drop;
     }
+    return 0;
 }
 
 void Logger::log(const String& message, LogLevel level, bool critical) {
@@ -93,13 +94,20 @@ void Logger::log(const String& message, LogLevel level, bool critical) {
     Serial.println(logEntry);
 
     // Only persist INFO, WARN, ERROR to flash
+    size_t dropped = 0;
+    bool shouldFlush = false;
     if (level != LOG_DEBUG) {
         _logBuffer.push_back(logEntry);
-        capBuffer(_logBuffer, "log"); // Bug #3
+        dropped = capBuffer(_logBuffer, "log");
+        shouldFlush = (_logBuffer.size() >= 50);
     }
 
-    bool shouldFlush = (_logBuffer.size() >= 50);
     xSemaphoreGiveRecursive(_mutex);
+
+    if (dropped > 0) {
+        Serial.printf("[WARN] Logger: log buffer cap reached, dropped %u oldest entries\n",
+                      (unsigned)dropped);
+    }
 
     if (critical || shouldFlush) {
         flushAll();
@@ -115,9 +123,13 @@ void Logger::error(const String& message, bool critical) { log(message, LOG_ERRO
 void Logger::logData(const String& message) {
     if (_mutex == nullptr || xSemaphoreTakeRecursive(_mutex, pdMS_TO_TICKS(100)) != pdTRUE) return;
     _dataBuffer.push_back(message);
-    capBuffer(_dataBuffer, "data"); // Bug #3
+    size_t dropped = capBuffer(_dataBuffer, "data");
     bool shouldFlush = (_dataBuffer.size() >= 50);
     xSemaphoreGiveRecursive(_mutex);
+    if (dropped > 0) {
+        Serial.printf("[WARN] Logger: data buffer cap reached, dropped %u oldest entries\n",
+                      (unsigned)dropped);
+    }
     if (shouldFlush) flushAll();
 }
 #endif

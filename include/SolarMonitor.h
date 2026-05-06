@@ -3,6 +3,8 @@
 
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
+#include <atomic>
+#include <memory>
 #include "Config.h"
 #include "IncrementalController.h"
 
@@ -32,9 +34,10 @@ public:
 private:
     static void monitorTask(void* pvParameters);
 
-    static const Config* _config;
-    static IncrementalController* _ctrl;
-    static uint32_t _lastGoodPoll;
+    static Config _config_copy;
+    static Config* _config;
+    static std::unique_ptr<IncrementalController> _ctrl;
+    static std::atomic<uint32_t> _lastGoodPoll;
     static TaskHandle_t _monitorTaskHandle;
 };
 
