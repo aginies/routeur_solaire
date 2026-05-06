@@ -11,6 +11,7 @@ This C++ version is a **migration from the original MicroPython implementation f
 - **High-Speed Diversion**: Implements a highly responsive power diversion algorithm (burst-fire/trame mode) to match excess solar production with a resistive load.
 - **Multi-Source Monitoring**: Supports data acquisition from Shelly EM (via HTTP or MQTT) and JSY-MK-194 (via UART). Equipment power measurement via Shelly Plus 1PM (HTTP or MQTT).
 - **Asynchronous Web Server**: Provides a rich web interface with a **sidebar-based configuration menu** for real-time monitoring, logging, and easy navigation between settings.
+- **Phase Angle Calibration Wizard**: Includes a dedicated automated sweep tool (`/web_phase_cal`) to map the power curve of resistive loads when using phase-cutting mode, ensuring precise linear power control.
 - **Improved Force Mode UI**: Clearly distinguishes between manual "Boost" and scheduled "Mode Forcé (Plage Horaire)" to avoid confusion.
 - **Advanced Statistics**: Tracks daily/hourly energy usage with a **compact horizontal distribution bar** and historical data retention.
 - **Safety & Protection**: Includes watchdog timers, temperature monitoring (Internal & SSR heatsink), and automatic fan control.
@@ -151,7 +152,7 @@ The firmware supports four SSR control strategies (`zero_crossing` is an alias o
 | :--- | :--- | :--- | :--- |
 | **trame** | Bresenham line algorithm directly in ZX ISR. Decision is made once per full AC cycle, then applied on both half-cycles. | **Most SSRs** (recommended default). | ✅ Eliminates DC bias/hum. Uses the shared `cycleStealingTask` watchdog task. |
 | **cycle_stealing** | Toggles SSR at every zero-crossing event based on running duty accumulator. | SSRs that can switch instantaneously at zero-crossing. | ✅ Highest resolution (half-cycle). Can cause DC offset hum. |
-| **phase** | Phase-angle control — ZX ISR computes target delay and notifies `phaseControlTask`, which arms `esp_timer` from task context. | SSRs rated for **random-phase** (triac) triggering. | No `esp_timer` API calls inside ISR. Requires fast gate; produces harmonic distortion. |
+| **phase** | Phase-angle control — ZX ISR computes target delay and notifies `phaseControlTask`, which arms `esp_timer` from task context. | SSRs rated for **random-phase** (triac) triggering. | No `esp_timer` API calls inside ISR. Requires fast gate; produces harmonic distortion. **Requires running the `/web_phase_cal` wizard** to map the load power curve. |
 | **burst** | Fixed-period slow PWM (e.g., 500 ms ON/OFF). Not synchronized with mains zero-crossing. | Basic SSRs where flicker/EMI is not a concern. | ⚠️ Does not use ZX pin. Simplest mode, purely task-driven. |
 
 **Important:** `burst` mode ignores the ZX pin entirely. Using burst mode with a zero-crossing SSR will still work but offers no advantage over `trame`.
@@ -264,6 +265,7 @@ All endpoints except `/update` and `/RESET_device` respect the configured `web_u
 | GET | `/download_data` | Yes | Download `solar_data.txt` as attachment. |
 | GET | `/get_config` | Yes | Export full configuration as JSON. |
 | GET | `/web_config` | Yes | Config web page (`web_config.html.gz`). |
+| GET | `/web_phase_cal` | Yes | Phase Angle Calibration wizard (`web_phase_cal.html.gz`). |
 | GET | `/web_equip2` | Yes | Equipment 2 config page (`web_equip2.html.gz`). |
 | GET | `/web_dev` | Yes | Dev Telemetry page (`web_dev.html.gz`). |
 | GET | `/stats` | Yes | Stats web page (`web_stats.html.gz`). |

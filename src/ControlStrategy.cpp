@@ -289,6 +289,13 @@ void IRAM_ATTR ControlStrategy::handleZxInterrupt() {
     if (!_zxEventGroup) return;
     uint32_t nowUs = micros();
     uint32_t prevUs = _zxTime;
+
+    // ZX debounce: reject edges that arrive less than 4ms after the last one.
+    // A 50Hz half-cycle is 10ms, 60Hz is 8.3ms — anything shorter is noise/ringing
+    // from the optocoupler. Without this, spurious edges desynchronize the trame
+    // mode odd/even counter causing single-half-cycle firing (DC injection / EMI).
+    if (prevUs != 0 && (nowUs - prevUs) < 4000) return;
+
     _zxTime = nowUs;
     _zxCounter++;
     if (prevUs != 0) {
@@ -422,6 +429,10 @@ void IRAM_ATTR ControlStrategy::handlePhaseZxInterrupt() {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     uint32_t nowUs = micros();
     uint32_t prevUs = _zxTime;
+
+    // ZX debounce: reject glitches shorter than 4ms (see handleZxInterrupt comment).
+    if (prevUs != 0 && (nowUs - prevUs) < 4000) return;
+
     _zxTime = nowUs;
     _zxCounter++;
     if (prevUs != 0) {

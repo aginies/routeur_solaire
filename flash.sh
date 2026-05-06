@@ -11,6 +11,8 @@ RUN_TESTS=false
 MONITOR=false
 ERASE=false
 USB_CDC=false
+FLASH=""
+PSRAM=""
 
 # --- CLI check ---
 command -v platformio >/dev/null 2>&1 || { echo "Error: 'platformio' CLI not found in PATH." >&2; exit 1; }
@@ -141,7 +143,7 @@ if [ -n "$VARIANT" ]; then
 
         # PSRAM Overrides via Environment Variables
         if [ -n "$PSRAM" ]; then
-            export PLATFORMIO_BUILD_FLAGS="${PLATFORMIO_BUILD_FLAGS} -DBOARD_HAS_PSRAM"
+            export PLATFORMIO_BUILD_FLAGS="${PLATFORMIO_BUILD_FLAGS:-} -DBOARD_HAS_PSRAM"
             # 8MB and 16MB PSRAM are usually OPI (Octal)
             if [ "$PSRAM" -eq 8 ] || [ "$PSRAM" -eq 16 ]; then
                 export PLATFORMIO_BOARD_BUILD_ARDUINO_MEMORY_TYPE="qio_opi"
@@ -155,7 +157,7 @@ if [ -n "$VARIANT" ]; then
             fi
         else
             # Unset PSRAM flag for variants like N8 (no PSRAM)
-            export PLATFORMIO_BUILD_UNFLAGS="${PLATFORMIO_BUILD_UNFLAGS} -DBOARD_HAS_PSRAM"
+            export PLATFORMIO_BUILD_UNFLAGS="${PLATFORMIO_BUILD_UNFLAGS:-} -DBOARD_HAS_PSRAM"
             export PLATFORMIO_BOARD_BUILD_FLASH_MODE="qio"
         fi
     fi
@@ -163,7 +165,7 @@ fi
 
 # --- Handle Stats Days override ---
 if [ -n "$STATS_DAYS" ]; then
-    export PLATFORMIO_BUILD_FLAGS="${PLATFORMIO_BUILD_FLAGS} -D MAX_STATS_DAYS=${STATS_DAYS}"
+    export PLATFORMIO_BUILD_FLAGS="${PLATFORMIO_BUILD_FLAGS:-} -D MAX_STATS_DAYS=${STATS_DAYS}"
     echo "--- OVERRIDE: MAX_STATS_DAYS=${STATS_DAYS} ---"
 fi
 
@@ -173,8 +175,8 @@ if [ "$USB_CDC" = true ]; then
         echo "Warning: --usb only applies to ESP32-S3; ignoring for env '$ENV'."
     else
         # Drop the CDC=0 from platformio.ini and re-add CDC=1. PIO honors these env vars.
-        export PLATFORMIO_BUILD_UNFLAGS="${PLATFORMIO_BUILD_UNFLAGS} -DARDUINO_USB_CDC_ON_BOOT=0"
-        export PLATFORMIO_BUILD_FLAGS="${PLATFORMIO_BUILD_FLAGS} -DARDUINO_USB_CDC_ON_BOOT=1"
+        export PLATFORMIO_BUILD_UNFLAGS="${PLATFORMIO_BUILD_UNFLAGS:-} -DARDUINO_USB_CDC_ON_BOOT=0"
+        export PLATFORMIO_BUILD_FLAGS="${PLATFORMIO_BUILD_FLAGS:-} -DARDUINO_USB_CDC_ON_BOOT=1"
         echo "--- OVERRIDE: USB-CDC Serial ENABLED (use the native USB-OTG port, /dev/ttyACMx) ---"
     fi
 fi
