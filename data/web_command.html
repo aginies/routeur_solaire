@@ -394,7 +394,7 @@
 
                 // Equipment Power
                 const epEl = document.getElementById('equipmentPower');
-                if (epEl) epEl.innerHTML = num(d.equipment_power) + '<span class="unit">W</span>';
+                if (epEl) epEl.innerHTML = num(d.eq1_real_power) + '<span class="unit">W</span>';
                 
                 // Eq2
                 const eq2Row = document.getElementById('eq2Row');
@@ -708,7 +708,7 @@
 
                 const times = hist.map(p => Math.floor(p.t));
                 const gridData = hist.map(p => p.g);
-                const equipData = hist.map(p => p.e);
+                const equipData = hist.map(p => p.e1r);
                 const ssrTemp = hist.map(p => p.s <= -100 ? null : p.s);
 
                 let data = [times, gridData, equipData];
