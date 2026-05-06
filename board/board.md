@@ -75,17 +75,17 @@ This map groups the central ESP32-S3 module's pins by their physical/logical fun
       [ PERIPHERALS ]           [ ESP32-S3 PINS ]          [ SYSTEM / POWER ]
                                 ┌─────────────────┐
     ( Energy Meter )            │       GND   [1] │ <────┐ [ Common Ground ]
-    JSY TX ───────────(Data In)─│ IO17     3.3V   [2] │ <────┘ [ AMS1117-3.3 OUT ]
-    JSY RX ◀─────────(Data Out)─→ IO18             │             + [ C1-C8 Caps ]
-    JSY Zx ────────────(Sync In)-> IO15       IO19 │ ◀───->  USB D- (Serial/DFU)
+    JSY TX ───────────(Data In)─│ IO17  3.3V  [2] │ <────┘ [ AMS1117-3.3 OUT ]
+    JSY RX ◀───────(Data Out)─→ │ IO18            │             + [ C1-C8 Caps ]
+    JSY Zx ──────────(Sync In)->│IO15        IO19 │ ◀───->  USB D- (Serial/DFU)
                                 │            IO20 │ ◀───->  USB D+ (Serial/DFU)
     ( Load Control )            │ [ACTUATORS]     │
     SSR IN ◀──────────(PWM Out)─│ IO17         EN │ ◀────  Reset [ SW2 + R1 ]
     RELAY  ◀──────────(DRV Out)─│ IO6         IO0 │ ◀────  Boot  [ SW1 + R2 ]
-    FAN    <——───────(PWM Out)——│ IO5        IO46 | ────->  [ R3 Pull-Down ]
+    FAN    <——───────(PWM Out)——│ IO5        IO46 │ ────->  [ R3 Pull-Down ]
                                 │                 │
     ( Sensing / UI )            │ [UI & SENSE]    │
-    TEMP DAT ◀───────(1-Wire)─-> │ IO16            │ <────  [ R4 Pull-Up ]
+    TEMP DAT ◀───────(1-Wire)─> │ IO16            │ <────  [ R4 Pull-Up ]
     (WS2812) ◀───────(Status)── │ IO2             │
                                 └─────────────────┘
 
