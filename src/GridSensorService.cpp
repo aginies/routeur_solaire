@@ -208,13 +208,13 @@ float GridSensorService::getShellyPower() {
         static float phase = 0;
         phase += 0.1f;
         if (phase > 6283.0f) phase -= 6283.0f; // ~1000 * 2pi
-        float noise = (random(100) - 50) / 10.0f;
+        float noise = ((float)esp_random() / (float)UINT32_MAX * 20.0f - 10.0f);
         return _config->export_setpoint + (sinf(phase) * 100.0f) + noise;
     }
 
     if (WiFi.status() != WL_CONNECTED) return SENSOR_ERROR_VALUE;
 
-    char url[80];
+    char url[300];
     snprintf(url, sizeof(url), "http://%s/emeter/%d", _config->shelly_em_ip.c_str(), _config->shelly_em_index);
     _http.begin(_client, url);
 

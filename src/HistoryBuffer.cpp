@@ -131,7 +131,8 @@ void HistoryBuffer::load() {
         }
         file.close();
 
-        // Bug #6: if header could not be read at all, log it before deleting.
+        // Always remove the source file after handling (consumed pattern).
+        // On failure, log first so the file can be recovered for diagnostics.
         if (!headerOk) {
             Logger::warn("HistoryBuffer: history.bin header truncated; discarding");
         }
