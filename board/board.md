@@ -63,10 +63,14 @@ You can find all the necessary components for this PCB on AliExpress or other ma
 | IO46 | Strapping | 10kΩ -> GND | Must be LOW at boot |
 | IO19/20 | Native USB | J1 USB-C | Fully available for Serial/DFU |
 
+
 The schematic is designed for a single mainboard where all peripherals (JSY, SSR, Relay, Fan, Sensor) can be plugged in directly.
+
 Key design decisions:
 Power: The AMS1117-3.3 takes 5V from USB/J1. The 5V Fan (J6) is powered directly from the 5V rail to save regulator capacity.
+
 JSY Connection: IO17/IO18 are used for UART1 communication with the JSY-194G. This preserves IO19/IO20 for native USB serial/data.
+
 ---
 ## ESP32-S3 Pin-Out Map (Production Config)
 
