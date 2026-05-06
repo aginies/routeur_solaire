@@ -75,9 +75,9 @@ struct Config {
     String ap_ip = "192.168.66.1";
 
     // Hardware Pins
-    int ssr_pin = 12;
-    int relay_pin = 13;
-    int ds18b20_pin = 14;
+    int ssr_pin = 17;
+    int relay_pin = 6;
+    int ds18b20_pin = 16;
     int fan_pin = 5;
     int zx_pin = 15;
 
@@ -170,7 +170,7 @@ struct Config {
     int jsy_grid_channel = 1;
     int jsy_equip1_channel = 2;
     int jsy_tx = 17;
-    int jsy_rx = 16;
+    int jsy_rx = 18;
 
     // SSR Mode
     String control_mode = "trame";
