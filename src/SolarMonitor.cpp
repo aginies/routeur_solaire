@@ -126,7 +126,13 @@ void SolarMonitor::monitorTask(void* pvParameters) {
         }
 
         // 1. Update Safety (Internal ESP32 temp)
-        TemperatureManager::lastEspTemp = temperatureRead();
+        // Throttled to every 5s to avoid contention with WiFi's internal
+        // temperature sensor reads (SAR ADC spinlock deadlock on ESP32-S3).
+        static uint32_t lastTempRead = 0;
+        if (now - lastTempRead >= 5000 || lastTempRead == 0) {
+            lastTempRead = now;
+            TemperatureManager::lastEspTemp = temperatureRead();
+        }
 
         // 2. Night Mode & Boost Calculation (cached, changes only on minute boundaries)
         if (now - lastNightCheck >= 60000 || lastNightCheck == 0) {

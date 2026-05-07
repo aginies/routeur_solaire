@@ -46,7 +46,7 @@ static volatile int _phaseCalCmdJump = -1;
 static portMUX_TYPE _phaseCalCmdMux = portMUX_INITIALIZER_UNLOCKED;
 
 // Forward declaration: esp_timer callback for calibration sweep SSR pulse
-static void phaseCalFire(void* arg);
+static void IRAM_ATTR phaseCalFire(void* arg);
 
 static inline void IRAM_ATTR ssrSetFromIsr(int pin, bool on) {
     if (pin < 0) return;
@@ -440,6 +440,17 @@ void IRAM_ATTR ControlStrategy::handlePhaseZxInterrupt() {
     }
     xEventGroupSetBitsFromISR(_zxEventGroup, 0x01, &xHigherPriorityTaskWoken);
 
+    // During calibration, skip all duty/SSR logic — the calibration task
+    // drives the SSR via esp_timer independently. This avoids spinlock
+    // contention between the ISR and the timer dispatch task on CPU0.
+    if (_phaseCalActive) {
+        if (_currentTaskHandle != nullptr) {
+            vTaskNotifyGiveFromISR(_currentTaskHandle, &xHigherPriorityTaskWoken);
+        }
+        if (xHigherPriorityTaskWoken) portYIELD_FROM_ISR();
+        return;
+    }
+
     if (ActuatorManager::ssrPin < 0) {
         if (xHigherPriorityTaskWoken) portYIELD_FROM_ISR();
         return;
@@ -565,12 +576,23 @@ void ControlStrategy::phaseControlTask(void* pvParameters) {
 // for the resistive load to settle and the user to read power/temperature.
 
 // esp_timer callback used DURING calibration sweep to fire the SSR at the
-// current step delay.  The task itself controls when the timer fires.
-static void phaseCalFire(void* /*arg*/) {
+// current step delay. Uses direct register write for minimum latency.
+// The 150µs pulse width is sufficient to trigger a TRIAC gate.
+static void IRAM_ATTR phaseCalFire(void* /*arg*/) {
     if (ActuatorManager::ssrPin < 0) return;
-    digitalWrite(ActuatorManager::ssrPin, HIGH);
+    // Use register-level GPIO for speed (same as ssrSetFromIsr)
+    int pin = ActuatorManager::ssrPin;
+    if (pin < 32) {
+        GPIO.out_w1ts = (1UL << pin);
+    } else {
+        GPIO.out1_w1ts.val = (1UL << (pin - 32));
+    }
     delayMicroseconds(150);
-    digitalWrite(ActuatorManager::ssrPin, LOW);
+    if (pin < 32) {
+        GPIO.out_w1tc = (1UL << pin);
+    } else {
+        GPIO.out1_w1tc.val = (1UL << (pin - 32));
+    }
 }
 
 int ControlStrategy::getPhaseCalCurrentDelayUs() {
