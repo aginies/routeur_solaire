@@ -192,30 +192,36 @@ if [ "$ERASE" = true ]; then
 fi
 
 echo "--- 1. Cleaning project ---"
-pio run -e "$PIO_ENV" -t clean
+pio --no-ansi run -e "$PIO_ENV" -t clean -s
 
 if [ "$ERASE" = true ]; then
     echo "--- 1b. Erasing Full Chip (NVS/Flash) ---"
-    pio run -e "$PIO_ENV" -t erase
+    pio --no-ansi run -e "$PIO_ENV" -t erase -s
 fi
 
 echo "--- 2. Building and Uploading Firmware ($PIO_ENV) ---"
-pio run -e "$PIO_ENV" -t upload
+pio --no-ansi run -e "$PIO_ENV" -t upload -s
 
 if [ "$SKIP_FS" = false ]; then
     echo "--- 3a. Compressing HTML assets ---"
     if [ -f "data/compress.sh" ]; then
-        bash data/compress.sh
+        bash data/compress.sh > /dev/null
     else
         echo "Warning: data/compress.sh not found, skipping HTML compression."
     fi
     echo "--- 3b. Building and Uploading Filesystem (LittleFS) ---"
-    pio run -e "$PIO_ENV" -t uploadfs
+    pio --no-ansi run -e "$PIO_ENV" -t uploadfs -s
 fi
 
 echo "--- DONE! ---"
 if [ "$MONITOR" = true ]; then
     echo "Starting Serial Monitor (Press Ctrl+C to stop)..."
     sleep 2
-    pio device monitor -e "$PIO_ENV" --filter time --filter colorize --filter debug
+    # If stdout is redirected (not a TTY), use a cleaner monitor output
+    if [ ! -t 1 ]; then
+        # Raw mode prevents PIO from adding ANSI/CR codes that break file viewing
+        pio device monitor -e "$PIO_ENV" --raw
+    else
+        pio device monitor -e "$PIO_ENV" --filter time --filter colorize --filter debug
+    fi
 fi
