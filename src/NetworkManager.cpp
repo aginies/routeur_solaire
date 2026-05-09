@@ -151,7 +151,9 @@ void NetworkManager::setupAP() {
     WiFi.setSleep(false);
     Logger::info("AP IP: " + WiFi.softAPIP().toString());
     _isAP = true;
-    startCaptivePortal();
+    if (!_config->e_wifi) {
+        startCaptivePortal();
+    }
 }
 
 void NetworkManager::startCaptivePortal() {
@@ -161,11 +163,10 @@ void NetworkManager::startCaptivePortal() {
 
 void NetworkManager::loop() {
     if (_isAP) {
-        // Bug Fix: Only process DNS if NOT connected to STA.
-        // This avoids capturing DNS queries on the home network if both interfaces are up.
-        if (WiFi.status() != WL_CONNECTED) {
+        // Only capture DNS for the captive portal when WiFi is user-disabled.
+        if (_config && !_config->e_wifi) {
             _dnsServer.processNextRequest();
-        } else if (_config && _config->e_wifi) {
+        } else if (WiFi.status() == WL_CONNECTED) {
             // We recovered! Switch back to pure STA mode.
             Logger::info("WiFi recovered, stopping AP fallback");
             _isAP = false;
