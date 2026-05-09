@@ -44,6 +44,7 @@ void NetworkManager::setupSTA() {
 
     // Bug Fix: ensure DNS is stopped and we are in pure STA mode
     _dnsServer.stop();
+    WiFi.softAPdisconnect(true);
     WiFi.mode(WIFI_STA);
 
     if (_config->wifi_static_ip.length() > 0) {
@@ -96,9 +97,9 @@ void NetworkManager::setupSTA() {
     } else {
         // Bug #11: snprintf instead of String + String(int)
         char buf[80];
-        snprintf(buf, sizeof(buf), "Connection failed (Status: %d). Starting Access Point...", (int)WiFi.status());
+        snprintf(buf, sizeof(buf), "Connection failed (Status: %d). Staying in STA mode...", (int)WiFi.status());
         Logger::warn(String(buf));
-        setupAP();
+        // setupAP(); // Feature disabled: no AP fallback
     }
 }
 
@@ -115,14 +116,8 @@ void NetworkManager::setupAP() {
 
     Logger::info("Starting Access Point: " + _config->ap_ssid);
     
-    // Bug Fix: Use AP+STA if we are supposed to be connected to Wi-Fi,
-    // so the background reconnection logic can still function.
     _dnsServer.stop();
-    if (_config->e_wifi) {
-        WiFi.mode(WIFI_AP_STA);
-    } else {
-        WiFi.mode(WIFI_AP);
-    }
+    WiFi.mode(WIFI_AP);
 
     // Bug #3: validate ap_ip; fall back to 192.168.4.1 if malformed.
     IPAddress apIP;
@@ -169,6 +164,7 @@ void NetworkManager::loop() {
             Logger::info("WiFi recovered, stopping AP fallback");
             _isAP = false;
             _dnsServer.stop();
+            WiFi.softAPdisconnect(true);
             WiFi.mode(WIFI_STA);
             _reconnectFailures = 0;
             return;
@@ -197,9 +193,9 @@ void NetworkManager::loop() {
                 WiFi.reconnect();
 
                 if (_reconnectFailures >= RECONNECT_FAILS_BEFORE_AP) {
-                    Logger::error("WiFi reconnect failed " + String(_reconnectFailures) + " times, falling back to AP mode");
+                    Logger::error("WiFi reconnect failed " + String(_reconnectFailures) + " times, continuing attempts...");
                     _reconnectFailures = 0;
-                    setupAP(); // sets _isAP = true
+                    // setupAP(); // Feature disabled: no AP fallback
                 }
             }
         }
