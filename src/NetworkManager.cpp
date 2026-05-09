@@ -23,17 +23,19 @@ void NetworkManager::init(const Config& config) {
     _lastReconnectMs = millis();
     _reconnectFailures = 0;
 
-    // We avoid aggressive disconnect/off here to see if it helps WROOM stability
-    // WiFi.disconnect(true);
-    // WiFi.mode(WIFI_OFF);
-    // delay(100);
+    // Force-disable persistent settings so the SDK doesn't auto-start an AP
+    // that was active during a previous session.
+    WiFi.persistent(false);
+    WiFi.disconnect(true);
+    WiFi.softAPdisconnect(true);
+    WiFi.mode(WIFI_OFF);
+    delay(100);
 
     if (config.e_wifi) {
         setupSTA();
     } else {
-        Logger::warn("WiFi is disabled and AP is also disabled by user request. Network is OFF.");
-        WiFi.mode(WIFI_OFF);
-        // setupAP();
+        Logger::warn("WiFi is disabled by user configuration. Starting fallback AP.");
+        setupAP();
     }
 }
 
@@ -99,22 +101,14 @@ void NetworkManager::setupSTA() {
     } else {
         // Bug #11: snprintf instead of String + String(int)
         char buf[80];
-        snprintf(buf, sizeof(buf), "Connection failed (Status: %d). Staying in STA mode...", (int)WiFi.status());
+        snprintf(buf, sizeof(buf), "Connection failed (Status: %d). Starting fallback AP.", (int)WiFi.status());
         Logger::warn(String(buf));
-        // setupAP(); // Feature disabled: no AP fallback
+        setupAP();
     }
 }
 
 void NetworkManager::setupAP() {
-    Logger::info("Access Point feature is currently DISABLED by user request.");
-    _isAP = false;
-    WiFi.softAPdisconnect(true);
-    WiFi.mode(WIFI_STA); 
-    return;
-}
-
-/*
-void NetworkManager::setupAP_Disabled() {
+    if (_isAP) return;
     if (_config == nullptr) { // Bug #7
         Serial.println("[ERROR] NetworkManager::setupAP called before init");
         return;
@@ -128,7 +122,8 @@ void NetworkManager::setupAP_Disabled() {
     Logger::info("Starting Access Point: " + _config->ap_ssid);
     
     _dnsServer.stop();
-    WiFi.mode(WIFI_AP);
+    // Use WIFI_AP_STA so we can keep trying to connect as STA in background
+    WiFi.mode(WIFI_AP_STA);
 
     // Bug #3: validate ap_ip; fall back to 192.168.4.1 if malformed.
     IPAddress apIP;
@@ -158,7 +153,6 @@ void NetworkManager::setupAP_Disabled() {
     _isAP = true;
     startCaptivePortal();
 }
-*/
 
 void NetworkManager::startCaptivePortal() {
     _dnsServer.start(53, "*", WiFi.softAPIP());
@@ -191,6 +185,13 @@ void NetworkManager::loop() {
     uint32_t now = millis();
     if (now - _lastCheck > 1000) { // Update cache every 1s
         _lastCheck = now;
+
+        // Defensive check: if we are NOT in AP mode, ensure the radio hasn't flipped to AP_STA
+        if (!_isAP && WiFi.getMode() != WIFI_STA) {
+            WiFi.softAPdisconnect(true);
+            WiFi.mode(WIFI_STA);
+        }
+
         _cachedConnected = (WiFi.status() == WL_CONNECTED);
         if (_cachedConnected) {
             _cachedRSSI = WiFi.RSSI();
@@ -205,9 +206,9 @@ void NetworkManager::loop() {
                 WiFi.reconnect();
 
                 if (_reconnectFailures >= RECONNECT_FAILS_BEFORE_AP) {
-                    Logger::error("WiFi reconnect failed " + String(_reconnectFailures) + " times, continuing attempts...");
+                    Logger::error("WiFi reconnect failed " + String(_reconnectFailures) + " times. Starting fallback AP.");
                     _reconnectFailures = 0;
-                    // setupAP(); // Feature disabled: no AP fallback
+                    setupAP();
                 }
             }
         }
