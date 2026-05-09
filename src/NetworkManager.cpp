@@ -31,7 +31,9 @@ void NetworkManager::init(const Config& config) {
     if (config.e_wifi) {
         setupSTA();
     } else {
-        setupAP();
+        Logger::warn("WiFi is disabled and AP is also disabled by user request. Network is OFF.");
+        WiFi.mode(WIFI_OFF);
+        // setupAP();
     }
 }
 
@@ -104,6 +106,15 @@ void NetworkManager::setupSTA() {
 }
 
 void NetworkManager::setupAP() {
+    Logger::info("Access Point feature is currently DISABLED by user request.");
+    _isAP = false;
+    WiFi.softAPdisconnect(true);
+    WiFi.mode(WIFI_STA); 
+    return;
+}
+
+/*
+void NetworkManager::setupAP_Disabled() {
     if (_config == nullptr) { // Bug #7
         Serial.println("[ERROR] NetworkManager::setupAP called before init");
         return;
@@ -147,6 +158,7 @@ void NetworkManager::setupAP() {
     _isAP = true;
     startCaptivePortal();
 }
+*/
 
 void NetworkManager::startCaptivePortal() {
     _dnsServer.start(53, "*", WiFi.softAPIP());
