@@ -41,6 +41,9 @@ void NetworkManager::setupSTA() {
         return;
     }
     Logger::info("Connecting to WiFi SSID: [" + _config->wifi_ssid + "]");
+
+    // Bug Fix: ensure DNS is stopped and we are in pure STA mode
+    _dnsServer.stop();
     WiFi.mode(WIFI_STA);
 
     if (_config->wifi_static_ip.length() > 0) {
@@ -111,7 +114,15 @@ void NetworkManager::setupAP() {
     }
 
     Logger::info("Starting Access Point: " + _config->ap_ssid);
-    WiFi.mode(WIFI_AP);
+    
+    // Bug Fix: Use AP+STA if we are supposed to be connected to Wi-Fi,
+    // so the background reconnection logic can still function.
+    _dnsServer.stop();
+    if (_config->e_wifi) {
+        WiFi.mode(WIFI_AP_STA);
+    } else {
+        WiFi.mode(WIFI_AP);
+    }
 
     // Bug #3: validate ap_ip; fall back to 192.168.4.1 if malformed.
     IPAddress apIP;
@@ -149,11 +160,25 @@ void NetworkManager::startCaptivePortal() {
 
 void NetworkManager::loop() {
     if (_isAP) {
-        _dnsServer.processNextRequest();
-        return;
+        // Bug Fix: Only process DNS if NOT connected to STA.
+        // This avoids capturing DNS queries on the home network if both interfaces are up.
+        if (WiFi.status() != WL_CONNECTED) {
+            _dnsServer.processNextRequest();
+        } else if (_config && _config->e_wifi) {
+            // We recovered! Switch back to pure STA mode.
+            Logger::info("WiFi recovered, stopping AP fallback");
+            _isAP = false;
+            _dnsServer.stop();
+            WiFi.mode(WIFI_STA);
+            _reconnectFailures = 0;
+            return;
+        }
     }
 
     if (_config == nullptr) return; // Bug #7
+
+    // If we are in AP mode and STA is NOT enabled, we have nothing else to do.
+    if (_isAP && !_config->e_wifi) return;
 
     uint32_t now = millis();
     if (now - _lastCheck > 1000) { // Update cache every 1s

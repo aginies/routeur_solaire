@@ -74,7 +74,7 @@
         }
         .overview-row .summary {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
             gap: 16px;
         }
         .stacked-bar-container {
@@ -285,7 +285,11 @@
                     <div class="value" id="totalRedirect">— kWh</div>
                 </div>
                 <div class="stat-box">
-                    <div class="label">Capture Solaire</div>
+                    <div class="label">Taux de Capture</div>
+                    <div class="value" id="captureRate">— %</div>
+                </div>
+                <div class="stat-box">
+                    <div class="label">Durée Active</div>
                     <div class="value" id="activeTime" style="font-size: 1.4em;">—</div>
                 </div>
             </div>
@@ -449,7 +453,6 @@
             if (!chartsAvailable || typeof uPlot === 'undefined') {
                 document.getElementById('cdnErrorBanner').style.display = 'block';
                 document.getElementById('barCard').style.display = 'none';
-                document.getElementById('pieCard').style.display = 'none';
                 return;
             }
             const selectedDate = document.getElementById('statDate').value;
@@ -527,6 +530,7 @@
             document.getElementById('totalImport').textContent   = tImp.toFixed(2) + ' kWh';
             document.getElementById('totalExport').textContent   = tExp.toFixed(2) + ' kWh';
             document.getElementById('totalRedirect').textContent = tRed.toFixed(2) + ' kWh';
+            document.getElementById('captureRate').textContent   = (tExp + tRed) > 0 ? rate.toFixed(1) + '%' : '—';
 
             const hrs  = Math.floor(totalActiveSecs / 3600);
             const mins = Math.floor((totalActiveSecs % 3600) / 60);

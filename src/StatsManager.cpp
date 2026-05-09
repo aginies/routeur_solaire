@@ -25,6 +25,7 @@ float StatsManager::totalRedirectToday = 0;
 float StatsManager::totalExportToday = 0;
 volatile bool StatsManager::_saveRequested = false;
 TaskHandle_t StatsManager::_taskHandle = nullptr;
+static uint32_t _activeTimeMsAccumulator = 0;
 #ifndef NATIVE_TEST
 SemaphoreHandle_t StatsManager::_statsMutex = nullptr;
 #endif
@@ -223,6 +224,7 @@ void StatsManager::update(float gridPower, float equipmentPower, uint32_t interv
             totalImportToday = 0;
             totalRedirectToday = 0;
             totalExportToday = 0;
+            _activeTimeMsAccumulator = 0; // Reset millisecond accumulator for the new day
 
             DailyStats ds;
             ds.import = 0;
@@ -243,7 +245,17 @@ void StatsManager::update(float gridPower, float equipmentPower, uint32_t interv
             ds.export_wh += energyExport;
         }
         ds.redirect += energyRedirect;
-        if (equipmentPower > 10) ds.active_time += (intervalMs / 1000);
+        
+        // Bug Fix: Accumulate milliseconds and only increment active_time (seconds) 
+        // when we cross a full second boundary. Integer division (intervalMs / 1000)
+        // was losing all data for typical ~110ms intervals.
+        if (equipmentPower > 10.0f) {
+            _activeTimeMsAccumulator += intervalMs;
+            if (_activeTimeMsAccumulator >= 1000) {
+                ds.active_time += (_activeTimeMsAccumulator / 1000);
+                _activeTimeMsAccumulator %= 1000;
+            }
+        }
 
         if (hour >= 0 && hour < 24) {
             ds.h_import[hour] += energyImport;
