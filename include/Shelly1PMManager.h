@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <WiFiClient.h>
 #include <HTTPClient.h>
+#include <atomic>
 #include "Config.h"
 
 struct Shelly1PMDevice {
@@ -25,11 +26,16 @@ public:
     static bool isRelayOn();
     static float getPower();
     
+    // Asynchronous control
+    static void requestTurnOn();
+    static void requestTurnOff();
+
     // EQ1 (Ballon) - new interface
     static float getPowerEq1();
     static bool hasValidEq1Data();
 
-    static void update(); // Refresh both
+    static void update(); // Process MQTT handover (non-blocking)
+    static void performBackgroundHttpUpdate(); // Actual HTTP polling & actions (blocking, for background task)
 
 private:
     static WiFiClient _client;
@@ -37,6 +43,9 @@ private:
     static const Config* _config;
     static Shelly1PMDevice _dev1; // EQ1
     static Shelly1PMDevice _dev2; // EQ2
+    
+    enum class Action { NONE, TURN_ON, TURN_OFF };
+    static std::atomic<Action> _pendingAction;
 
     static void updateDevice(Shelly1PMDevice& dev, const String& ip, int index);
 };

@@ -566,7 +566,8 @@ void WebManager::setupRoutes() {
         Eq2State s = Equipment2Manager::getState();
         String stateStr = "OFF";
         if (s == Eq2State::ON) stateStr = "MARCHE";
-        else if (s == Eq2State::PENDING_OFF) stateStr = "ARRÊT IMMINENT";
+        else if (s == Eq2State::PENDING_OFF || s == Eq2State::PENDING_OFF_DELAY) stateStr = "ARRÊT IMMINENT";
+        else if (s == Eq2State::PENDING_ON) stateStr = "MARCHE IMMINENTE";
         doc["state"] = stateStr;
         doc["power"] = Shelly1PMManager::getPower();
         doc["min_time"] = Equipment2Manager::getRemainingMinTime();
@@ -874,7 +875,7 @@ void WebManager::setupRoutes() {
 void WebManager::streamStatusJson(AsyncWebServerRequest *request) {
     AsyncResponseStream *response = request->beginResponseStream("application/json");
     JsonDocument doc;
-    doc["grid_power"] = GridSensorService::currentGridPower;
+    doc["grid_power"] = GridSensorService::currentGridPower.load();
     doc["equipment_power"] = ActuatorManager::equipmentPower;
     doc["eq1_real_power"] = Shelly1PMManager::getPowerEq1();
     doc["equip2_power"] = Shelly1PMManager::getPower();

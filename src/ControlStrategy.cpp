@@ -759,7 +759,7 @@ void ControlStrategy::phaseCalibrateTask(void* pvParameters) {
                 reads++;
                 if (reads > SETTLE_SAMPLES) {
                     // Start accumulating after settle period
-                    gridAcc += GridSensorService::currentGridPower;
+                    gridAcc += GridSensorService::currentGridPower.load();
                     eqAcc += ActuatorManager::equipmentPower;
                 }
                 if (reads >= SETTLE_SAMPLES * 2) {

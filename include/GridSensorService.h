@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <WiFiClient.h>
 #include <HTTPClient.h>
+#include <atomic>
 #include "Config.h"
 
 class GridSensorService {
@@ -20,12 +21,22 @@ public:
     static bool isEquip1SourceJsy2();
     static float currentEquip1PowerFromJsy;
 
-    static float currentGridPower;
+    static std::atomic<float> currentGridPower;
     static float currentGridVoltage;
-    static bool hasFreshData;
+    static std::atomic<bool> hasFreshData;
+
+    static void startBackgroundPoll();
+    static void stopBackgroundPoll();
 
 private:
-    static bool readJSY(HardwareSerial* serial, float& p1, float& p2);
+    struct JsyState {
+        enum { IDLE, WAITING } state = IDLE;
+        uint32_t queryTime = 0;
+    };
+
+    static void networkPollTask(void* pvParameters);
+    static float fetchShellyHttpData();
+    static bool pollJSY(HardwareSerial* serial, JsyState& state, float& p1, float& p2);
     static uint16_t calculateCRC(uint8_t *array, uint8_t len);
 
     static WiFiClient _client;
@@ -34,6 +45,9 @@ private:
     static const Config* _config;
     static HardwareSerial* _jsy1Serial;
     static HardwareSerial* _jsy2Serial;
+    static JsyState _jsy1State;
+    static JsyState _jsy2State;
+    static TaskHandle_t _pollTaskHandle;
 };
 
 #endif

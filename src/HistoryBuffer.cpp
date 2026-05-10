@@ -162,7 +162,7 @@ void HistoryBuffer::historyTask(void* pvParameters) {
         if (now > 1600000000 && powerHistory && _dataMutex && xSemaphoreTake(_dataMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
             PowerPoint p = {
                 (uint32_t)now,
-                GridSensorService::currentGridPower,
+                GridSensorService::currentGridPower.load(),
                 ActuatorManager::equipmentPower,
                 Shelly1PMManager::getPower(),
                 Shelly1PMManager::getPowerEq1(),
