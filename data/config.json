@@ -80,7 +80,7 @@
     "e_ssr_temp": true,
     "ssr_max_temp": 65.0,
 
-    "e_fan": true,
+    "e_fan": false,
     "fan_temp_offset": 10,
 
     "jsy1_tx": 5,

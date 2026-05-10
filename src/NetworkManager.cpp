@@ -131,7 +131,12 @@ void NetworkManager::setupAP() {
         Logger::warn("Invalid ap_ip '" + _config->ap_ip + "', falling back to 192.168.4.1");
         apIP = IPAddress(192, 168, 4, 1);
     }
-    if (!WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0))) {
+    // When e_wifi is true, this AP is only a temporary fallback for the web UI.
+    // Set the gateway to the AP IP only when we want captive portal behaviour
+    // (e_wifi disabled). Otherwise set gateway to 0.0.0.0 so the DHCP server
+    // does NOT advertise the ESP as the DNS server to connecting stations.
+    IPAddress gw = _config->e_wifi ? IPAddress(0, 0, 0, 0) : apIP;
+    if (!WiFi.softAPConfig(apIP, gw, IPAddress(255, 255, 255, 0))) {
         Logger::warn("softAPConfig failed");
     }
 
@@ -175,6 +180,10 @@ void NetworkManager::loop() {
             WiFi.mode(WIFI_STA);
             _reconnectFailures = 0;
             return;
+        } else {
+            // e_wifi is true but STA not yet recovered: ensure captive DNS
+            // is definitely not running (defensive against config changes).
+            _dnsServer.stop();
         }
     }
 
