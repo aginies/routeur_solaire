@@ -92,7 +92,7 @@ The system can be fully configured via the web interface. Below is a detailed br
 
 ### General & Connectivity
 - **System Name & Timezone**: Basic identification and local time synchronization (crucial for logs and night mode).
-- **WiFi Setup**: Support for Client mode (connecting to your router) or Access Point mode. Supports Static IP configuration.
+- **WiFi Setup**: Support for Client mode (connecting to your router) or Access Point mode. Supports Static IP configuration. If the configured Wi-Fi is unreachable for more than 2 minutes, the device automatically starts a fallback Access Point (`W_Solaire`) while continuing to attempt background reconnection (`WIFI_AP_STA` mode).
 - **Grid Measure Source (`grid_measure_source`)**:
     - `shelly`: Shelly EM (WiFi HTTP/MQTT)
     - `jsy`: JSY-MK-194 (wired UART)
@@ -568,7 +568,7 @@ Home Assistant entities not appearing after enabling MQTT:
 Check serial log for `task_wdt: Task watchdog got triggered`. This usually means a task exceeded its 60-second execution window. Common causes:
 - Shelly HTTP timeout too long (use `--erase` to reset to defaults).
 - `MAX_STATS_DAYS` very large (365) — `stats.json` save can take several seconds.
-- Network instability causing `WiFi.reconnect()` to flood (default is every 1 second).
+- Network instability causing `WiFi.reconnect()` to flood (default is every 10 seconds).
 
 ### Eq2 Never Turns On
 If Equipment 2 (priority=1) never activates:
@@ -582,7 +582,6 @@ If Equipment 2 (priority=1) never activates:
 ## Known Limitations
 
 - **Controller Deadzone**: When `max_duty_percent < 95%`, Equipment 2 priority-1 mode (water heater first) is unreachable since the equation heater can never reach 95% duty cycle.
-- **Stats JSON Iteration**: Historical stats loaded from `stats.json` on boot use JSON key iteration order which is not guaranteed chronological. The oldest-by-key entries survive, not necessarily the oldest-by-time entries.
 - **Burst Mode SSR Compatibility**: Burst mode ignores zero-crossing — use only with true zero-crossing SSRs to avoid EMI and contact wear.
 - **WROOM Feature Parity**: The WROOM environment (`esp32dev`) completely disables stats, history, and data logging. Use ESP32-S3 for full feature set.
 - **Config Serialization Drift**: Config save/load manually maps ~100 fields between JSON and the `Config` struct. Adding a field to `Config` may require updating both `ConfigManager::load()` and `ConfigManager::save()`.

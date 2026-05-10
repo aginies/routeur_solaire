@@ -192,25 +192,26 @@ if [ "$ERASE" = true ]; then
 fi
 
 echo "--- 1. Cleaning project ---"
-pio --no-ansi run -e "$PIO_ENV" -t clean -s
+pio --no-ansi run -e "$PIO_ENV" -t clean
 
 if [ "$ERASE" = true ]; then
     echo "--- 1b. Erasing Full Chip (NVS/Flash) ---"
-    pio --no-ansi run -e "$PIO_ENV" -t erase -s
+    pio --no-ansi run -e "$PIO_ENV" -t erase
 fi
 
 echo "--- 2. Building and Uploading Firmware ($PIO_ENV) ---"
-pio --no-ansi run -e "$PIO_ENV" -t upload -s
+echo "    Hardware: ESP32-S3 Variant: $VARIANT (Flash: ${FLASH:-default}MB, PSRAM: ${PSRAM:-none}MB)"
+pio --no-ansi run -e "$PIO_ENV" -t upload
 
 if [ "$SKIP_FS" = false ]; then
     echo "--- 3a. Compressing HTML assets ---"
     if [ -f "data/compress.sh" ]; then
-        bash data/compress.sh > /dev/null
+        bash data/compress.sh
     else
         echo "Warning: data/compress.sh not found, skipping HTML compression."
     fi
     echo "--- 3b. Building and Uploading Filesystem (LittleFS) ---"
-    pio --no-ansi run -e "$PIO_ENV" -t uploadfs -s
+    pio --no-ansi run -e "$PIO_ENV" -t uploadfs
 fi
 
 echo "--- DONE! ---"

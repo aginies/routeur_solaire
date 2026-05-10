@@ -165,12 +165,13 @@ struct Config {
     int shelly_timeout = 2;
     int safety_timeout = 10;
 
-    // JSY-MK-194
-    int jsy_uart_id = 2;
+    // JSY-MK-194 (Two hardware UARTs supported)
+    int jsy1_tx = 5;
+    int jsy1_rx = 4;
+    int jsy2_tx = 17;
+    int jsy2_rx = 16;
     int jsy_grid_channel = 1;
     int jsy_equip1_channel = 2;
-    int jsy_tx = 17;
-    int jsy_rx = 18;
 
     // SSR Mode
     String control_mode = "trame";

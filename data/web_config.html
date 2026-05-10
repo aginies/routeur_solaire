@@ -316,7 +316,8 @@
                         <label for="GRID_SENSOR_SOURCE">Source mesure réseau:</label>
                         <select id="GRID_SENSOR_SOURCE" name="GRID_MEASURE_SOURCE">
                             <option value="shelly">Shelly EM (WiFi)</option>
-                            <option value="jsy">JSY-MK-194 (UART)</option>
+                            <option value="jsy1">JSY1-MK-194 (UART1)</option>
+                            <option value="jsy2">JSY2-MK-194 (UART2)</option>
                         </select>
                     </div>
 
@@ -359,10 +360,28 @@
                     </div>
 
                     <div id="gridSourceJsy">
-                        <h3>JSY-MK-194 (UART)</h3>
-                        <div class="form-group">
-                            <label for="JSY_UART_ID">UART ID:</label>
-                            <input type="number" min="1" max="2" id="JSY_UART_ID" name="JSY_UART_ID">
+                        <h3>Configuration JSY-MK-194 (UART)</h3>
+                        <div style="background:#2c3e50; padding:15px; border-radius:8px; margin-bottom:15px;">
+                            <h4 style="margin-top:0;">JSY 1 (UART 1)</h4>
+                            <div class="form-group">
+                                <label for="JSY1_TX">GPIO Pin TX:</label>
+                                <input type="number" min="0" max="48" id="JSY1_TX" name="JSY1_TX">
+                            </div>
+                            <div class="form-group">
+                                <label for="JSY1_RX">GPIO Pin RX:</label>
+                                <input type="number" min="0" max="48" id="JSY1_RX" name="JSY1_RX">
+                            </div>
+                        </div>
+                        <div style="background:#2c3e50; padding:15px; border-radius:8px; margin-bottom:15px;">
+                            <h4 style="margin-top:0;">JSY 2 (UART 2)</h4>
+                            <div class="form-group">
+                                <label for="JSY2_TX">GPIO Pin TX:</label>
+                                <input type="number" min="0" max="48" id="JSY2_TX" name="JSY2_TX">
+                            </div>
+                            <div class="form-group">
+                                <label for="JSY2_RX">GPIO Pin RX:</label>
+                                <input type="number" min="0" max="48" id="JSY2_RX" name="JSY2_RX">
+                            </div>
                         </div>
                         <div class="form-group">
                             <label for="JSY_GRID_CHANNEL">Canal JSY réseau:</label>
@@ -370,14 +389,6 @@
                                 <option value="1">Canal 1</option>
                                 <option value="2">Canal 2</option>
                             </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="JSY_TX">GPIO Pin TX:</label>
-                            <input type="number" min="0" max="48" id="JSY_TX" name="JSY_TX">
-                        </div>
-                        <div class="form-group">
-                            <label for="JSY_RX">GPIO Pin RX:</label>
-                            <input type="number" min="0" max="48" id="JSY_RX" name="JSY_RX">
                         </div>
                     </div>
 
@@ -439,7 +450,8 @@
                         <label for="EQUIP1_MEASURE_SOURCE">Source mesure Equipement 1:</label>
                         <select id="EQUIP1_MEASURE_SOURCE" name="EQUIP1_MEASURE_SOURCE">
                             <option value="shelly">Shelly</option>
-                            <option value="jsy">JSY-MK-194</option>
+                            <option value="jsy1">JSY1-MK-194 (UART1)</option>
+                            <option value="jsy2">JSY2-MK-194 (UART2)</option>
                         </select>
                     </div>
 
@@ -844,7 +856,8 @@
             var shellyBox = document.getElementById('gridSourceShelly');
             var jsyBox = document.getElementById('gridSourceJsy');
             if (!srcEl || !shellyBox || !jsyBox) return;
-            var useJsy = (srcEl.value === 'jsy');
+            var src = srcEl.value;
+            var useJsy = (src === 'jsy1' || src === 'jsy2' || src === 'jsy');
             shellyBox.style.display = useJsy ? 'none' : '';
             jsyBox.style.display = useJsy ? '' : 'none';
         }
@@ -855,8 +868,9 @@
             var jsyBox = document.getElementById('equip1SourceJsy');
             if (!srcEl || !shellyBox || !jsyBox) return;
             var src = srcEl.value;
-            shellyBox.style.display = (src === 'shelly') ? '' : 'none';
-            jsyBox.style.display = (src === 'jsy') ? '' : 'none';
+            var useJsy = (src === 'jsy1' || src === 'jsy2' || src === 'jsy');
+            shellyBox.style.display = useJsy ? 'none' : '';
+            jsyBox.style.display = useJsy ? '' : 'none';
         }
 
         function updateWifiIPModeUI() {
@@ -955,11 +969,12 @@
                 setVal('FORCE_END',c.force_end);
                 setVal('NIGHT_POLL_INTERVAL',c.night_poll_interval);
                 setVal('GRID_SENSOR_SOURCE', c.grid_measure_source !== undefined ? c.grid_measure_source : 'shelly');
-                setVal('JSY_UART_ID',c.jsy_uart_id);
                 setVal('JSY_GRID_CHANNEL', c.jsy_grid_channel !== undefined ? c.jsy_grid_channel : 1);
                 setVal('JSY_EQUIP1_CHANNEL', c.jsy_equip1_channel !== undefined ? c.jsy_equip1_channel : 2);
-                setVal('JSY_TX',c.jsy_tx);
-                setVal('JSY_RX',c.jsy_rx);
+                setVal('JSY1_TX',c.jsy1_tx);
+                setVal('JSY1_RX',c.jsy1_rx);
+                setVal('JSY2_TX',c.jsy2_tx);
+                setVal('JSY2_RX',c.jsy2_rx);
                 setVal('ZX_PIN',c.zx_pin);
                 setVal('CONTROL_MODE',c.control_mode);
                 updateRegulationModeUI();

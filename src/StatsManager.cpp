@@ -10,6 +10,8 @@
 #endif
 #include <time.h>
 #include <cmath>
+#include <vector>
+#include <algorithm>
 
 #ifdef NATIVE_TEST
 #define millis() 0
@@ -135,30 +137,38 @@ void StatsManager::init() {
 
     JsonObject obj = doc.as<JsonObject>();
     int total = obj.size();
-    // Bug #1: keep last MAX_STATS_DAYS entries; previous formula off-by-one.
-    // We want to skip the first (total - MAX_STATS_DAYS) entries.
+
+    // Chronological sorting of keys to ensure only the oldest entries are pruned.
+    // JSON iteration order is not guaranteed.
+    std::vector<String> keys;
+    keys.reserve(total);
+    for (JsonPair p : obj) {
+        keys.push_back(String(p.key().c_str()));
+    }
+    std::sort(keys.begin(), keys.end());
+
     int skipFirst = (total > MAX_STATS_DAYS) ? (total - MAX_STATS_DAYS) : 0;
 
-    int idx = 0;
-    for (JsonPair p : obj) {
-        if (idx++ < skipFirst) continue;
+    for (int i = skipFirst; i < total; i++) {
+        const String& key = keys[i];
+        JsonObject val = obj[key];
 
         DailyStats ds;
-        ds.import = p.value()["import"];
-        ds.redirect = p.value()["redirect"];
-        ds.export_wh = p.value()["export"];
-        ds.active_time = p.value()["active_time"];
+        ds.import = val["import"];
+        ds.redirect = val["redirect"];
+        ds.export_wh = val["export"];
+        ds.active_time = val["active_time"];
 
-        JsonArray h_imp = p.value()["h_import"];
-        JsonArray h_red = p.value()["h_redirect"];
-        JsonArray h_exp = p.value()["h_export"];
+        JsonArray h_imp = val["h_import"];
+        JsonArray h_red = val["h_redirect"];
+        JsonArray h_exp = val["h_export"];
 
-        for (int i = 0; i < 24; i++) {
-            ds.h_import[i] = h_imp[i] | 0.0f;
-            ds.h_redirect[i] = h_red[i] | 0.0f;
-            ds.h_export[i] = h_exp[i] | 0.0f;
+        for (int j = 0; j < 24; j++) {
+            ds.h_import[j] = h_imp[j] | 0.0f;
+            ds.h_redirect[j] = h_red[j] | 0.0f;
+            ds.h_export[j] = h_exp[j] | 0.0f;
         }
-        _history[p.key().c_str()] = ds;
+        _history[key.c_str()] = ds;
     }
 
     // Bug #1 (continued): Today's entry — preserve hourly bins from JSON; only override

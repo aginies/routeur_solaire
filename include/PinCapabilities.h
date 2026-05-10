@@ -10,8 +10,10 @@ enum class PinRole {
     ZX_INPUT,
     DS18B20,
     INTERNAL_LED,
-    JSY_TX,
-    JSY_RX,
+    JSY1_TX,
+    JSY1_RX,
+    JSY2_TX,
+    JSY2_RX,
 };
 
 bool isPinValidForRole(int pin, PinRole role);

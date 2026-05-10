@@ -348,7 +348,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
                     if (Shelly1PMManager::hasValidEq1Data()) {
                         ActuatorManager::equipmentPower = Shelly1PMManager::getPowerEq1();
                     }
-                } else if (_config->equip1_measure_source == "jsy") {
+                } else if (GridSensorService::isEquip1SourceJsy1() || GridSensorService::isEquip1SourceJsy2()) {
                     ActuatorManager::equipmentPower = GridSensorService::currentEquip1PowerFromJsy;
                 }
             }

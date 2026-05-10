@@ -95,7 +95,8 @@ void WebManager::applyRequestParams(AsyncWebServerRequest *request, Config &cfg)
     if (has("SHELLY_MQTT_TOPIC")) cfg.shelly_mqtt_topic = get("SHELLY_MQTT_TOPIC").substring(0, 128);
     if (has("GRID_MEASURE_SOURCE")) {
         String s = get("GRID_MEASURE_SOURCE");
-        if (s == "jsy" || s == "shelly") cfg.grid_measure_source = s;
+        if (s == "jsy1" || s == "jsy2" || s == "shelly") cfg.grid_measure_source = s;
+        else if (s == "jsy") cfg.grid_measure_source = "jsy1";
     }
     // Bug #15: these four fields are in SECONDS (code multiplies by 1000 before
     // comparing against millis()/setTimeout()). The previous clamp ranges
@@ -116,7 +117,8 @@ void WebManager::applyRequestParams(AsyncWebServerRequest *request, Config &cfg)
     if (has("EQUIP1_MQTT_TOPIC")) cfg.equip1_mqtt_topic = get("EQUIP1_MQTT_TOPIC").substring(0, 128);
     if (has("EQUIP1_MEASURE_SOURCE")) {
         String s = get("EQUIP1_MEASURE_SOURCE");
-        if (s == "shelly" || s == "jsy") cfg.equip1_measure_source = s;
+        if (s == "shelly" || s == "jsy1" || s == "jsy2") cfg.equip1_measure_source = s;
+        else if (s == "jsy") cfg.equip1_measure_source = "jsy1";
     }
 
     // Equipment 2
@@ -161,11 +163,12 @@ void WebManager::applyRequestParams(AsyncWebServerRequest *request, Config &cfg)
     if (has("PHASE_CAL_HOLD_MS")) cfg.phase_cal_hold_ms = clampInt(get("PHASE_CAL_HOLD_MS").toInt(), 1000, 30000);
 
     // JSY
-    if (has("JSY_UART_ID")) cfg.jsy_uart_id = clampInt(get("JSY_UART_ID").toInt(), 1, 2);
+    if (has("JSY1_TX")) setRolePin(cfg.jsy1_tx, get("JSY1_TX").toInt(), PinRole::JSY1_TX);
+    if (has("JSY1_RX")) setRolePin(cfg.jsy1_rx, get("JSY1_RX").toInt(), PinRole::JSY1_RX);
+    if (has("JSY2_TX")) setRolePin(cfg.jsy2_tx, get("JSY2_TX").toInt(), PinRole::JSY2_TX);
+    if (has("JSY2_RX")) setRolePin(cfg.jsy2_rx, get("JSY2_RX").toInt(), PinRole::JSY2_RX);
     if (has("JSY_GRID_CHANNEL")) cfg.jsy_grid_channel = clampInt(get("JSY_GRID_CHANNEL").toInt(), 1, 2);
     if (has("JSY_EQUIP1_CHANNEL")) cfg.jsy_equip1_channel = clampInt(get("JSY_EQUIP1_CHANNEL").toInt(), 1, 2);
-    if (has("JSY_TX")) setRolePin(cfg.jsy_tx, get("JSY_TX").toInt(), PinRole::JSY_TX);
-    if (has("JSY_RX")) setRolePin(cfg.jsy_rx, get("JSY_RX").toInt(), PinRole::JSY_RX);
 
     // Force / Night
     if (has("BOOST_MINUTES")) cfg.boost_minutes = get("BOOST_MINUTES").toInt();
@@ -262,15 +265,18 @@ void WebManager::setupRoutes() {
         sendLogSnapshot(request, "/solar_data.txt", "solar_data.txt", "Data file not found");
     });
 
-    _server.on("/get_log_action", HTTP_GET, [](AsyncWebServerRequest *request) {
+    _server.on("/get_log_action", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
         Logger::streamLogs(request);
     });
 
-    _server.on("/get_solar_data", HTTP_GET, [](AsyncWebServerRequest *request) {
+    _server.on("/get_solar_data", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
         Logger::streamDataLogs(request);
     });
 
-    _server.on("/weather_refresh", HTTP_GET, [](AsyncWebServerRequest *request) {
+    _server.on("/weather_refresh", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
         WeatherManager::forceUpdate();
         request->send(200, "text/plain", "OK");
     });
@@ -633,11 +639,12 @@ void WebManager::setupRoutes() {
         doc["force_start"] = _config->force_start;
         doc["force_end"] = _config->force_end;
         doc["night_poll_interval"] = _config->night_poll_interval;
-        doc["jsy_uart_id"] = _config->jsy_uart_id;
+        doc["jsy1_tx"] = _config->jsy1_tx;
+        doc["jsy1_rx"] = _config->jsy1_rx;
+        doc["jsy2_tx"] = _config->jsy2_tx;
+        doc["jsy2_rx"] = _config->jsy2_rx;
         doc["jsy_grid_channel"] = _config->jsy_grid_channel;
         doc["jsy_equip1_channel"] = _config->jsy_equip1_channel;
-        doc["jsy_tx"] = _config->jsy_tx;
-        doc["jsy_rx"] = _config->jsy_rx;
         doc["zx_pin"] = _config->zx_pin;
         doc["control_mode"] = _config->control_mode;
         // Phase-angle calibration settings
@@ -853,11 +860,13 @@ void WebManager::setupRoutes() {
         request->send(200, "application/json", result);
     });
 
-    _server.on("/status", HTTP_GET, [](AsyncWebServerRequest *request) {
+    _server.on("/status", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
         streamStatusJson(request);
     });
 
-    _server.on("/history", HTTP_GET, [](AsyncWebServerRequest *request) {
+    _server.on("/history", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
         HistoryBuffer::streamHistoryJson(request);
     });
 }
@@ -917,8 +926,10 @@ void WebManager::streamStatusJson(AsyncWebServerRequest *request) {
 
     doc["esp_temp"] = cachedEspTemp;
 
-    if (_config->grid_measure_source == "jsy") {
-        doc["grid_source"] = "JSY";
+    if (_config->grid_measure_source == "jsy1" || _config->grid_measure_source == "jsy") {
+        doc["grid_source"] = "JSY1";
+    } else if (_config->grid_measure_source == "jsy2") {
+        doc["grid_source"] = "JSY2";
     } else {
         doc["grid_source"] = _config->e_shelly_mqtt ? "MQTT" : "HTTP";
     }
@@ -997,8 +1008,10 @@ void WebManager::streamStatusJson(AsyncWebServerRequest *request) {
     addPinValidation("zx_pin", _config->zx_pin, PinRole::ZX_INPUT);
     addPinValidation("ds18b20_pin", _config->ds18b20_pin, PinRole::DS18B20);
     addPinValidation("internal_led_pin", _config->internal_led_pin, PinRole::INTERNAL_LED);
-    addPinValidation("jsy_tx", _config->jsy_tx, PinRole::JSY_TX);
-    addPinValidation("jsy_rx", _config->jsy_rx, PinRole::JSY_RX);
+    addPinValidation("jsy1_tx", _config->jsy1_tx, PinRole::JSY1_TX);
+    addPinValidation("jsy1_rx", _config->jsy1_rx, PinRole::JSY1_RX);
+    addPinValidation("jsy2_tx", _config->jsy2_tx, PinRole::JSY2_TX);
+    addPinValidation("jsy2_rx", _config->jsy2_rx, PinRole::JSY2_RX);
     doc["pin_validation_ok"] = allPinsValid;
     
     time_t t_now_epoch;

@@ -83,11 +83,12 @@
     "e_fan": true,
     "fan_temp_offset": 10,
 
-    "jsy_uart_id": 1,
+    "jsy1_tx": 5,
+    "jsy1_rx": 4,
+    "jsy2_tx": 17,
+    "jsy2_rx": 16,
     "jsy_grid_channel": 1,
     "jsy_equip1_channel": 2,
-    "jsy_tx": 5,
-    "jsy_rx": 4,
 
     "control_mode": "trame",
     "half_period_us": 9900,
