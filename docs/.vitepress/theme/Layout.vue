@@ -18,54 +18,78 @@ onMounted(() => {
   `
   heroContainer.insertBefore(wrapper, heroContainer.firstChild)
 
-  // --- Particle canvas — radial spread from sun (x=72%, y=-80px) ---
+  // --- Particle canvas — mini circles spreading from sun center outward, synced with sun brightness ---
   const canvasEl = document.getElementById('particleCanvas')
   if (!canvasEl) return
+
+  function resize() {
+    const cw = Math.max(heroContainer.clientWidth, window.innerWidth * 0.6, 400)
+    const ch = Math.max(heroContainer.clientHeight, window.innerHeight * 0.8, 350)
+    canvasEl.width = cw; canvasEl.height = ch
+    canvasEl.style.width = cw + 'px'; canvasEl.style.height = ch + 'px'
+  }
+
+  setTimeout(resize, 80); resize()
+  window.addEventListener('resize', resize)
+
+  const ctx = canvasEl.getContext('2d')
+  if (!ctx) return
+
   let rafId = null
   const particles = []
+  // Sync: the sun's opacity oscillates ~70s cycle with specific peaks
+  function sunAlpha(now) {
+    const t = (now / 1000) % 70   /* match sunPulse 70s period */
+    if (t < 14) return 0.28 + (0.58 - 0.28) * (t / 14)
+    if (t < 27) return 0.58 - (0.58 - 0.18) * ((t - 14) / 13)
+    if (t < 44) return 0.18 + (0.78 - 0.18) * ((t - 27) / 17)
+    if (t < 56) return 0.78 - (0.78 - 0.12) * ((t - 44) / 12)
+    if (t < 72) return 0.12 + (0.82 - 0.12) * ((t - 56) / 16)
+    /* t >= 72: from 0.82 back to 0.34 */
+    return 0.82 - (0.82 - 0.34) * ((t - 72) / (70 - 72 + 14))   // wraps smoothly
+  }
 
   function initP(p) {
+    // Spawn right at the sun center (x=72% of canvas width, y=-80px)
     const sx = canvasEl.width * 0.72
-    const sy = -80
-    p.x = sx + (Math.random() - 0.5) * 24
-    p.y = sy + (Math.random() - 0.5) * 16
+    const sy = -80 + 260
+    p.x = sx; p.y = sy
+    // Random direction — full circle
     const a = Math.random() * Math.PI * 2
-    const spd = 0.3 + Math.random() * 2.8
-    p.vx = Math.cos(a) * spd; p.vy = Math.sin(a) * spd
-    p.life = 0; p.ml = 150 + (Math.random() * 90 | 0)
+    // Speed outward from center (not purely radial, just directional)
+    const spd = 0.8 + Math.random() * 1.5
+    p.vx = Math.cos(a) * spd
+    p.vy = Math.sin(a) * spd
+    p.life = 0
+    p.ml = 250 + Math.random() * 300 | 0   // ~4-8 seconds at 60fps
   }
 
   function drawP(ctx, p) {
-    const t = Math.min(p.life / p.ml, 1)
-    const alpha = t < 0.1 ? t * 10 : t > 0.65 ? 1 - ((t - 0.65) / 0.35) : 1
-    if (alpha <= 0.01) return
+    if (p.life >= p.ml) return
+    const t = p.life / p.ml   // 0→1 over lifetime
+    const sunBright = sunAlpha(Date.now())
+    const alpha = sunBright * (1 - t * 0.45)   // particles breathe with the sun, fade as they travel outward
     ctx.save()
-    ctx.globalAlpha = alpha * 0.8
-    const r = 2 + t * 3
+    ctx.globalAlpha = alpha
+    // Mini circle — constant radius, no glow
     ctx.fillStyle = '#f0c040'
-    ctx.shadowColor = '#f0c040'
-    ctx.shadowBlur = 10
     ctx.beginPath()
-    ctx.arc(p.x, p.y, r, 0, Math.PI * 2)
+    ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2)
     ctx.fill()
     ctx.restore()
   }
 
   function loop() {
-    const w = canvasEl.width, h = canvasEl.height
-    // Clear + draw all particles
-    for (const p of particles) { if (p.life >= p.ml) initP(p); drawP(ctx, p); p.x += p.vx; p.y += p.vy; p.life++ }
+    ctx.clearRect(0, 0, canvasEl.width, canvasEl.height)   // wipe before each frame
+    for (const p of particles) {
+      if (p.life >= p.ml) initP(p)   // recycle: send back to sun center
+      drawP(ctx, p); p.x += p.vx; p.y += p.vy; p.life++
+    }
     rafId = requestAnimationFrame(loop)
   }
 
-  // Handle resize
-  function resize() { canvasEl.width = heroContainer.clientWidth || 800; canvasEl.height = heroContainer.clientHeight || 600 }
-
-  // Get canvas context for drawing particles
-  const ctx = canvasEl.getContext('2d')
-  if (!ctx) return
-  window.addEventListener('resize', resize); resize()
-  for (const p of particles) initP(p)
+  // Start with a full batch so we see them moving outwards immediately
+  for (let i = 0; i < 120; i++) { const p = {}; initP(p); particles.push(p); p.life = Math.random() * 350 | 0 }
   rafId = requestAnimationFrame(loop)
 })
 
@@ -180,6 +204,8 @@ onMounted(() => {
   pointer-events: none;
   overflow: visible !important;
   z-index: 100 !important;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 /* ── License badge — at bottom of page ───────── */
