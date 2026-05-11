@@ -57,11 +57,11 @@ onMounted(() => {
     // Random direction — full circle
     const a = Math.random() * Math.PI * 2
     // Speed outward from center (not purely radial, just directional)
-    const spd = 0.8 + Math.random() * 1.5
+    const spd = 0.15 + Math.random() * 0.3
     p.vx = Math.cos(a) * spd
     p.vy = Math.sin(a) * spd
     p.life = 0
-    p.ml = 250 + Math.random() * 300 | 0   // ~4-8 seconds at 60fps
+    p.ml = 600 + Math.random() * 400 | 0   // ~10-17 seconds at 60fps — slower particles live longer
   }
 
   function drawP(ctx, p) {
@@ -89,7 +89,7 @@ onMounted(() => {
   }
 
   // Start with a full batch so we see them moving outwards immediately
-  for (let i = 0; i < 120; i++) { const p = {}; initP(p); particles.push(p); p.life = Math.random() * 350 | 0 }
+  for (let i = 0; i < 120; i++) { const p = {}; initP(p); particles.push(p); p.life = Math.random() * 700 | 0 }
   rafId = requestAnimationFrame(loop)
 })
 
