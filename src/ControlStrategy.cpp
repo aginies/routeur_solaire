@@ -24,6 +24,7 @@ static volatile bool _phaseCancelPending = false;
 EventGroupHandle_t ControlStrategy::_zxEventGroup = nullptr;
 TaskHandle_t ControlStrategy::_currentTaskHandle = nullptr;
 esp_timer_handle_t ControlStrategy::_phaseTimer = nullptr;
+static bool _isrAttached = false;
 
 // Phase-calibration sweep state (always volatile — accessed from multiple tasks)
 static volatile bool _phaseCalActive = false;
@@ -170,8 +171,9 @@ void ControlStrategy::setDutyMilli(uint32_t dutyMilli) {
 }
 
 void ControlStrategy::stopTasks() {
-    if (_config) {
+    if (_config && _isrAttached) {
         detachInterrupt(digitalPinToInterrupt(_config->zx_pin));
+        _isrAttached = false;
     }
 
     if (_currentTaskHandle != nullptr) {
@@ -235,6 +237,7 @@ void ControlStrategy::startTasks() {
     } else if (_config->control_mode == "cycle_stealing" || _config->control_mode == "zero_crossing" || _config->control_mode == "trame") {
         pinMode(_config->zx_pin, INPUT_PULLUP);
         attachInterrupt(digitalPinToInterrupt(_config->zx_pin), handleZxInterrupt, RISING);
+        _isrAttached = true;
         xTaskCreatePinnedToCore(cycleStealingTask, "cycleTask", 4096, NULL, 5, &_currentTaskHandle, 1);
     } else if (_config->control_mode == "phase") {
         pinMode(_config->zx_pin, INPUT_PULLUP);
@@ -254,6 +257,7 @@ void ControlStrategy::startTasks() {
             }
             // Attach the ZX ISR so the calibration task gets ZX events.
             attachInterrupt(digitalPinToInterrupt(_config->zx_pin), handlePhaseZxInterrupt, RISING);
+            _isrAttached = true;
             xTaskCreatePinnedToCore(phaseCalibrateTask, "phaseCal", 4096, NULL, 4, &_currentTaskHandle, 1);
             portENTER_CRITICAL(&_phaseCalMux);
             _phaseCalActive = true;
@@ -277,6 +281,7 @@ void ControlStrategy::startTasks() {
             // Start task before enabling ISR so notifications always have a valid target.
             xTaskCreatePinnedToCore(phaseControlTask, "phaseTask", 2048, NULL, 5, &_currentTaskHandle, 1);
             attachInterrupt(digitalPinToInterrupt(_config->zx_pin), handlePhaseZxInterrupt, RISING);
+            _isrAttached = true;
         }
     } else {
         // Bug #8: unrecognized control_mode silently leaves SSR dead. Warn loudly.
@@ -759,7 +764,7 @@ void ControlStrategy::phaseCalibrateTask(void* pvParameters) {
                 reads++;
                 if (reads > SETTLE_SAMPLES) {
                     // Start accumulating after settle period
-                    gridAcc += GridSensorService::currentGridPower.load();
+                    gridAcc += GridSensorService::currentGridPower;
                     eqAcc += ActuatorManager::equipmentPower;
                 }
                 if (reads >= SETTLE_SAMPLES * 2) {

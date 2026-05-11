@@ -25,10 +25,7 @@ void Equipment2Manager::init(const Config& config) {
     Shelly1PMManager::init(config);
 
     if (!config.e_equip2) {
-        // Bug #6: log if disabling fails
-        if (!Shelly1PMManager::turnOff()) {
-            Logger::warn("Equipment2Manager::init: Shelly turnOff failed (equip2 disabled)");
-        }
+        Logger::info("Equipment2 is disabled by configuration");
     }
 }
 

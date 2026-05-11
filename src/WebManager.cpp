@@ -878,7 +878,7 @@ void WebManager::setupRoutes() {
 void WebManager::streamStatusJson(AsyncWebServerRequest *request) {
     AsyncResponseStream *response = request->beginResponseStream("application/json");
     JsonDocument doc;
-    doc["grid_power"] = GridSensorService::currentGridPower.load();
+    doc["grid_power"] = (float)GridSensorService::currentGridPower;
     doc["equipment_power"] = ActuatorManager::equipmentPower;
     doc["eq1_real_power"] = Shelly1PMManager::getPowerEq1();
     doc["equip2_power"] = Shelly1PMManager::getPower();

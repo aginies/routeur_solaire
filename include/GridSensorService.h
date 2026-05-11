@@ -21,7 +21,7 @@ public:
     static bool isEquip1SourceJsy2();
     static float currentEquip1PowerFromJsy;
 
-    static std::atomic<float> currentGridPower;
+    static volatile float currentGridPower;
     static float currentGridVoltage;
     static std::atomic<bool> hasFreshData;
 

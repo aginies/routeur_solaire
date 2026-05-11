@@ -8,8 +8,8 @@
 static constexpr float SENSOR_ERROR_VALUE = -99999.0f;
 
 float GridSensorService::currentEquip1PowerFromJsy = 0.0;
+volatile float GridSensorService::currentGridPower = 0.0f;
 float GridSensorService::currentGridVoltage = 230.0;
-std::atomic<float> GridSensorService::currentGridPower{0.0f};
 std::atomic<bool> GridSensorService::hasFreshData{false};
 const Config* GridSensorService::_config = nullptr;
 HardwareSerial* GridSensorService::_jsy1Serial = nullptr;
@@ -102,7 +102,7 @@ void GridSensorService::networkPollTask(void* pvParameters) {
             if (_config->grid_measure_source == "shelly" && !_config->e_shelly_mqtt) {
                 float p = fetchShellyHttpData();
                 if (p != SENSOR_ERROR_VALUE) {
-                    currentGridPower.store(p);
+                    currentGridPower = p;
                     hasFreshData.store(true);
                 }
             }
@@ -174,13 +174,13 @@ bool GridSensorService::fetchGridData() {
     // Shelly HTTP Method (Handled by background task)
     else {
         if (hasFreshData.exchange(false)) {
-            gridPower = currentGridPower.load();
+            gridPower = currentGridPower;
             fresh = true;
         }
     }
 
     if (fresh && !isnan(gridPower)) {
-        currentGridPower.store(gridPower);
+        currentGridPower = gridPower;
         return true;
     }
 

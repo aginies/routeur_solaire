@@ -3,23 +3,22 @@
 #include <esp_task_wdt.h>
 
 const Config* NetworkManager::_config = nullptr;
-DNSServer NetworkManager::_dnsServer;
 bool NetworkManager::_isAP = false;
 uint32_t NetworkManager::_lastCheck = 0;
 bool NetworkManager::_cachedConnected = false;
 int NetworkManager::_cachedRSSI = -100;
 
-// Bug #2: back-off state for reconnect attempts
+// Back-off state for reconnect attempts
 static uint32_t _lastReconnectMs = 0;
 static uint8_t _reconnectFailures = 0;
-static const uint32_t RECONNECT_INTERVAL_MS = 10000; // retry every 10 s, not every 1 s
+static const uint32_t RECONNECT_INTERVAL_MS = 10000; // retry every 10 s
 static const uint8_t  RECONNECT_FAILS_BEFORE_AP = 12; // ~2 min sustained outage -> AP fallback
 
 void NetworkManager::init(const Config& config) {
     _config = &config;
     _cachedConnected = false;
     _cachedRSSI = -100;
-    _lastCheck = millis();          // Bug #5: prime so first loop() doesn't immediately reconnect
+    _lastCheck = millis();
     _lastReconnectMs = millis();
     _reconnectFailures = 0;
 
@@ -34,20 +33,18 @@ void NetworkManager::init(const Config& config) {
     if (config.e_wifi) {
         setupSTA();
     } else {
-        Logger::warn("WiFi is disabled by user configuration. Starting fallback AP.");
+        Logger::warn("WiFi is disabled by user configuration. Starting AP.");
         setupAP();
     }
 }
 
 void NetworkManager::setupSTA() {
-    if (_config == nullptr) { // Bug #7
+    if (_config == nullptr) {
         Serial.println("[ERROR] NetworkManager::setupSTA called before init");
         return;
     }
     Logger::info("Connecting to WiFi SSID: [" + _config->wifi_ssid + "]");
 
-    // Bug Fix: ensure DNS is stopped and we are in pure STA mode
-    _dnsServer.stop();
     WiFi.softAPdisconnect(true);
     WiFi.mode(WIFI_STA);
 
@@ -58,7 +55,6 @@ void NetworkManager::setupSTA() {
         bool ok_sn      = subnet.fromString(_config->wifi_subnet);
 
         if (ok_ip && ok_gw && ok_sn) {
-            // Bug #4: validate DNS parse before passing to WiFi.config().
             const String& dnsStr = _config->wifi_dns.length() > 0 ? _config->wifi_dns : _config->wifi_gateway;
             if (!dns.fromString(dnsStr)) {
                 Logger::warn("Invalid DNS '" + dnsStr + "', falling back to gateway");
@@ -67,7 +63,6 @@ void NetworkManager::setupSTA() {
             WiFi.config(ip, gateway, subnet, dns);
             Logger::info("Using Static IP: " + _config->wifi_static_ip);
         } else {
-            // Bug #6: log silent fallback to DHCP
             Logger::warn("Static IP config invalid (ip/gw/subnet parse failed), using DHCP");
         }
     }
@@ -79,7 +74,6 @@ void NetworkManager::setupSTA() {
         delay(500);
         attempts++;
         if (attempts % 2 == 0) Serial.print(".");
-        // Bug #1: defensive WDT pet if calling task is subscribed
         if (esp_task_wdt_status(NULL) == ESP_OK) {
             esp_task_wdt_reset();
         }
@@ -87,19 +81,17 @@ void NetworkManager::setupSTA() {
     Serial.println();
 
     if (WiFi.status() == WL_CONNECTED) {
-        WiFi.setSleep(false); // Disable power save for stability
+        WiFi.setSleep(false);
         WiFi.setTxPower(WIFI_POWER_19_5dBm);
         Logger::info("Connected! IP: " + WiFi.localIP().toString());
         _isAP = false;
-        _cachedConnected = true;        // prime the cache
+        _cachedConnected = true;
         _cachedRSSI = WiFi.RSSI();
         _reconnectFailures = 0;
 
-        // Sync NTP with configured Timezone
         configTzTime(_config->timezone.c_str(), "pool.ntp.org", "time.google.com");
         Logger::info("NTP Sync started (" + _config->timezone + ")");
     } else {
-        // Bug #11: snprintf instead of String + String(int)
         char buf[80];
         snprintf(buf, sizeof(buf), "Connection failed (Status: %d). Starting fallback AP.", (int)WiFi.status());
         Logger::warn(String(buf));
@@ -109,45 +101,36 @@ void NetworkManager::setupSTA() {
 
 void NetworkManager::setupAP() {
     if (_isAP) return;
-    if (_config == nullptr) { // Bug #7
+    if (_config == nullptr) {
         Serial.println("[ERROR] NetworkManager::setupAP called before init");
         return;
     }
-    // Bug #13: don't try to start AP without an SSID
     if (_config->ap_ssid.length() == 0) {
         Logger::error("AP SSID is empty, cannot start Access Point");
         return;
     }
 
     Logger::info("Starting Access Point: " + _config->ap_ssid);
-    
-    _dnsServer.stop();
-    // Use WIFI_AP_STA so we can keep trying to connect as STA in background
-    WiFi.mode(WIFI_AP_STA);
 
-    // Bug #3: validate ap_ip; fall back to 192.168.4.1 if malformed.
+    // Use WIFI_AP_STA when e_wifi is enabled so we can keep trying STA in background.
+    // Use WIFI_AP when e_wifi is disabled (pure AP, no STA reconnect needed).
+    WiFi.mode(_config->e_wifi ? WIFI_AP_STA : WIFI_AP);
+
     IPAddress apIP;
     if (!apIP.fromString(_config->ap_ip)) {
         Logger::warn("Invalid ap_ip '" + _config->ap_ip + "', falling back to 192.168.4.1");
         apIP = IPAddress(192, 168, 4, 1);
     }
-    // When e_wifi is true, this AP is only a temporary fallback for the web UI.
-    // Set the gateway to the AP IP only when we want captive portal behaviour
-    // (e_wifi disabled). Otherwise set gateway to 0.0.0.0 so the DHCP server
-    // does NOT advertise the ESP as the DNS server to connecting stations.
-    IPAddress gw = _config->e_wifi ? IPAddress(0, 0, 0, 0) : apIP;
-    if (!WiFi.softAPConfig(apIP, gw, IPAddress(255, 255, 255, 0))) {
+    if (!WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0))) {
         Logger::warn("softAPConfig failed");
     }
 
-    // Bug #9: validate ap_channel (1..13). 14 is JP-only and many radios reject it.
     int ch = _config->ap_channel;
     if (ch < 1 || ch > 13) {
         Logger::warn("Invalid ap_channel " + String(ch) + ", forcing 1");
         ch = 1;
     }
 
-    // Bug #8: capture softAP() return
     bool ok = WiFi.softAP(_config->ap_ssid.c_str(), _config->ap_password.c_str(), ch, _config->ap_hidden_ssid);
     if (!ok) {
         Logger::error("WiFi.softAP() failed to start AP");
@@ -156,47 +139,31 @@ void NetworkManager::setupAP() {
     WiFi.setSleep(false);
     Logger::info("AP IP: " + WiFi.softAPIP().toString());
     _isAP = true;
-    if (!_config->e_wifi) {
-        startCaptivePortal();
-    }
-}
-
-void NetworkManager::startCaptivePortal() {
-    _dnsServer.start(53, "*", WiFi.softAPIP());
-    Logger::info("Captive Portal DNS started");
 }
 
 void NetworkManager::loop() {
-    if (_isAP) {
-        // Only capture DNS for the captive portal when WiFi is user-disabled.
-        if (_config && !_config->e_wifi) {
-            _dnsServer.processNextRequest();
-        } else if (WiFi.status() == WL_CONNECTED) {
-            // We recovered! Switch back to pure STA mode.
+    // When AP is active and e_wifi is enabled, check if STA recovered.
+    if (_isAP && _config && _config->e_wifi) {
+        if (WiFi.status() == WL_CONNECTED) {
             Logger::info("WiFi recovered, stopping AP fallback");
             _isAP = false;
-            _dnsServer.stop();
             WiFi.softAPdisconnect(true);
             WiFi.mode(WIFI_STA);
             _reconnectFailures = 0;
             return;
-        } else {
-            // e_wifi is true but STA not yet recovered: ensure captive DNS
-            // is definitely not running (defensive against config changes).
-            _dnsServer.stop();
         }
     }
 
-    if (_config == nullptr) return; // Bug #7
+    if (_config == nullptr) return;
 
-    // If we are in AP mode and STA is NOT enabled, we have nothing else to do.
+    // If we are in AP mode and STA is NOT enabled, nothing else to do.
     if (_isAP && !_config->e_wifi) return;
 
     uint32_t now = millis();
-    if (now - _lastCheck > 1000) { // Update cache every 1s
+    if (now - _lastCheck > 1000) {
         _lastCheck = now;
 
-        // Defensive check: if we are NOT in AP mode, ensure the radio hasn't flipped to AP_STA
+        // Defensive: if NOT in AP mode, ensure the radio hasn't flipped to AP_STA
         if (!_isAP && WiFi.getMode() != WIFI_STA) {
             WiFi.softAPdisconnect(true);
             WiFi.mode(WIFI_STA);
@@ -205,10 +172,9 @@ void NetworkManager::loop() {
         _cachedConnected = (WiFi.status() == WL_CONNECTED);
         if (_cachedConnected) {
             _cachedRSSI = WiFi.RSSI();
-            _reconnectFailures = 0; // Bug #2: reset back-off counter when healthy
+            _reconnectFailures = 0;
         } else {
             _cachedRSSI = -100;
-            // Bug #2: throttle reconnect attempts and fall back to AP after sustained failure.
             if (now - _lastReconnectMs >= RECONNECT_INTERVAL_MS) {
                 _lastReconnectMs = now;
                 _reconnectFailures++;
@@ -235,6 +201,6 @@ int NetworkManager::getRSSI() {
 
 String NetworkManager::getIP() {
     if (_isAP) return WiFi.softAPIP().toString();
-    if (!_cachedConnected) return String("0.0.0.0"); // Bug #10: explicit not-connected sentinel
+    if (!_cachedConnected) return String("0.0.0.0");
     return WiFi.localIP().toString();
 }

@@ -12,7 +12,8 @@ Shelly1PMDevice Shelly1PMManager::_dev1;
 Shelly1PMDevice Shelly1PMManager::_dev2;
 WiFiClient Shelly1PMManager::_client;
 HTTPClient Shelly1PMManager::_http;
-std::atomic<Shelly1PMManager::Action> Shelly1PMManager::_pendingAction{Shelly1PMManager::Action::NONE};
+volatile Shelly1PMManager::Action Shelly1PMManager::_pendingAction = Shelly1PMManager::Action::NONE;
+portMUX_TYPE Shelly1PMManager::_actionMux = portMUX_INITIALIZER_UNLOCKED;
 
 // Bug #2: serialize all access to the shared _http/_client singletons.
 static SemaphoreHandle_t _httpMutex = nullptr;
@@ -29,7 +30,7 @@ static const uint32_t SHELLY_DATA_MAX_AGE_MS = 5UL * 60UL * 1000UL;
 
 void Shelly1PMManager::init(const Config& config) {
     _config = &config;
-    _pendingAction.store(Action::NONE);
+    _pendingAction = Action::NONE;
     _http.setConnectTimeout(2000);
     _http.setTimeout(2000);
     if (_httpMutex == nullptr) {
@@ -38,11 +39,11 @@ void Shelly1PMManager::init(const Config& config) {
 }
 
 void Shelly1PMManager::requestTurnOn() {
-    _pendingAction.store(Action::TURN_ON);
+    _pendingAction = Action::TURN_ON;
 }
 
 void Shelly1PMManager::requestTurnOff() {
-    _pendingAction.store(Action::TURN_OFF);
+    _pendingAction = Action::TURN_OFF;
 }
 
 bool Shelly1PMManager::turnOn() {
@@ -158,7 +159,10 @@ void Shelly1PMManager::performBackgroundHttpUpdate() {
     uint32_t now = millis();
 
     // 0. Execute pending control actions FIRST
-    Action a = _pendingAction.exchange(Action::NONE);
+    portENTER_CRITICAL(&_actionMux);
+    Action a = _pendingAction;
+    _pendingAction = Action::NONE;
+    portEXIT_CRITICAL(&_actionMux);
     if (a == Action::TURN_ON) turnOn();
     else if (a == Action::TURN_OFF) turnOff();
 

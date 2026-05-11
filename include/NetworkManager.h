@@ -2,7 +2,6 @@
 #define NETWORKMANAGER_H
 
 #include <WiFi.h>
-#include <DNSServer.h>
 #include "Config.h"
 
 class NetworkManager {
@@ -16,10 +15,8 @@ public:
 private:
     static void setupSTA();
     static void setupAP();
-    static void startCaptivePortal();
 
     static const Config* _config;
-    static DNSServer _dnsServer;
     static bool _isAP;
     static uint32_t _lastCheck;
     static bool _cachedConnected;

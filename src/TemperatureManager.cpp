@@ -15,7 +15,10 @@ uint8_t temprature_sens_read();
 }
 #endif
 
-float TemperatureManager::currentSsrTemp = -999.0;
+// Safe default: 25.0C avoids false EMERGENCY_FAULT at boot before the DS18B20
+// returns its first valid reading. The fault counter mechanism (FAULT_TRIP_LEVEL)
+// will correctly set -999.0f if the sensor is genuinely broken.
+float TemperatureManager::currentSsrTemp = 25.0f;
 float TemperatureManager::lastEspTemp = 0.0;
 int TemperatureManager::ssrFaultCount = 0;
 const Config* TemperatureManager::_config = nullptr;

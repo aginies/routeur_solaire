@@ -405,7 +405,7 @@ void StatsManager::save() {
     // cannot corrupt the existing /stats.json (LittleFS rename does not overwrite,
     // so we must remove the destination first).
     const char* finalPath = "/stats.json";
-    const char* tmpPath   = "/stats.json.tmp";
+    const char* tmpPath   = "/stats.tmp";
     if (LittleFS.exists(tmpPath)) LittleFS.remove(tmpPath);
 
     File file = LittleFS.open(tmpPath, "w");

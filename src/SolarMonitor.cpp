@@ -121,7 +121,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
 
             char logBuf[128];
             snprintf(logBuf, sizeof(logBuf), "%s - G:%.1fW, E:%.1fW, T:%.1fC", 
-                     timeBuf, GridSensorService::currentGridPower.load(), ActuatorManager::equipmentPower, TemperatureManager::currentSsrTemp);
+                     timeBuf, (float)GridSensorService::currentGridPower, ActuatorManager::equipmentPower, TemperatureManager::currentSsrTemp);
             Logger::logData(logBuf);
         }
 
@@ -190,7 +190,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
                 }
                 
                 // --- EQUIPMENT 2 (PAC) PRIORITY LOGIC ---
-                float gridPower = GridSensorService::currentGridPower.load();
+                float gridPower = GridSensorService::currentGridPower;
                 float eq1Power = ActuatorManager::equipmentPower;
                 float surplus = -gridPower + eq1Power; // Available power for diversion (excluding Eq2)
                 if (Equipment2Manager::isCurrentlyOn()) {
@@ -228,7 +228,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
 
                 // RUN PID CONTROL for Eq1: only if in NORMAL state
                 if (SafetyManager::currentState == SystemState::STATE_NORMAL) {
-                    float effectiveGrid = GridSensorService::currentGridPower.load() - _config->export_setpoint;
+                    float effectiveGrid = GridSensorService::currentGridPower - _config->export_setpoint;
                     
                     // DYNAMIC SENSOR LAG PROTECTION:
                     // If JSY is active, react every message (it's wired and fast).
@@ -257,7 +257,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
                         // unconditionally spamming Serial.
                         char ctrlBuf[96];
                         snprintf(ctrlBuf, sizeof(ctrlBuf), "Ctrl: Grid=%.1fW, Setpoint=%.0fW, Duty=%.1f%%",
-                            GridSensorService::currentGridPower.load(), _config->export_setpoint, ActuatorManager::currentDuty * 100.0);
+                            (float)GridSensorService::currentGridPower, _config->export_setpoint, ActuatorManager::currentDuty * 100.0);
                         Logger::debug(ctrlBuf);
                     }
                 } else {
@@ -279,7 +279,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
 
         // 5. Stats & MQTT
 #ifndef DISABLE_STATS
-        StatsManager::update(GridSensorService::currentGridPower.load(), ActuatorManager::equipmentPower, now - lastStatsUpdate, nightActive, _config->e_equip1);
+        StatsManager::update((float)GridSensorService::currentGridPower, ActuatorManager::equipmentPower, now - lastStatsUpdate, nightActive, _config->e_equip1);
 #endif
         lastStatsUpdate = now;
         esp_task_wdt_reset();
@@ -290,7 +290,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
             
             // Bug #21: MqttManager::publishStatus can block if the stack is hung
             MqttManager::publishStatus(
-                GridSensorService::currentGridPower.load(),
+                (float)GridSensorService::currentGridPower,
                 ActuatorManager::equipmentPower,
                 ActuatorManager::equipmentActive,
                 (SafetyManager::currentState == SystemState::STATE_BOOST),
@@ -315,7 +315,8 @@ void SolarMonitor::monitorTask(void* pvParameters) {
         if (mqttNetworkActive) esp_task_wdt_delete(NULL);
         MqttManager::loop();
         if (mqttNetworkActive) esp_task_wdt_add(NULL);
-        
+        // Yield CPU 1 so loopTask (priority 1) can pet its own WDT
+        vTaskDelay(1);
         esp_task_wdt_reset();
 
         // 7. Measured Power Update (Shelly 1PM)
@@ -333,6 +334,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
             Shelly1PMManager::update();
             
             if (shellyPollActive) esp_task_wdt_add(NULL);
+            vTaskDelay(1);
             esp_task_wdt_reset();
             
             if (_config->e_equip1) {

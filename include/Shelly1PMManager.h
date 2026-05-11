@@ -4,7 +4,6 @@
 #include <Arduino.h>
 #include <WiFiClient.h>
 #include <HTTPClient.h>
-#include <atomic>
 #include "Config.h"
 
 struct Shelly1PMDevice {
@@ -45,7 +44,8 @@ private:
     static Shelly1PMDevice _dev2; // EQ2
     
     enum class Action { NONE, TURN_ON, TURN_OFF };
-    static std::atomic<Action> _pendingAction;
+    static volatile Action _pendingAction;
+    static portMUX_TYPE _actionMux;
 
     static void updateDevice(Shelly1PMDevice& dev, const String& ip, int index);
 };
