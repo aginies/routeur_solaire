@@ -7,7 +7,7 @@ const { Layout } = DefaultTheme
 
 // Inject sun + particles into hero container at runtime (after hydration)
 onMounted(() => {
-  const heroContainer = document.querySelector('.VPHero.has-image .container')
+  const heroContainer = document.querySelector('.VPHero .container')
   if (heroContainer) {
     const wrapper = document.createElement('div')
     wrapper.className = 'hero-bg'
@@ -23,16 +23,10 @@ onMounted(() => {
         <span class="spiral s2" style="--dur:9.5s;--delay:3s;--dir:-1;"></span>
       </div>
 
-      <!-- ── Drifting clouds over the sun ─────────── -->
-      <div class="hero-clouds">
-        <span class="cloud c1"></span>
-        <span class="cloud c2"></span>
-        <span class="cloud c3"></span>
-        <span class="cloud c4"></span>
-      </div>
     `
     heroContainer.insertBefore(wrapper, heroContainer.firstChild)
   }
+
 
   // Inject license badge after features section (inside VPHome)
   const homeFeatures = document.querySelector('.VPHomeFeatures')
@@ -85,19 +79,24 @@ onMounted(() => {
 
 .VPHero .container {
   position: relative; /* establishes stacking context for hero-sun */
+  background: transparent !important;
 }
 
-/* ── Sun background wrapper ──────────────────────── */
+.VPHero {
+  background: transparent !important;
+}
+
+/* ── Sun background wrapper (high z-index to cover VitePress elements) ─────── */
 
 .hero-bg {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 0;
+  z-index: 98 !important;
   overflow: visible !important;
 }
 
-/* ── Big Sun Glow (behind text, z-index=1) ─────── */
+/* ── Big Sun Glow (behind text, z-index=99) ─────── */
 
 .hero-sun {
   position: absolute;
@@ -115,7 +114,7 @@ onMounted(() => {
   );
   filter: blur(3px);
   pointer-events: none;
-  z-index: 1 !important;
+  z-index: 99 !important;
   animation: sunPulse 70s ease-in-out infinite alternate;
 }
 
@@ -137,45 +136,7 @@ onMounted(() => {
   inset: 0;
   pointer-events: none;
   overflow: visible !important;
-  z-index: 2 !important;
-}
-
-/* ── Clouds Container — above particles, below text ─── */
-
-.hero-clouds {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  overflow: hidden;
-  z-index: 3 !important;
-}
-
-.cloud {
-  position: absolute;
-  width: 280px;
-  height: 96px;
-  background: #ffffff;
-  border-radius: var(--cloud-r, 100px);
-  box-shadow:
-    50px -35px 0 -5px var(--c1, rgba(240, 192, 64, 0.18)),
-   -40px -18px 0  0 var(--c2, rgba(240, 192, 64, 0.22)),
-    75px  -4px 0  4px var(--c3, rgba(240, 192, 64, 0.14));
-  animation: cloudDrift linear infinite;
-  opacity: 1;
-}
-
-.c1 { --cloud-r: 75%; --c1: rgba(220,215,200,0.35); --c2: rgba(220,215,200,0.45); --c3: rgba(220,215,200,0.30);
-      top: 8%; left: -30%; width: 320px; height: 105px; animation-duration: 78s;   animation-delay:  0s; }
-.c2 { --cloud-r: 60%; --c1: rgba(210,205,195,0.30); --c2: rgba(210,205,195,0.40); --c3: rgba(210,205,195,0.25);
-      top: 28%; left: -20%; width: 260px; height: 85px; animation-duration: 105s;  animation-delay: -30s; }
-.c3 { --cloud-r: 80%; --c1: rgba(200,195,185,0.25); --c2: rgba(200,195,185,0.35); --c3: rgba(200,195,185,0.20);
-      top: 48%; left: -25%; width: 360px; height: 120px; animation-duration: 95s;   animation-delay: -55s; }
-.c4 { --cloud-r: 70%; --c1: rgba(215,210,200,0.28); --c2: rgba(215,210,200,0.38); --c3: rgba(215,210,200,0.22);
-      top: 68%; left: -15%; width: 290px; height: 95px; animation-duration: 115s;  animation-delay: -75s; }
-
-@keyframes cloudDrift {
-  from { transform: translateX(0); }
-  to   { transform: translateX(calc(100vw + 400px)); }
+  z-index: 100 !important;
 }
 
 /* ── Dots radiating outward from sun (ambient atmosphere) ─── */
