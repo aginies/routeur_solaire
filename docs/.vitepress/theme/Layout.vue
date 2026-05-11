@@ -1,16 +1,63 @@
 <script setup>
 import DefaultTheme from 'vitepress/theme'
-import { onMounted, ref } from 'vue'
+import { onMounted } from 'vue'
 import './custom.css'
 
 const { Layout } = DefaultTheme
-const showScrollTop = ref(false)
 
+// Inject sun + particles into hero container at runtime (after hydration)
 onMounted(() => {
-  window.addEventListener('scroll', () => {
-    showScrollTop.value = window.scrollY > 300
-  }, { passive: true })
+  const heroContainer = document.querySelector('.VPHero.has-image .container')
+  if (heroContainer) {
+    const wrapper = document.createElement('div')
+    wrapper.className = 'hero-bg'
+    wrapper.innerHTML = `
+      <div class="hero-sun" style="--sun-size:320px;"></div>
+      <div class="hero-particles">
+        <span class="particle p1"></span><span class="particle p2"></span><span class="particle p3"></span>
+        <span class="particle p4"></span><span class="particle p5"></span><span class="particle p6"></span>
+        <span class="particle p7"></span><span class="particle p8"></span><span class="particle p9"></span>
+        <span class="particle p10"></span><span class="particle p11"></span><span class="particle p12"></span>
+        <span class="particle p13"></span><span class="particle p14"></span><span class="particle p15"></span>
+        <span class="spiral s1" style="--dur:8s;--dir:1;"></span>
+        <span class="spiral s2" style="--dur:9.5s;--delay:3s;--dir:-1;"></span>
+      </div>
+    `
+    heroContainer.insertBefore(wrapper, heroContainer.firstChild)
+  }
+
+  // Inject license badge after features section (inside VPHome)
+  const homeFeatures = document.querySelector('.VPHomeFeatures')
+  if (homeFeatures && homeFeatures.parentNode) {
+    const container = document.createElement('div')
+    container.className = 'license-container'
+    container.innerHTML = `
+      <p class="license-badge" style="display: block; text-align: center; margin-top: 32px; padding: 8px 16px; background: rgba(240, 192, 64, 0.06); border: 1px solid rgba(240, 192, 64, 0.2); border-radius: 8px; font-size: 13px !important; color: #a89b70 !important;">
+        Open source — GPLv3 &middot; <a href="https://github.com/aginies/routeur_solaire" target="_blank" rel="noopener" style="color: #f0c040; text-decoration: none;">GitHub</a>
+      </p>
+    `
+    homeFeatures.parentNode.insertBefore(container, homeFeatures.nextSibling)
+  }
+
+  // Scroll-to-top handler (update display directly)
+  const updateScrollTop = () => { btn.style.display = window.scrollY > 300 ? 'block' : 'none' }
+  window.addEventListener('scroll', updateScrollTop, { passive: true })
+  updateScrollTop() // initial state
+
+  // Inject scroll-to-top button into body (after all content)
+  const btn = document.createElement('button')
+  btn.id = 'scroll-top'
+  btn.setAttribute('style', `position: fixed; right: 24px; bottom: 28px; width: 46px; height: 46px; border-radius: 50%; background: #1a1a2e; color: #f0c040; font-size: 20px; border: none; cursor: pointer; transition: opacity 0.3s ease, transform 0.3s ease; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);`)
+  btn.textContent = '↑'
+  btn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }))
+  document.body.appendChild(btn)
 })
+
+/* ── Scroll-to-top button hover effect (global style) ─── */
+
+#scroll-top:hover {
+  transform: scale(1.1);
+}
 </script>
 
 <template>
@@ -39,16 +86,7 @@ onMounted(() => {
       <div class="reveal">
         <slot name="home-features-after" />
       </div>
-
-      <!-- License badge at bottom of page -->
-      <p class="license-badge">
-        Open source — GPLv3 &middot;
-        <a href="https://github.com/aginies/routeur_solaire" target="_blank" rel="noopener">GitHub</a>
-      </p>
     </template>
-
-    <!-- Scroll to top button (outside VPHero) -->
-    <button id="scroll-top" v-show="showScrollTop" @click="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
   </Layout>
 </template>
 
@@ -222,31 +260,11 @@ onMounted(() => {
   transform: scale(1.1);
 }
 
-#scroll-top:hover {
-  transform: scale(1.1);
-}
+/* ── License badge container (same width as feature cards) ─── */
 
-/* ── License badge — at bottom of page ───────── */
-
-.reveal .license-badge {
-  display: block;
-  text-align: center;
-  margin-top: 32px;
-  padding: 8px 16px;
-  background: rgba(240, 192, 64, 0.06);
-  border: 1px solid rgba(240, 192, 64, 0.2);
-  border-radius: 8px;
-  font-size: 13px;
-  color: #a89b70 !important;
-}
-
-.reveal .license-badge a {
-  color: var(--rp-accent-1, #f0c040);
-  text-decoration: none;
-  transition: opacity 0.2s ease;
-}
-
-.reveal .license-badge a:hover {
-  opacity: 0.8;
+.license-container {
+  max-width: 1152px;
+  margin: 0 auto;
+  padding: 0 48px; /* matches VPHomeFeatures .container */
 }
 </style>
