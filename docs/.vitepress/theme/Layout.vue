@@ -33,8 +33,8 @@ onMounted(() => {
           <span class="cross c3" style="--dur:5.5s;--delay:3s;--dy:-60px;"></span>
 
           <!-- Spiral rays — rotate as they rise -->
-          <span class="spiral s1" style="--dur:8s;--dir:1;"><i></i><i></i><i></i></span>
-          <span class="spiral s2" style="--dur:9.5s;--delay:3s;--dir:-1;"><i></i><i></i><i></i></span>
+          <span class="spiral s1" style="--dur:8s;--dir:1;"></span>
+          <span class="spiral s2" style="--dur:9.5s;--delay:3s;--dir:-1;"></span>
 
           <!-- Sparkles near the top of the hero -->
           <span class="spark k1" style="--dur:2.5s;"></span>
@@ -78,7 +78,7 @@ onMounted(() => {
 .hero-sun {
   position: absolute;
   top: -80px;
-  left: 50%;
+  left: 72%;
   transform: translateX(-50%);
   width: var(--sun-size, 320px);
   height: var(--sun-size, 320px);
@@ -92,6 +92,16 @@ onMounted(() => {
   filter: blur(3px);
   pointer-events: none;
   z-index: 1 !important;
+  animation: sunPulse 8s ease-in-out infinite alternate;
+}
+
+@keyframes sunPulse {
+  0%   { opacity: 0.45; transform: translateX(-50%) scale(0.96); }
+  20%  { opacity: 0.75; transform: translateX(-50%) scale(1.02); }
+  40%  { opacity: 0.35; transform: translateX(-50%) scale(0.98); }
+  60%  { opacity: 0.9;  transform: translateX(-50%) scale(1.05); }
+  75%  { opacity: 0.25; transform: translateX(-50%) scale(0.94); }
+  100% { opacity: 0.65; transform: translateX(-50%) scale(1.03); }
 }
 
 /* ── Particles Container (above sun, below text) ─── */
@@ -139,7 +149,7 @@ onMounted(() => {
   100% { transform: translateY(-120vh) scale(0.3); opacity: 0; }
 }
 
-/* ── Spiral rays — rotate as they rise ─────────── */
+/* ── Spiral rays — rotate as they rise (hidden, kept for future use) ─── */
 
 .spiral {
   position: absolute;
@@ -150,26 +160,7 @@ onMounted(() => {
   opacity: 0;
   animation: spiralRise var(--dur) ease-in-out infinite;
   animation-delay: var(--delay, 0s);
-}
-
-.spiral i {
-  position: absolute;
-  left: 0;
-  width: 4px;
-  height: 300px;
-  border-radius: 50%;
-  background: linear-gradient(to top, transparent 20%, #f0c040 60%, transparent);
-  transform-origin: center bottom;
-  animation: spiralSpin calc(var(--dur) * 1.5) linear infinite;
-  animation-direction: var(--dir, 1);
-}
-
-@keyframes spiralRise {
-  0%   { opacity: 0; transform: translateY(0); }
-  20%  { opacity: 0.4; }
-  50%  { opacity: 0.6; }
-  80%  { opacity: 0.3; }
-  100% { opacity: 0; transform: translateY(-150px); }
+  display: none !important;
 }
 
 @keyframes spiralSpin {
