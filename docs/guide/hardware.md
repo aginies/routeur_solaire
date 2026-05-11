@@ -36,7 +36,7 @@ Voici les branchements recommandés pour les cartes de développement courantes.
 
 ## Notes importantes
 
-> **Relais de sécurité :** La polarité du relais est importante. Par défaut, un signal **BAS (LOW)** ferme le circuit du SSR (fonctionnement normal), tandis qu'un signal **HAUT (HIGH)** l'ouvre (coupure de sécurité). En cas de coupure de l'ESP32, le SSR se coupe automatiquement.
+> **Relais de sécurité :** La polarité est importante. Le SSR est piloté en actif-HAUT : le relais de sécurité inverse ce signal pour un comportement *fail-safe*. Un signal **BAS (LOW)** sur IO6 ferme le relais → circuit alimenté (fonctionnement normal). Un signal **HAUT (HIGH)** l'ouvre → coupure du SSR. En cas de coupure ou redémarrage de l'ESP32, la charge est automatiquement déconnectée.
 
 > **DS18B20 :** Le capteur de température 1-Wire nécessite une résistance de pull-up de 4,7 kΩ entre la ligne de données et le 3,3 V. Câblé en mode "parasite", il ne nécessite qu'une seule connexion de données (pas d'alimentation séparée).
 
@@ -156,11 +156,7 @@ Le routeur calcule la puissance solaire attendue en utilisant un modèle géomé
 | **Inclinaison** (`solar_panel_tilt`) | Angle du panneau par rapport à l'horizontale (→ verticale) | 0° (plat) – 90° (vertical) |
 | **Facteur de perte** (`solar_loss_factor`) | Pertes estimées (poussière, température, vieillissement) | 0.7 – 1.0 |
 
-Ces paramètres sont utilisés par le gestionnaire météo pour prédire la puissance solaire et optimiser le déclenchement des équipements.
-
-### Dual JSY — deux compteurs simultanés
-
-Le routeur supporte deux compteurs JSY-MK-194 connectés sur différents ports UART (UART1 et UART2). Chaque compteur peut être assigné à une mesure différente : l'un pour la puissance réseau (`jsy_grid_channel`) et l'autre pour la consommation de l'équipement 1 (`jsy_equip1_channel`). Cette configuration double-mètre permet un suivi plus précis des flux d'énergie sans surcharger le bus.
+Ces paramètres sont configurables via l'interface web ([configuration détaillée](configuration.md)) et utilisés par le gestionnaire météo pour prédire la puissance solaire et optimiser le déclenchement des équipements.
 
 ### Liens utiles pour l'achat des composants
 
