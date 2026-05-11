@@ -7,22 +7,20 @@ const char* ConfigManager::CONFIG_FILE = "/config.json";
 const char* ConfigManager::CONFIG_TMP_FILE = "/config.json.tmp";
 SemaphoreHandle_t ConfigManager::_saveMutex = nullptr;
 
-// Bug #10: create the save mutex once at boot so that save() can be called from any task
-// without a race. This replaces the old ensureMutex() lazy-initialisation pattern.
+// Create the save mutex once at boot so that save() can be called from any task
+// without a race. Replaces the previous lazy-init pattern.
 void ConfigManager::init() {
     if (_saveMutex == nullptr) {
         _saveMutex = xSemaphoreCreateMutex();
     }
 }
 
-// Bug #4: ArduinoJson v7 deprecates JsonDocument::containsKey(). The recommended
-// replacement is `!doc[key].isNull()`. This helper centralises that so a future API change
-// is a one-line edit.
+// ArduinoJson v7 deprecates JsonDocument::containsKey(); use !doc[key].isNull() instead.
 static inline bool has(JsonDocument& doc, const char* key) {
     return !doc[key].isNull();
 }
 
-// Bug #5: validation helpers — applied only to fields where an out-of-range value would
+// Validation helpers — applied only to fields where an out-of-range value would
 // brick the device (wrong GPIO, invalid CPU freq, port overflow). Soft fields keep
 // whatever the user wrote.
 static int clampInt(int v, int lo, int hi, int dflt, const char* name) {
@@ -48,7 +46,7 @@ static int validateCpuFreq(int f, int dflt) {
     return dflt;
 }
 
-// Bug #11: bounded JSON buffers to prevent OOM on corrupted config files.
+// Bounded JSON buffers to prevent OOM on corrupted config files.
 // ~4 KB covers all current fields with comfortable headroom (~2 KB raw JSON).
 static const size_t CONFIG_JSON_CAPACITY = 4096;
 
@@ -88,8 +86,8 @@ Config ConfigManager::load() {
                 Logger::info("ConfigManager: Recovered from NVS backup");
                 loadedFromFile = true;
             } else {
-                // Bug #6: previously this error was silently swallowed, leaving the user with
-                // no clue why the system reverted to defaults despite an NVS backup existing.
+                // Previously this error was silently swallowed; now log it so the user knows
+                // why we reverted to defaults despite an NVS backup existing.
                 Logger::error("ConfigManager: NVS JSON error: " + String(error.c_str()));
             }
         }
@@ -106,7 +104,7 @@ Config ConfigManager::load() {
     // System
     if (has(doc, "name")) config.name = doc["name"].as<String>();
     if (has(doc, "timezone")) config.timezone = doc["timezone"].as<String>();
-    // Bug #5: cpu_freq must be one of the three supported steps on ESP32-S3.
+    // cpu_freq must be one of the three supported steps on ESP32-S3.
     if (has(doc, "cpu_freq")) config.cpu_freq = validateCpuFreq(doc["cpu_freq"].as<int>(), config.cpu_freq);
     if (has(doc, "internal_led_pin")) config.internal_led_pin = validatePinRole(doc["internal_led_pin"].as<int>(), config.internal_led_pin, PinRole::INTERNAL_LED);
     if (has(doc, "max_esp32_temp")) config.max_esp32_temp = doc["max_esp32_temp"];
@@ -124,11 +122,11 @@ Config ConfigManager::load() {
     if (has(doc, "ap_ssid")) config.ap_ssid = doc["ap_ssid"].as<String>();
     if (has(doc, "ap_password")) config.ap_password = doc["ap_password"].as<String>();
     if (has(doc, "ap_hidden_ssid")) config.ap_hidden_ssid = doc["ap_hidden_ssid"];
-    // Bug #5: 2.4 GHz channels are 1..13 (14 in JP, ignored).
+    // 2.4 GHz channels are 1..13 (14 in JP, ignored).
     if (has(doc, "ap_channel")) config.ap_channel = clampInt(doc["ap_channel"].as<int>(), 1, 13, config.ap_channel, "ap_channel");
     if (has(doc, "ap_ip")) config.ap_ip = doc["ap_ip"].as<String>();
 
-    // Hardware — Bug #5: GPIO bounds-check critical pins.
+    // Hardware — GPIO bounds-check critical pins.
     if (has(doc, "ssr_pin"))     config.ssr_pin     = validatePinRole(doc["ssr_pin"].as<int>(),     config.ssr_pin,     PinRole::SSR);
     if (has(doc, "relay_pin"))   config.relay_pin   = validatePinRole(doc["relay_pin"].as<int>(),   config.relay_pin,   PinRole::RELAY);
     if (has(doc, "ds18b20_pin")) config.ds18b20_pin = validatePinRole(doc["ds18b20_pin"].as<int>(), config.ds18b20_pin, PinRole::DS18B20);
@@ -150,7 +148,7 @@ Config ConfigManager::load() {
     if (has(doc, "safety_timeout")) config.safety_timeout = doc["safety_timeout"];
 
     // Equipment 1
-    // Bug #9: when both `equip1_name` (current) and `equipment_name` (legacy alias) are
+    // When both `equip1_name` (current) and `equipment_name` (legacy alias) are
     // present in the JSON, the current key takes precedence. The else-if chain encodes that.
     if (has(doc, "equip1_name")) config.equip1_name = doc["equip1_name"].as<String>();
     else if (has(doc, "equipment_name")) config.equip1_name = doc["equipment_name"].as<String>();
@@ -191,9 +189,30 @@ Config ConfigManager::load() {
     if (has(doc, "solar_panel_tilt")) config.solar_panel_tilt = clampInt(doc["solar_panel_tilt"].as<int>(), 0, 90, config.solar_panel_tilt, "solar_panel_tilt");
     if (has(doc, "solar_loss_factor")) config.solar_loss_factor = clampInt(doc["solar_loss_factor"].as<int>(), 0, 90, config.solar_loss_factor, "solar_loss_factor");
 
-    // Incremental Controller
-    if (has(doc, "delta")) config.delta = doc["delta"];
-    if (has(doc, "deltaneg")) config.deltaneg = doc["deltaneg"];
+    // Incremental Controller — validate delta/deltaneg against internal minimum deadzone.
+    if (has(doc, "delta") || has(doc, "deltaneg")) {
+        int32_t d = has(doc, "delta") ? doc["delta"].as<int>() : config.delta;
+        int32_t dn = has(doc, "deltaneg") ? doc["deltaneg"].as<int>() : config.deltaneg;
+
+        // Enforce a minimum deadzone (≥100 W total) so the controller never sees
+        // a collapsed zone. Also clamp signs: delta must be ≥ 0 and deltaneg ≤ 0.
+        bool warned = false;
+        if (dn > d) { Logger::warn("ConfigManager: deltaneg > delta, swapping"); warned = true; }
+
+        // If both have wrong sign or the gap is too small, expand to ±50W.
+        int32_t span = d - dn;  // always ≥ 0 after swap
+        if (span < 100) {
+            Logger::warn("ConfigManager: delta/deltaneg gap too small (<100 W), expanding to ±50W");
+            d = 50;
+            dn = -50;
+            warned = false;
+        }
+
+        config.delta = d;
+        config.deltaneg = dn;
+    } else {
+        // No delta/deltaneg in JSON at all — keep defaults.
+    }
     if (has(doc, "compensation")) config.compensation = doc["compensation"];
     if (has(doc, "dynamic_threshold_w")) config.dynamic_threshold_w = doc["dynamic_threshold_w"];
 
@@ -251,7 +270,7 @@ Config ConfigManager::load() {
     // MQTT
     if (has(doc, "e_mqtt")) config.e_mqtt = doc["e_mqtt"];
     if (has(doc, "mqtt_ip")) config.mqtt_ip = doc["mqtt_ip"].as<String>();
-    // Bug #5: TCP port range is 1..65535.
+    // TCP port range is 1..65535.
     if (has(doc, "mqtt_port")) config.mqtt_port = clampInt(doc["mqtt_port"].as<int>(), 1, 65535, config.mqtt_port, "mqtt_port");
     if (has(doc, "mqtt_user")) config.mqtt_user = doc["mqtt_user"].as<String>();
     if (has(doc, "mqtt_password")) config.mqtt_password = doc["mqtt_password"].as<String>();
@@ -271,15 +290,14 @@ Config ConfigManager::load() {
 bool ConfigManager::save(const Config& config) {
     Logger::info("ConfigManager: Saving config to LittleFS and NVS...");
 
-    // Bug #7: take the save mutex so concurrent web/MQTT triggers don't trample each other
+    // Take the save mutex so concurrent web/MQTT triggers don't trample each other
     // mid-write. Wait up to 5 s; if we can't get it, refuse the save.
-    // Bug #10: ensureMutex() removed — init() is called at boot time now.
     if (xSemaphoreTake(_saveMutex, pdMS_TO_TICKS(5000)) != pdTRUE) {
         Logger::error("ConfigManager: save() could not acquire mutex (timeout)");
         return false;
     }
 
-    // Bug #11: bounded allocation — prevents OOM if config is unexpectedly large.
+    // Bounded allocation — prevents OOM if config is unexpectedly large.
     DynamicJsonDocument doc(CONFIG_JSON_CAPACITY);
 
     doc["name"] = config.name;
@@ -399,9 +417,8 @@ bool ConfigManager::save(const Config& config) {
     bool littleFsOk = false;
     bool nvsOk = false;
 
-    // 1. Save to LittleFS — Bug #1: write to .tmp then rename atomically so a power loss
-    // mid-write leaves the previous valid config intact.
-    // Bug #2: check serializeJson() return value (bytes written).
+    // 1. Save to LittleFS — write to .tmp then rename atomically so a power loss
+    // mid-write leaves the previous valid config intact. Also check serializeJson() return value.
     {
         // Pre-clean any leftover tmp from a previous crash.
         if (LittleFS.exists(CONFIG_TMP_FILE)) {
@@ -431,8 +448,7 @@ bool ConfigManager::save(const Config& config) {
         }
     }
 
-    // 2. Save to NVS (Preferences) - Full JSON string
-    // Bug #2: putString() returns the number of bytes written, 0 == failure.
+    // 2. Save to NVS (Preferences) - Full JSON string; putString() returns bytes written, 0 == failure.
     {
         Preferences prefs;
         if (!prefs.begin("solar_config", false)) {
@@ -452,7 +468,7 @@ bool ConfigManager::save(const Config& config) {
     }
 
     xSemaphoreGive(_saveMutex);
-    // Bug #3: return real status. Both stores must succeed for save() to be considered OK.
+    // Return real status: both stores must succeed for save() to be considered OK.
     return littleFsOk && nvsOk;
 }
 
