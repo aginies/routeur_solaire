@@ -16,8 +16,13 @@ onMounted(() => {
 
 <template>
   <Layout>
+    <template #home-hero-before>
+      <!-- Big glowing sun positioned behind the text -->
+      <div class="hero-sun"></div>
+    </template>
+
     <template #home-hero-after>
-      <!-- Floating sun particles rendered behind hero content -->
+      <!-- Floating sun particles rendered between background and text -->
       <div class="hero-particles">
         <!-- Dots rising from bottom (ambient atmosphere) -->
         <span class="particle p1"></span><span class="particle p2"></span><span class="particle p3"></span>
@@ -80,12 +85,30 @@ onMounted(() => {
 
 <style scoped>
 /* ── Hero Particles ─────────────────────────── */
+.home-hero > .container {
+  position: relative; /* establishes stacking context for hero-sun */
+}
+
+.hero-sun {
+  position: absolute;
+  top: -120px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 340px;
+  height: 340px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #f0c040 15%, rgba(240, 192, 64, 0.5) 40%, transparent 70%);
+  filter: blur(4px);
+  pointer-events: none;
+  z-index: 1;
+}
+
 .hero-particles {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 0;
   overflow: hidden;
+  z-index: 2; /* above sun, below hero text */
 }
 
 /* Dots rising from bottom — ambient atmosphere */
