@@ -6,53 +6,7 @@ import './custom.css'
 const { Layout } = DefaultTheme
 const showScrollTop = ref(false)
 
-const particleHTML = `
-  <span class="particle p1"></span><span class="particle p2"></span><span class="particle p3"></span>
-  <span class="particle p4"></span><span class="particle p5"></span><span class="particle p6"></span>
-  <span class="particle p7"></span><span class="particle p8"></span><span class="particle p9"></span>
-  <span class="particle p10"></span><span class="particle p11"></span><span class="particle p12"></span>
-  <span class="particle p13"></span><span class="particle p14"></span><span class="particle p15"></span>
-
-  <span class="cross c1" style="--dur:6s;--dy:-80px;"></span>
-  <span class="cross c2" style="--dur:7s;--delay:1.5s;--dx:40px;"></span>
-  <span class="cross c3" style="--dur:5.5s;--delay:3s;--dy:-60px;"></span>
-
-  <span class="ray r1" style="--angle:-75deg;--dur:4.2s;"></span>
-  <span class="ray r2" style="--angle:-60deg;--dur:5.1s;--delay:0.9s;"></span>
-  <span class="ray r3" style="--angle:-45deg;--dur:4.7s;--delay:1.8s;"></span>
-  <span class="ray r4" style="--angle:-30deg;--dur:5.6s;--delay:2.4s;"></span>
-  <span class="ray r5" style="--angle:-15deg;--dur:4.9s;--delay:0.5s;"></span>
-  <span class="ray r6" style="--angle:0deg;--dur:5.8s;--delay:3.2s;"></span>
-  <span class="ray r7" style="--angle:+15deg;--dur:6.0s;--delay:1.1s;"></span>
-  <span class="ray r8" style="--angle:+30deg;--dur:5.4s;--delay:2.7s;"></span>
-  <span class="ray r9" style="--angle:+45deg;--dur:6.3s;--delay:0.8s;"></span>
-  <span class="ray r10" style="--angle:+60deg;--dur:4.6s;--delay:2.0s;"></span>
-  <span class="ray r11" style="--angle:+75deg;--dur:5.9s;--delay:3.8s;"></span>
-
-  <span class="ray h-ray h1" style="--dir-h:0deg;--dur:4.5s;--x:-60%;"></span>
-  <span class="ray h-ray h2" style="--dir-h:15deg;--dur:5.2s;--delay:1.3s;"></span>
-  <span class="ray h-ray h3" style="--dir-h:-15deg;--dur:4.8s;--delay:0.6s;"></span>
-  <span class="ray h-ray h4" style="--dir-h:30deg;--dur:5.7s;--delay:2.1s;"></span>
-  <span class="ray h-ray h5" style="--dir-h:-30deg;--dur:6.1s;--delay:1.7s;"></span>
-
-  <span class="spiral s1" style="--dur:8s;--dir:1;"><i></i><i></i><i></i></span>
-  <span class="spiral s2" style="--dur:9.5s;--delay:3s;--dir:-1;"><i></i><i></i><i></i></span>
-
-  <span class="spark k1" style="--dur:2.5s;"></span>
-  <span class="spark k2" style="--dur:3.2s;--delay:0.8s;"></span>
-  <span class="spark k3" style="--dur:2.8s;--delay:1.6s;"></span>
-`
-
 onMounted(() => {
-  // Inject sun + particles directly into hero container so position: absolute works
-  const container = document.querySelector('.VPHero .container')
-  if (container) {
-    const wrapper = document.createElement('div')
-    wrapper.innerHTML = `<div class="hero-sun" style="--sun-size:320px;"></div><div class="hero-particles">${particleHTML}</div>`
-    container.appendChild(wrapper)
-  }
-
-  // Scroll-to-top handler
   window.addEventListener('scroll', () => {
     showScrollTop.value = window.scrollY > 300
   }, { passive: true })
@@ -61,47 +15,97 @@ onMounted(() => {
 
 <template>
   <Layout>
+    <!-- Sun + particles injected INSIDE VPHero via info-before slot -->
+    <template #home-hero-info-before>
+      <div class="hero-bg">
+        <div class="hero-sun" style="--sun-size:320px;"></div>
+        <div class="hero-particles">
+          <!-- Dots rising from bottom (ambient atmosphere) -->
+          <span class="particle p1"></span><span class="particle p2"></span><span class="particle p3"></span>
+          <span class="particle p4"></span><span class="particle p5"></span><span class="particle p6"></span>
+          <span class="particle p7"></span><span class="particle p8"></span><span class="particle p9"></span>
+          <span class="particle p10"></span><span class="particle p11"></span><span class="particle p12"></span>
+          <span class="particle p13"></span><span class="particle p14"></span><span class="particle p15"></span>
+
+          <!-- Cross-fire dots — horizontal drift -->
+          <span class="cross c1" style="--dur:6s;--dy:-80px;"></span>
+          <span class="cross c2" style="--dur:7s;--delay:1.5s;--dx:40px;"></span>
+          <span class="cross c3" style="--dur:5.5s;--delay:3s;--dy:-60px;"></span>
+
+          <!-- Spiral rays — rotate as they rise -->
+          <span class="spiral s1" style="--dur:8s;--dir:1;"><i></i><i></i><i></i></span>
+          <span class="spiral s2" style="--dur:9.5s;--delay:3s;--dir:-1;"><i></i><i></i><i></i></span>
+
+          <!-- Sparkles near the top of the hero -->
+          <span class="spark k1" style="--dur:2.5s;"></span>
+          <span class="spark k2" style="--dur:3.2s;--delay:0.8s;"></span>
+          <span class="spark k3" style="--dur:2.8s;--delay:1.6s;"></span>
+        </div>
+      </div>
+    </template>
+
+    <!-- Reveal-on-scroll for feature cards -->
     <template #home-features-after>
-      <!-- Reveal-on-scroll for feature cards -->
       <div class="reveal">
         <slot name="home-features-after" />
       </div>
     </template>
 
-    <!-- Scroll-to-top button (always visible, shown via JS) -->
+    <!-- Scroll to top button (outside VPHero) -->
     <button id="scroll-top" v-show="showScrollTop" @click="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
   </Layout>
 </template>
 
-<style scoped>
-/* ── Hero Particles ─────────────────────────── */
-.home-hero > .container {
+<style>
+/* ── Hero Background (sun + particles) ─────────── */
+
+.VPHero .container {
   position: relative; /* establishes stacking context for hero-sun */
 }
 
+/* ── Sun background wrapper ──────────────────────── */
+
+.hero-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: visible !important;
+}
+
+/* ── Big Sun Glow (behind text, z-index=1) ─────── */
+
 .hero-sun {
   position: absolute;
-  bottom: 60%;
+  top: -80px;
   left: 50%;
-  transform: translate(-50%, 50%);
+  transform: translateX(-50%);
   width: var(--sun-size, 320px);
   height: var(--sun-size, 320px);
   border-radius: 50%;
-  background: radial-gradient(circle, #f0c040 18%, rgba(240, 192, 64, 0.4) 38%, transparent 65%);
-  filter: blur(4px);
+  background: radial-gradient(
+    circle at center,
+    #f0c040 18%,
+    rgba(240, 192, 64, 0.5) 40%,
+    transparent 70%
+  );
+  filter: blur(3px);
   pointer-events: none;
-  z-index: 1;
+  z-index: 1 !important;
 }
+
+/* ── Particles Container (above sun, below text) ─── */
 
 .hero-particles {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  overflow: hidden;
-  z-index: 2; /* above sun, below hero text */
+  overflow: visible !important;
+  z-index: 2 !important;
 }
 
-/* Dots rising from bottom — ambient atmosphere */
+/* ── Dots rising from bottom (ambient atmosphere) ─── */
+
 .particle {
   position: absolute;
   width: 6px;
@@ -135,30 +139,8 @@ onMounted(() => {
   100% { transform: translateY(-120vh) scale(0.3); opacity: 0; }
 }
 
-/* Sun rays — thin golden streaks shooting upward */
-.ray {
-  position: absolute;
-  left: 50%;
-  bottom: -6px;
-  width: 2px;
-  height: 140px;
-  background: linear-gradient(to top, #f0c040, transparent);
-  transform-origin: center bottom;
-  opacity: 0;
-  animation: rayShoot var(--dur) ease-in-out infinite;
-  animation-delay: var(--delay, 0s);
-}
+/* ── Spiral rays — rotate as they rise ─────────── */
 
-@keyframes rayShoot {
-  0%   { opacity: 0; height: 20px; }
-  15%  { opacity: 0.6; }
-  35%  { opacity: 0.8; height: 140px; }
-  55%  { opacity: 0.9; height: 150px; }
-  75%  { opacity: 0.4; height: 120px; }
-  100% { opacity: 0; height: 60px; transform: rotate(var(--angle)) translateY(-80px); }
-}
-
-/* Spiral rays — rotate as they rise */
 .spiral {
   position: absolute;
   left: 50%;
@@ -195,7 +177,8 @@ onMounted(() => {
   to   { transform: rotate(360deg * var(--dir, 1)); }
 }
 
-/* Sparkles — twinkling near the top of hero */
+/* ── Sparkles — twinkling near the top of hero ─── */
+
 .spark {
   position: absolute;
   left: 50%;
@@ -217,10 +200,30 @@ onMounted(() => {
   100% { transform: scale(0.3); opacity: 0; }
 }
 
-/* ── Reveal-on-scroll fade-in wrapper (global) ─ */
-</style>
+/* ── Cross-fire dots — horizontal drift ─────────── */
 
-<style>
+.cross {
+  position: absolute;
+  left: 50%;
+  top: 45%;
+  width: 3.5px;
+  height: 3.5px;
+  background: #f0c040;
+  border-radius: 50%;
+  opacity: 0;
+  animation: crossFire var(--dur) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+
+@keyframes crossFire {
+  0%   { transform: translate(-4px, 0); opacity: 0; }
+  20%  { opacity: 0.8; }
+  50%  { transform: translate(var(--dx, -20px), var(--dy, -120px)); opacity: 0.6; }
+  100% { transform: translate(calc(var(--dx, -20px) * 2), calc(var(--dy, -120px) * 2.5)); opacity: 0; }
+}
+
+/* ── Reveal-on-scroll fade-in wrapper ─────────── */
+
 .reveal {
   animation: fadeIn 0.6s ease both;
 }
@@ -230,7 +233,8 @@ onMounted(() => {
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Scroll-to-top button */
+/* ── Scroll-to-top button (visible on scroll) ─── */
+
 #scroll-top {
   position: fixed;
   right: 24px;

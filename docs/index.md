@@ -5,9 +5,6 @@ hero:
   name: "Routeur Solaire"
   text: "Optimisez votre autoconsommation"
   tagline: "Solution haute performance pour ESP32 et compteurs JSY"
-  image:
-    src: /solar-icon.svg
-    alt: Routeur Solaire
   actions:
     - theme: brand
       text: Commencer →
