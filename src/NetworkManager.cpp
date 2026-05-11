@@ -115,6 +115,7 @@ void NetworkManager::setupAP() {
     // Use WIFI_AP_STA when e_wifi is enabled so we can keep trying STA in background.
     // Use WIFI_AP when e_wifi is disabled (pure AP, no STA reconnect needed).
     WiFi.mode(_config->e_wifi ? WIFI_AP_STA : WIFI_AP);
+    _isAP = true;   /* set early — avoids a "halfway" state between mode change and softAP() */
 
     IPAddress apIP;
     if (!apIP.fromString(_config->ap_ip)) {
@@ -186,6 +187,9 @@ void NetworkManager::loop() {
                     _reconnectFailures = 0;
                     setupAP();
                 }
+
+                /* Always refresh RSSI after WiFi.reconnect() so callers see current signal */
+                _cachedRSSI = WiFi.RSSI();
             }
         }
     }

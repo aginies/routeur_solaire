@@ -315,6 +315,7 @@ void IRAM_ATTR ControlStrategy::handleZxInterrupt() {
             // "Trame" Mode: Full Cycle switching to eliminate DC component hum.
             // We make a decision at the start of every full cycle (odd count).
             if (_zxCounter % 2 != 0) {
+                portENTER_CRITICAL(&_controlMux);
                 _accumulator += _dutyMilli;
                 if (_accumulator >= 1000) {
                     _accumulator -= 1000;
@@ -322,6 +323,7 @@ void IRAM_ATTR ControlStrategy::handleZxInterrupt() {
                 } else {
                     _fireFullCycle = false;
                 }
+                portEXIT_CRITICAL(&_controlMux);
                 _lastTrameDecisionUs = nowUs;
             }
             ssrSetFromIsr(ActuatorManager::ssrPin, _fireFullCycle);
@@ -329,6 +331,7 @@ void IRAM_ATTR ControlStrategy::handleZxInterrupt() {
         } else {
             // "Cycle Stealing" Mode: Half Cycle switching for maximum resolution.
             // Note: can create DC offset hum on some grids/transformers.
+            portENTER_CRITICAL(&_controlMux);
             _accumulator += _dutyMilli;
             bool on = false;
             if (_accumulator >= 1000) {
