@@ -35,11 +35,6 @@ onMounted(() => {
           <!-- Spiral rays — rotate as they rise -->
           <span class="spiral s1" style="--dur:8s;--dir:1;"></span>
           <span class="spiral s2" style="--dur:9.5s;--delay:3s;--dir:-1;"></span>
-
-          <!-- Sparkles near the top of the hero -->
-          <span class="spark k1" style="--dur:2.5s;"></span>
-          <span class="spark k2" style="--dur:3.2s;--delay:0.8s;"></span>
-          <span class="spark k3" style="--dur:2.8s;--delay:1.6s;"></span>
         </div>
       </div>
     </template>
@@ -168,51 +163,6 @@ onMounted(() => {
 @keyframes spiralSpin {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg * var(--dir, 1)); }
-}
-
-/* ── Sparkles — twinkling near the top of hero ─── */
-
-.spark {
-  position: absolute;
-  left: 50%;
-  bottom: 40%;
-  width: 8px;
-  height: 8px;
-  background: radial-gradient(circle, #f0c040 30%, transparent);
-  border-radius: 50%;
-  opacity: 0;
-  animation: sparkle var(--dur) ease-in-out infinite;
-  animation-delay: var(--delay, 0s);
-}
-
-@keyframes sparkle {
-  0%   { transform: scale(0.3); opacity: 0; }
-  25%  { transform: scale(1); opacity: 0.8; }
-  50%  { transform: scale(0.5); opacity: 0; }
-  75%  { transform: scale(1); opacity: 0.6; }
-  100% { transform: scale(0.3); opacity: 0; }
-}
-
-/* ── Cross-fire dots — horizontal drift ─────────── */
-
-.cross {
-  position: absolute;
-  left: 50%;
-  top: 45%;
-  width: 3.5px;
-  height: 3.5px;
-  background: #f0c040;
-  border-radius: 50%;
-  opacity: 0;
-  animation: crossFire var(--dur) ease-in-out infinite;
-  animation-delay: var(--delay, 0s);
-}
-
-@keyframes crossFire {
-  0%   { transform: translate(-4px, 0); opacity: 0; }
-  20%  { opacity: 0.8; }
-  50%  { transform: translate(var(--dx, -20px), var(--dy, -120px)); opacity: 0.6; }
-  100% { transform: translate(calc(var(--dx, -20px) * 2), calc(var(--dy, -120px) * 2.5)); opacity: 0; }
 }
 
 /* ── Reveal-on-scroll fade-in wrapper ─────────── */
