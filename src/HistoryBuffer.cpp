@@ -17,8 +17,12 @@ int HistoryBuffer::historyCount = 0;
 SemaphoreHandle_t HistoryBuffer::_dataMutex = nullptr;
 TaskHandle_t HistoryBuffer::_taskHandle = nullptr;
 
-// Bug #3: cap on getHistoryJson() to avoid OOM on large buffers
+// Bug #3: cap on getHistoryJson() to avoid OOM on large buffers.
 static const int HISTORY_JSON_MAX_POINTS = 720;
+
+// Bug #6: bounded JSON buffer for getHistoryJson() — prevents heap exhaustion when
+// serializing up to 720 points (~100 KB unbounded). ~4 KB covers the array + objects.
+static const size_t HISTORY_JSON_DOC_CAPACITY = 4096;
 
 void HistoryBuffer::init(const Config& config) {
     if (powerHistory) {
@@ -64,15 +68,20 @@ void HistoryBuffer::save() {
     File file = LittleFS.open(tmpPath, "w");
     bool ok = false;
     if (file) {
-        // Bug #9: use int32_t for portable header layout (in practice int==int32_t
-        // on Xtensa, but explicit avoids future surprises). Cast on the wire only.
-        int32_t hMax = (int32_t)maxHistory;
-        int32_t hIdx = (int32_t)historyWriteIdx;
-        int32_t hCnt = (int32_t)historyCount;
-        size_t w1 = file.write((uint8_t*)&hMax, sizeof(int32_t));
-        size_t w2 = file.write((uint8_t*)&hIdx, sizeof(int32_t));
-        size_t w3 = file.write((uint8_t*)&hCnt, sizeof(int32_t));
-        ok = (w1 == sizeof(int32_t) && w2 == sizeof(int32_t) && w3 == sizeof(int32_t));
+        // Bug #9: use int32_t for portable header layout.
+        // Bug #12: magic number protects against silent corruption when the wire format
+        // drifts between firmware versions. Old files without it will be detected on load.
+        static const uint32_t HISTORY_MAGIC = 0x48495354; // "HIST" in ASCII
+        int32_t hMagic = (int32_t)HISTORY_MAGIC;
+        int32_t hMax   = (int32_t)maxHistory;
+        int32_t hIdx   = (int32_t)historyWriteIdx;
+        int32_t hCnt   = (int32_t)historyCount;
+        size_t w1 = file.write((uint8_t*)&hMagic, sizeof(int32_t));
+        size_t w2 = file.write((uint8_t*)&hMax,   sizeof(int32_t));
+        size_t w3 = file.write((uint8_t*)&hIdx,   sizeof(int32_t));
+        size_t w4 = file.write((uint8_t*)&hCnt,   sizeof(int32_t));
+        ok = (w1 == sizeof(int32_t) && w2 == sizeof(int32_t) &&
+              w3 == sizeof(int32_t) && w4 == sizeof(int32_t));
 
         // Write only the filled entries in chronological order to save flash space
         for (int i = 0; ok && i < historyCount; i++) {
@@ -109,14 +118,21 @@ void HistoryBuffer::load() {
     File file = LittleFS.open("/history.bin", "r");
     bool headerOk = false;
     if (file) {
-        int32_t savedMax, savedIdx, savedCount;
-        if (file.read((uint8_t*)&savedMax,   sizeof(int32_t)) == sizeof(int32_t) &&
+        // Bug #12: read and verify magic number before trusting any other fields.
+        static const uint32_t HISTORY_MAGIC = 0x48495354; // "HIST" in ASCII
+        int32_t savedMagic, savedMax, savedIdx, savedCount;
+        if (file.read((uint8_t*)&savedMagic, sizeof(int32_t)) == sizeof(int32_t) &&
+            file.read((uint8_t*)&savedMax,   sizeof(int32_t)) == sizeof(int32_t) &&
             file.read((uint8_t*)&savedIdx,   sizeof(int32_t)) == sizeof(int32_t) &&
             file.read((uint8_t*)&savedCount, sizeof(int32_t)) == sizeof(int32_t)) {
             headerOk = true;
 
-            if (savedMax == maxHistory && savedCount >= 0 && savedCount <= maxHistory
-                && savedIdx >= 0 && savedIdx < maxHistory) {
+            if (savedMagic != HISTORY_MAGIC) {
+                // Unknown or legacy format — discard to avoid silent corruption.
+                Logger::warn("HistoryBuffer: unsupported magic 0x" + String(savedMagic, HEX) + "; discarding");
+                LittleFS.remove("/history.bin");
+            } else if (savedMax == maxHistory && savedCount >= 0 && savedCount <= maxHistory
+                 && savedIdx >= 0 && savedIdx < maxHistory) {
                 // Records were saved in chronological order; read them back into the start of the buffer
                 file.read((uint8_t*)powerHistory, sizeof(PowerPoint) * savedCount);
                 historyCount = savedCount;
@@ -183,7 +199,10 @@ void HistoryBuffer::historyTask(void* pvParameters) {
 }
 
 String HistoryBuffer::getHistoryJson() {
-    JsonDocument doc;
+    // Bug #6: bounded JSON allocation — prevents heap exhaustion on large buffers.
+    DynamicJsonDocument doc(HISTORY_JSON_DOC_CAPACITY);
+    if (doc.capacity() == 0) return "[]";
+
     JsonArray arr = doc.to<JsonArray>();
 
     if (powerHistory && _dataMutex && xSemaphoreTake(_dataMutex, pdMS_TO_TICKS(500)) == pdTRUE) {
