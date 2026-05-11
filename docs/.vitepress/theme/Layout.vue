@@ -6,78 +6,70 @@ import './custom.css'
 const { Layout } = DefaultTheme
 const showScrollTop = ref(false)
 
+const particleHTML = `
+  <span class="particle p1"></span><span class="particle p2"></span><span class="particle p3"></span>
+  <span class="particle p4"></span><span class="particle p5"></span><span class="particle p6"></span>
+  <span class="particle p7"></span><span class="particle p8"></span><span class="particle p9"></span>
+  <span class="particle p10"></span><span class="particle p11"></span><span class="particle p12"></span>
+  <span class="particle p13"></span><span class="particle p14"></span><span class="particle p15"></span>
+
+  <span class="cross c1" style="--dur:6s;--dy:-80px;"></span>
+  <span class="cross c2" style="--dur:7s;--delay:1.5s;--dx:40px;"></span>
+  <span class="cross c3" style="--dur:5.5s;--delay:3s;--dy:-60px;"></span>
+
+  <span class="ray r1" style="--angle:-75deg;--dur:4.2s;"></span>
+  <span class="ray r2" style="--angle:-60deg;--dur:5.1s;--delay:0.9s;"></span>
+  <span class="ray r3" style="--angle:-45deg;--dur:4.7s;--delay:1.8s;"></span>
+  <span class="ray r4" style="--angle:-30deg;--dur:5.6s;--delay:2.4s;"></span>
+  <span class="ray r5" style="--angle:-15deg;--dur:4.9s;--delay:0.5s;"></span>
+  <span class="ray r6" style="--angle:0deg;--dur:5.8s;--delay:3.2s;"></span>
+  <span class="ray r7" style="--angle:+15deg;--dur:6.0s;--delay:1.1s;"></span>
+  <span class="ray r8" style="--angle:+30deg;--dur:5.4s;--delay:2.7s;"></span>
+  <span class="ray r9" style="--angle:+45deg;--dur:6.3s;--delay:0.8s;"></span>
+  <span class="ray r10" style="--angle:+60deg;--dur:4.6s;--delay:2.0s;"></span>
+  <span class="ray r11" style="--angle:+75deg;--dur:5.9s;--delay:3.8s;"></span>
+
+  <span class="ray h-ray h1" style="--dir-h:0deg;--dur:4.5s;--x:-60%;"></span>
+  <span class="ray h-ray h2" style="--dir-h:15deg;--dur:5.2s;--delay:1.3s;"></span>
+  <span class="ray h-ray h3" style="--dir-h:-15deg;--dur:4.8s;--delay:0.6s;"></span>
+  <span class="ray h-ray h4" style="--dir-h:30deg;--dur:5.7s;--delay:2.1s;"></span>
+  <span class="ray h-ray h5" style="--dir-h:-30deg;--dur:6.1s;--delay:1.7s;"></span>
+
+  <span class="spiral s1" style="--dur:8s;--dir:1;"><i></i><i></i><i></i></span>
+  <span class="spiral s2" style="--dur:9.5s;--delay:3s;--dir:-1;"><i></i><i></i><i></i></span>
+
+  <span class="spark k1" style="--dur:2.5s;"></span>
+  <span class="spark k2" style="--dur:3.2s;--delay:0.8s;"></span>
+  <span class="spark k3" style="--dur:2.8s;--delay:1.6s;"></span>
+`
+
 onMounted(() => {
-  const handler = () => {
-    showScrollTop.value = window.scrollY > 300
+  // Inject sun + particles directly into hero container so position: absolute works
+  const container = document.querySelector('.VPHero .container')
+  if (container) {
+    const wrapper = document.createElement('div')
+    wrapper.innerHTML = `<div class="hero-sun" style="--sun-size:320px;"></div><div class="hero-particles">${particleHTML}</div>`
+    container.appendChild(wrapper)
   }
-  window.addEventListener('scroll', handler, { passive: true })
+
+  // Scroll-to-top handler
+  window.addEventListener('scroll', () => {
+    showScrollTop.value = window.scrollY > 300
+  }, { passive: true })
 })
 </script>
 
 <template>
   <Layout>
-    <template #home-hero-after>
-      <!-- Big glowing sun positioned behind the text -->
-      <div class="hero-sun" style="--sun-size: 320px;"></div>
-
-      <!-- Floating sun particles rendered between background and text -->
-      <div class="hero-particles">
-        <!-- Dots rising from bottom (ambient atmosphere) -->
-        <span class="particle p1"></span><span class="particle p2"></span><span class="particle p3"></span>
-        <span class="particle p4"></span><span class="particle p5"></span><span class="particle p6"></span>
-        <span class="particle p7"></span><span class="particle p8"></span><span class="particle p9"></span>
-        <span class="particle p10"></span><span class="particle p11"></span><span class="particle p12"></span>
-        <span class="particle p13"></span><span class="particle p14"></span><span class="particle p15"></span>
-
-        <!-- Cross-fire dots — horizontal drift -->
-        <span class="cross c1" style="--dur: 6s;  --dy: -80px;"></span>
-        <span class="cross c2" style="--dur: 7s;  --delay: 1.5s; --dx: 40px;"></span>
-        <span class="cross c3" style="--dur: 5.5s; --delay: 3s;   --dy: -60px;"></span>
-
-        <!-- Sun rays — long thin streaks shooting upward -->
-        <span class="ray r1"  style="--angle: -75deg; --dur: 4.2s;"></span>
-        <span class="ray r2"  style="--angle: -60deg; --dur: 5.1s; --delay: 0.9s;"></span>
-        <span class="ray r3"  style="--angle: -45deg; --dur: 4.7s; --delay: 1.8s;"></span>
-        <span class="ray r4"  style="--angle: -30deg; --dur: 5.6s; --delay: 2.4s;"></span>
-        <span class="ray r5"  style="--angle: -15deg; --dur: 4.9s; --delay: 0.5s;"></span>
-        <span class="ray r6"  style="--angle:    0deg; --dur: 5.8s; --delay: 3.2s;"></span>
-        <span class="ray r7"  style="--angle: +15deg; --dur: 6.0s; --delay: 1.1s;"></span>
-        <span class="ray r8"  style="--angle: +30deg; --dur: 5.4s; --delay: 2.7s;"></span>
-        <span class="ray r9"  style="--angle: +45deg; --dur: 6.3s; --delay: 0.8s;"></span>
-        <span class="ray r10" style="--angle: +60deg; --dur: 4.6s; --delay: 2.0s;"></span>
-        <span class="ray r11" style="--angle: +75deg; --dur: 5.9s; --delay: 3.8s;"></span>
-
-        <!-- Horizontal rays — radiate outward from center -->
-        <span class="ray h-ray h1"  style="--dir-h: 0deg;   --dur: 4.5s;  --x: -60%;"></span>
-        <span class="ray h-ray h2"  style="--dir-h: 15deg;  --dur: 5.2s;  --delay: 1.3s;"></span>
-        <span class="ray h-ray h3"  style="--dir-h: -15deg; --dur: 4.8s;  --delay: 0.6s;"></span>
-        <span class="ray h-ray h4"  style="--dir-h: 30deg;  --dur: 5.7s;  --delay: 2.1s;"></span>
-        <span class="ray h-ray h5"  style="--dir-h: -30deg; --dur: 6.1s;  --delay: 1.7s;"></span>
-
-        <!-- Spiral rays — rotate as they rise -->
-        <span class="spiral s1" style="--dur: 8s; --dir: 1;">
-          <i></i><i></i><i></i>
-        </span>
-        <span class="spiral s2" style="--dur: 9.5s; --delay: 3s; --dir: -1;">
-          <i></i><i></i><i></i>
-        </span>
-
-        <!-- Sparkles near the top of the hero -->
-        <span class="spark k1" style="--dur: 2.5s;"></span>
-        <span class="spark k2" style="--dur: 3.2s; --delay: 0.8s;"></span>
-        <span class="spark k3" style="--dur: 2.8s; --delay: 1.6s;"></span>
-      </div>
-
-      <!-- Scroll to top button -->
-      <button id="scroll-top" v-show="showScrollTop" @click="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
-    </template>
-
-    <!-- Reveal-on-scroll for feature cards -->
     <template #home-features-after>
+      <!-- Reveal-on-scroll for feature cards -->
       <div class="reveal">
         <slot name="home-features-after" />
       </div>
     </template>
+
+    <!-- Scroll-to-top button (always visible, shown via JS) -->
+    <button id="scroll-top" v-show="showScrollTop" @click="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
   </Layout>
 </template>
 
@@ -225,7 +217,20 @@ onMounted(() => {
   100% { transform: scale(0.3); opacity: 0; }
 }
 
-/* ── Scroll-to-top Button (visible on scroll) ── */
+/* ── Reveal-on-scroll fade-in wrapper (global) ─ */
+</style>
+
+<style>
+.reveal {
+  animation: fadeIn 0.6s ease both;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Scroll-to-top button */
 #scroll-top {
   position: fixed;
   right: 24px;
@@ -244,15 +249,5 @@ onMounted(() => {
 
 #scroll-top:hover {
   transform: scale(1.1);
-}
-
-/* ── Reveal-on-scroll fade-in wrapper ───────── */
-.reveal {
-  animation: fadeIn 0.6s ease both;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(20px); }
-  to   { opacity: 1; transform: translateY(0); }
 }
 </style>
