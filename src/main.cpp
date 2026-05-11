@@ -69,6 +69,9 @@ void setup() {
     // but those messages were invisible to the web log viewer.
     Logger::init();
 
+    // Bug #10: create ConfigManager's save mutex before any task can call save().
+    ConfigManager::init();
+
     config = ConfigManager::load();
 
     // Version Check
