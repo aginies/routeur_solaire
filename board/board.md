@@ -6,17 +6,17 @@ You can find all the necessary components for this PCB on AliExpress or other ma
 
 | Component | Recommended Part | Purchase Links |
 | :--- | :--- | :--- |
-| **U1: ESP32-S3** | ESP32-S3-WROOM-1-N16R8 | [AliExpress Search](https://www.aliexpress.com/w/wholesale-ESP32-S3-WROOM-1-N16R8.html) |
-| **U2: Energy Meter** | JSY-MK-194G (Single Phase) | [AliExpress Link](https://www.aliexpress.com/item/1005006136142011.html) |
-| **U3: LDO Regulator** | AMS1117-3.3 (SOT-223) | [AliExpress Link](https://www.aliexpress.com/item/32832675358.html) |
-| **D1: ESD Diode** | PRTR5V0U2X or USBLC6 | [AliExpress Search](https://www.aliexpress.com/w/wholesale-PRTR5V0U2X.html) |
-| **J1: USB-C Port** | USB-C 2.0 (GCT USB4135 style) | [AliExpress Search](https://www.aliexpress.com/w/wholesale-USB-C-Vertical-Receptacle.html) |
-| **J4/J5: Terminals** | 2-pin 5.08mm Screw Terminals | [AliExpress Link](https://www.aliexpress.com/item/32845661413.html) |
-| **J6: Fan** | 4010 5V PWM Fan (e.g. Noctua) | [AliExpress Link (Generic)](https://www.aliexpress.com/w/wholesale-4010-5v-pwm-fan.html) / [Noctua Link](https://www.aliexpress.com/item/1005001936813874.html) |
-| **Relay Module** | 5V 1-Channel (High Level Trigger) | [AliExpress Link](https://www.aliexpress.com/item/32858302901.html) |
-| **J2/J7: Headers** | 2.54mm Pin Headers / JST-XH | [AliExpress Search](https://www.aliexpress.com/w/wholesale-2.54mm-header-JST-XH.html) |
-| **SW1/SW2: Buttons** | 6x6x5mm Tactile SMD 4-pin | [AliExpress Link](https://www.aliexpress.com/item/32858302188.html) |
-| **Passives** | 10µF Caps, 100nF Caps, 10k/4.7k Res | [SMD Passive Assortment](https://www.aliexpress.com/w/wholesale-0402-capacitor-resistor-sample-book.html) |
+| **U1: ESP32-S3** | ESP32-S3-WROOM-1-N16R8 | [Rechercher](https://www.aliexpress.com/wholesale?SearchText=ESP32+S3+WROOM+1+N16R8) |
+| **U2: Energy Meter** | JSY-MK-194G (Single Phase) | [Produit](https://www.aliexpress.com/item/1005006136142011.html) |
+| **U3: LDO Regulator** | AMS1117-3.3 (SOT-223) | [Produit](https://www.aliexpress.com/item/32832675358.html) |
+| **D1: ESD Diode** | PRTR5V0U2X or USBLC6 | [Rechercher](https://www.aliexpress.com/wholesale?SearchText=PRTR5V0U2X) |
+| **J1: USB-C Port** | USB-C 2.0 (GCT USB4135 style) | [Rechercher](https://www.aliexpress.com/wholesale?SearchText=USB+C+Vertical+SMD) |
+| **J4/J5: Terminals** | 2-pin 5.08mm Screw Terminals | [Produit](https://www.aliexpress.com/item/32845661413.html) |
+| **J6: Fan** | 4010 5V PWM Fan (e.g. Noctua) | [Generic](https://www.aliexpress.com/wholesale?SearchText=4010+5v+pwm+fan) / [Noctua NF-A4x20](https://www.aliexpress.com/item/1005001936813874.html) |
+| **Relay Module** | 5V 1-Channel (High Level Trigger) | [Produit](https://www.aliexpress.com/item/32858302901.html) |
+| **J2/J7: Headers** | 2.54mm Pin Headers / JST-XH | [Rechercher](https://www.aliexpress.com/wholesale?SearchText=JST+XH+2.54+header) |
+| **SW1/SW2: Buttons** | 6x6x5mm Tactile SMD 4-pin | [Produit](https://www.aliexpress.com/item/32858302188.html) |
+| **Passives** | 10µF Caps, 100nF Caps, 10k/4.7k Res | [Kit Assortment](https://www.aliexpress.com/wholesale?SearchText=0402+capacitor+resistor+assortment) |
 
 ---
 
