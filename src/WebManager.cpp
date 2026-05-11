@@ -20,15 +20,24 @@
 #include <Update.h>
 #include <ArduinoJson.h>
 #include <AsyncJson.h>
+#include <cstring>
+
+#ifndef REBOOT_COOLDOWN_MS
+#define REBOOT_COOLDOWN_MS 60000U  // 1 minute between reboots per endpoint
+#endif
 AsyncWebServer WebManager::_server(80);
 WiFiClient WebManager::_client;
 HTTPClient WebManager::_http;
 SemaphoreHandle_t WebManager::_httpMutex = nullptr;
 const Config* WebManager::_config = nullptr;
+uint32_t WebManager::_lastRebootTime[7] = {0};  // cooldown per action enum index (zeroed in init())
+static Config _cfg_copy;  // persistent copy, survives beyond init() caller scope
 bool WebManager::_rebootRequested = false;
 
 void WebManager::init(const Config& config) {
-    _config = &config;
+    memset(_lastRebootTime, 0, sizeof(_lastRebootTime));
+    _cfg_copy = config;     // store a self-owned copy instead of pointing at the parameter
+    _config = &_cfg_copy;
     _http.setConnectTimeout(1000);
     _http.setTimeout(2000);
     if (!_httpMutex) _httpMutex = xSemaphoreCreateMutex(); // Bug #6
@@ -490,15 +499,21 @@ void WebManager::setupRoutes() {
             newCfg.phase_cal_step_us = json["step"] | newCfg.phase_cal_step_us;
             newCfg.phase_cal_hold_ms = json["hold"] | newCfg.phase_cal_hold_ms;
             ConfigManager::save(newCfg);
-            request->send(200, "application/json", "{\"ok\":true}");
-            _rebootRequested = true;
+            if (requestReboot(RebootAction::PhaseCalStart)) {
+                request->send(200, "application/json", "{\"ok\":true}");
+            } else {
+                request->send(429, "application/json", "{\"error\":\"Trop frequent\"}");
+            }
         } else if (strcmp(action, "exit") == 0) {
             // Exit calibration mode (SSR goes off)
             Config newCfg = *_config;
             newCfg.phase_calibrate = false;
             ConfigManager::save(newCfg);
-            request->send(200, "application/json", "{\"ok\":true}");
-            _rebootRequested = true;
+            if (requestReboot(RebootAction::PhaseCalExit)) {
+                request->send(200, "application/json", "{\"ok\":true}");
+            } else {
+                request->send(429, "application/json", "{\"error\":\"Trop frequent\"}");
+            }
         } else if (strcmp(action, "pause") == 0) {
             ControlStrategy::setPhaseCalCommand("pause", -1);
             request->send(200, "application/json", "{\"ok\":true,\"paused\":true}");
@@ -540,11 +555,16 @@ void WebManager::setupRoutes() {
         Config newCfg = *_config;
         applyRequestParams(request, newCfg);
         
-        if (ConfigManager::save(newCfg)) {
+        if (ConfigManager::save(newCfg) && requestReboot(RebootAction::SaveConfigEq2)) {
             request->send(200, "text/plain", "OK");
-            _rebootRequested = true;
-        } else request->send(500);
+        } else if (!ConfigManager::save(newCfg)) {
+            request->send(500);
+        } else {
+            // save succeeded but reboot throttled
+            request->send(429, "application/json", "{\"error\":\"Trop frequent\"}");
+        }
     });
+
     _server.on("/save_eq2_schedule", HTTP_POST, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
         Config newCfg = *_config;
@@ -552,12 +572,13 @@ void WebManager::setupRoutes() {
             String schedStr = request->getParam("schedule", true)->value();
             if (schedStr.length() == 0) schedStr = "0";
             newCfg.equip2_schedule = strtoull(schedStr.c_str(), NULL, 10);
-            if (ConfigManager::save(newCfg)) {
-                // Bug #16: schedule is loaded once at boot; reboot so the change takes effect
-                request->send(200, "text/plain", "OK");
-                _rebootRequested = true;
-            } else {
+            bool saved = ConfigManager::save(newCfg);
+            if (!saved) {
                 request->send(500);
+            } else if (requestReboot(RebootAction::SaveSchedule)) {
+                request->send(200, "text/plain", "OK");
+            } else {
+                request->send(429, "application/json", "{\"error\":\"Trop frequent\"}");
             }
         } else {
             request->send(400, "text/plain", "Missing schedule parameter");
@@ -588,11 +609,13 @@ void WebManager::setupRoutes() {
         Config newCfg = *_config;
         applyRequestParams(request, newCfg);
 
-        if (ConfigManager::save(newCfg)) {
-            request->send(200, "text/plain", "Configuration sauvegardée. Redémarrage...");
-            _rebootRequested = true;
-        } else {
+        bool saved = ConfigManager::save(newCfg);
+        if (saved && requestReboot(RebootAction::SaveConfig)) {
+            request->send(200, "text/plain", "Configuration sauvegardee. Redemarrage...");
+        } else if (!saved) {
             request->send(500, "text/plain", "Erreur lors de la sauvegarde");
+        } else {
+            request->send(429, "application/json", "{\"error\":\"Trop frequent\"}");
         }
     });
 
@@ -738,8 +761,18 @@ void WebManager::setupRoutes() {
 
     _server.on("/RESET_device", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
-        request->send(200, "text/plain", "Redémarrage en cours...");
-        _rebootRequested = true;
+        if (requestReboot(RebootAction::ResetDevice)) {
+            request->send(200, "text/plain", "Redemarrage en cours...");
+        } else {
+            request->send(429, "application/json", "{\"error\":\"Trop frequent\"}");
+        }
+    });
+
+    _server.on("/RESET_config", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
+        bool throttled = !requestReboot(RebootAction::ResetConfig);
+        ConfigManager::reset();
+        request->send(throttled ? 429 : 200, "text/plain", throttled ? "Redemarrage bloque (trop frequent)" : "Configuration effacee. Redemarrage en cours...");
     });
 
     _server.on("/RESET_config", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
@@ -1063,3 +1096,17 @@ void WebManager::streamStatusJson(AsyncWebServerRequest *request) {
 String WebManager::getHistoryJson() {
     return HistoryBuffer::getHistoryJson();
 }
+
+bool WebManager::requestReboot(RebootAction action) {
+    uint32_t now = millis();
+    uint32_t elapsed = now - _lastRebootTime[(int)action];
+    if (elapsed < REBOOT_COOLDOWN_MS) {
+        uint32_t remaining = (REBOOT_COOLDOWN_MS - elapsed + 500) / 1000; // ceiling division
+        Logger::warn(String("Reboot throttled: ") + remaining + " seconds remain");
+        return false;
+    }
+    _rebootRequested = true;
+    _lastRebootTime[(int)action] = now;
+    return true;
+}
+
