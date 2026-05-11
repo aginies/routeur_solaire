@@ -95,10 +95,12 @@ The system can be fully configured via the web interface. Below is a detailed br
 - **WiFi Setup**: Support for Client mode (connecting to your router) or Access Point mode. Supports Static IP configuration. If the configured Wi-Fi is unreachable for more than 2 minutes, the device automatically starts a fallback Access Point (`W_Solaire`) while continuing to attempt background reconnection (`WIFI_AP_STA` mode).
 - **Grid Measure Source (`grid_measure_source`)**:
     - `shelly`: Shelly EM (WiFi HTTP/MQTT)
-    - `jsy`: JSY-MK-194 (wired UART)
+    - `jsy1`: JSY-MK-194 sur UART 1 (filaire)
+    - `jsy2`: JSY-MK-194 sur UART 2 (filaire)
 - **Equipment 1 Measure Source (`equip1_measure_source`)**:
-    - `shelly`: measured by Shelly Plus 1PM
-    - `jsy`: measured by JSY channel
+    - `shelly`: Mesuré par un Shelly Plus 1PM
+    - `jsy1`: Mesuré par le canal JSY sur UART 1
+    - `jsy2`: Mesuré par le canal JSY sur UART 2
 - **Equipment 1 Enable (`e_equip1`)**: On/off for Eq1 logic only (not a measurement-source selector).
 - **Equipment 2 (+Gestion Marche/Arrêt)**: Optional Shelly Plus 1PM for on/off relay control of a secondary equipment.
 - **MQTT Broker**: Connection details for integration with Home Assistant or other automation tools.
@@ -411,11 +413,12 @@ Default values are shown. All fields are editable via the Web UI.
 ### JSY-MK-194 (Wired Measurement)
 | Field | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `jsy_uart_id` | int | `2` | UART peripheral (1 or 2) |
-| `jsy_grid_channel` | int | `1` | Canal JSY reseau (used when `grid_measure_source = jsy`) |
-| `jsy_equip1_channel` | int | `2` | Canal JSY Eq1 (used when `equip1_measure_source = jsy`) |
-| `jsy_tx` | int | `17` | UART TX pin |
-| `jsy_rx` | int | `16` | UART RX pin |
+| `jsy_grid_channel` | int | `1` | Canal JSY réseau (utilisé si `grid_measure_source = jsy1/2`) |
+| `jsy_equip1_channel` | int | `2` | Canal JSY Eq1 (utilisé si `equip1_measure_source = jsy1/2`) |
+| `jsy1_tx` | int | `5` | UART1 TX pin |
+| `jsy1_rx` | int | `4` | UART1 RX pin |
+| `jsy2_tx` | int | `17` | UART2 TX pin |
+| `jsy2_rx` | int | `16` | UART2 RX pin |
 
 ### SSR Control Mode
 | Field | Type | Default | Description |
@@ -481,7 +484,8 @@ Default values are shown. All fields are editable via the Web UI.
 | **Zero-crossing** | `15` | `19` | ZX sensor output (open-collector, pull-up to 3.3V) |
 | **Common ground** | `GND` | `GND` | All sensor grounds |
 | **Power** | `3.3V` / `5V` | `3.3V` / `5V` | SSR control, relay, ZX (as rated) |
-| **UART1 RX/TX** | `4/5` | `18/15` | JSY-MK-194 RX/TX (4800 baud, 8N1) |
+| **UART1 RX/TX (JSY1)** | `4/5` | `18/15` | JSY-MK-194 RX/TX (4800 baud, 8N1) |
+| **UART2 RX/TX (JSY2)** | `16/17` | `32/33` | Second JSY-MK-194 RX/TX |
 | **NeoPixel** | `48` | `2` | Onboard WS2812 LED |
 
 > **Note: Config defaults vs. Wiring.** The Wiring Guide columns show the recommended physical pin assignments for each board target (used on this custom PCB). These differ from the `Config` struct defaults (e.g., `ssr_pin=12`), which are generic starting values for any build. When migrating from one board target to another, update both your wiring **and** the `Config` fields accordingly.
