@@ -7,7 +7,9 @@ const char* ConfigManager::CONFIG_FILE = "/config.json";
 const char* ConfigManager::CONFIG_TMP_FILE = "/config.json.tmp";
 SemaphoreHandle_t ConfigManager::_saveMutex = nullptr;
 
-void ConfigManager::ensureMutex() {
+// Bug #10: create the save mutex once at boot so that save() can be called from any task
+// without a race. This replaces the old ensureMutex() lazy-initialisation pattern.
+void ConfigManager::init() {
     if (_saveMutex == nullptr) {
         _saveMutex = xSemaphoreCreateMutex();
     }
@@ -46,9 +48,18 @@ static int validateCpuFreq(int f, int dflt) {
     return dflt;
 }
 
+// Bug #11: bounded JSON buffers to prevent OOM on corrupted config files.
+// ~4 KB covers all current fields with comfortable headroom (~2 KB raw JSON).
+static const size_t CONFIG_JSON_CAPACITY = 4096;
+
 Config ConfigManager::load() {
     Config config;
-    JsonDocument doc;
+    DynamicJsonDocument doc(CONFIG_JSON_CAPACITY);
+    if (doc.capacity() == 0) {
+        Logger::error("ConfigManager: insufficient memory for JSON");
+        save(config);
+        return config;
+    }
     bool loadedFromFile = false;
 
     // 1. Try loading from LittleFS
@@ -262,13 +273,15 @@ bool ConfigManager::save(const Config& config) {
 
     // Bug #7: take the save mutex so concurrent web/MQTT triggers don't trample each other
     // mid-write. Wait up to 5 s; if we can't get it, refuse the save.
-    ensureMutex();
+    // Bug #10: ensureMutex() removed — init() is called at boot time now.
     if (xSemaphoreTake(_saveMutex, pdMS_TO_TICKS(5000)) != pdTRUE) {
         Logger::error("ConfigManager: save() could not acquire mutex (timeout)");
         return false;
     }
 
-    JsonDocument doc;
+    // Bug #11: bounded allocation — prevents OOM if config is unexpectedly large.
+    DynamicJsonDocument doc(CONFIG_JSON_CAPACITY);
+
     doc["name"] = config.name;
     doc["timezone"] = config.timezone;
     doc["cpu_freq"] = config.cpu_freq;
