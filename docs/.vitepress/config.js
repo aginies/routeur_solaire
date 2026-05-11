@@ -13,6 +13,20 @@ export default defineConfig({
     ['link', { rel: 'preconnect', href: 'https://fonts.googleapis.com' }],
     ['link', { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' }],
     ['link', { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap' }],
+    /* Favicon */
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/routeur_solaire/solar-icon.svg' }],
+    ['link', { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/routeur_solaire/favicon.png' }],
+
+    /* Open Graph / social share */
+    ['meta', { property: 'og:type', content: 'website' }],
+    ['meta', { property: 'og:title', content: 'Routeur Solaire — Optimisez votre autoconsommation' }],
+    ['meta', { property: 'og:description', content: 'Solution haute performance pour ESP32 et compteurs JSY. Routage intelligent, anticipation météo, intégration MQTT.' }],
+    ['meta', { property: 'og:image', content: 'https://aginies.github.io/routeur_solaire/config.png' }],
+    ['meta', { property: 'og:url', content: 'https://aginies.github.io/routeur_solaire/' }],
+
+    /* Twitter */
+    ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+    ['meta', { name: 'twitter:title', content: 'Routeur Solaire — Optimisez votre autoconsommation' }],
   ],
   themeConfig: {
     nav: [
