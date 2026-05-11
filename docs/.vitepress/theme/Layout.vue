@@ -16,12 +16,10 @@ onMounted(() => {
 
 <template>
   <Layout>
-    <template #home-hero-before>
-      <!-- Big glowing sun positioned behind the text -->
-      <div class="hero-sun"></div>
-    </template>
-
     <template #home-hero-after>
+      <!-- Big glowing sun positioned behind the text -->
+      <div class="hero-sun" style="--sun-size: 320px;"></div>
+
       <!-- Floating sun particles rendered between background and text -->
       <div class="hero-particles">
         <!-- Dots rising from bottom (ambient atmosphere) -->
@@ -91,13 +89,13 @@ onMounted(() => {
 
 .hero-sun {
   position: absolute;
-  top: -120px;
+  bottom: 60%;
   left: 50%;
-  transform: translateX(-50%);
-  width: 340px;
-  height: 340px;
+  transform: translate(-50%, 50%);
+  width: var(--sun-size, 320px);
+  height: var(--sun-size, 320px);
   border-radius: 50%;
-  background: radial-gradient(circle, #f0c040 15%, rgba(240, 192, 64, 0.5) 40%, transparent 70%);
+  background: radial-gradient(circle, #f0c040 18%, rgba(240, 192, 64, 0.4) 38%, transparent 65%);
   filter: blur(4px);
   pointer-events: none;
   z-index: 1;
