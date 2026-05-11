@@ -92,16 +92,18 @@ onMounted(() => {
   filter: blur(3px);
   pointer-events: none;
   z-index: 1 !important;
-  animation: sunPulse 8s ease-in-out infinite alternate;
+  animation: sunPulse 70s ease-in-out infinite alternate;
 }
 
 @keyframes sunPulse {
-  0%   { opacity: 0.45; transform: translateX(-50%) scale(0.96); }
-  20%  { opacity: 0.75; transform: translateX(-50%) scale(1.02); }
-  40%  { opacity: 0.35; transform: translateX(-50%) scale(0.98); }
-  60%  { opacity: 0.9;  transform: translateX(-50%) scale(1.05); }
-  75%  { opacity: 0.25; transform: translateX(-50%) scale(0.94); }
-  100% { opacity: 0.65; transform: translateX(-50%) scale(1.03); }
+  0%   { opacity: 0.28; transform: translateX(-50%) scale(0.96); }
+  14%  { opacity: 0.58; transform: translateX(-50%) scale(1.01); }
+  27%  { opacity: 0.18; transform: translateX(-50%) scale(0.94); }
+  44%  { opacity: 0.78; transform: translateX(-50%) scale(1.03); }
+  56%  { opacity: 0.12; transform: translateX(-50%) scale(0.93); }
+  72%  { opacity: 0.82; transform: translateX(-50%) scale(1.04); }
+  86%  { opacity: 0.20; transform: translateX(-50%) scale(0.95); }
+  100% { opacity: 0.34; transform: translateX(-50%) scale(0.97); }
 }
 
 /* ── Particles Container (above sun, below text) ─── */
