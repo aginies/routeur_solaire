@@ -27,6 +27,9 @@ float StatsManager::totalRedirectToday = 0;
 float StatsManager::totalExportToday = 0;
 volatile bool StatsManager::_saveRequested = false;
 TaskHandle_t StatsManager::_taskHandle = nullptr;
+#ifndef NATIVE_TEST
+bool StatsManager::_importInProgress = false;
+#endif
 static uint32_t _activeTimeMsAccumulator = 0;
 #ifndef NATIVE_TEST
 SemaphoreHandle_t StatsManager::_statsMutex = nullptr;
@@ -63,6 +66,40 @@ static void persistNvsTotals(const String& dayKey) {
         prefs.end();
     }
 }
+
+// Bug #16: PSRAM Allocator for ArduinoJson. deserializing 365 days of stats
+// can take >400KB of AST memory, exhausting internal SRAM.
+#ifndef NATIVE_TEST
+struct ArduinoJsonSpiRamAllocator : ArduinoJson::Allocator {
+    void* allocate(size_t size) override {
+#if defined(BOARD_HAS_PSRAM)
+        void* ptr = heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!ptr) ptr = malloc(size); // Fallback
+        return ptr;
+#else
+        return malloc(size);
+#endif
+    }
+
+    void deallocate(void* pointer) override {
+#if defined(BOARD_HAS_PSRAM)
+        heap_caps_free(pointer);
+#else
+        free(pointer);
+#endif
+    }
+
+    void* reallocate(void* ptr, size_t new_size) override {
+#if defined(BOARD_HAS_PSRAM)
+        void* new_ptr = heap_caps_realloc(ptr, new_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!new_ptr) new_ptr = realloc(ptr, new_size);
+        return new_ptr;
+#else
+        return realloc(ptr, new_size);
+#endif
+    }
+};
+#endif
 #endif
 
 void StatsManager::init() {
@@ -118,7 +155,12 @@ void StatsManager::init() {
     #define MAX_STATS_DAYS 30
     #endif
 
+#ifndef NATIVE_TEST
+    ArduinoJsonSpiRamAllocator ajAlloc;
+    JsonDocument doc(&ajAlloc);
+#else
     JsonDocument doc;
+#endif
     DeserializationError error = deserializeJson(doc, file);
     file.close();
 
@@ -341,6 +383,7 @@ void StatsManager::statsTask(void* pvParameters) {
 
 void StatsManager::save() {
 #ifndef NATIVE_TEST
+    if (_importInProgress) return;
     if (_statsMutex == nullptr || xSemaphoreTake(_statsMutex, pdMS_TO_TICKS(2000)) != pdTRUE) {
         return;
     }

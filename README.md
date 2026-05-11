@@ -536,10 +536,10 @@ Tests use a `NATIVE_TEST` preprocessor flag to stub Arduino/ESP32 dependencies (
 
 ## Security Notes
 
-- **OTA Update (`/update`)**: No authentication required. Anyone on the same network can flash arbitrary firmware. Only enable on trusted networks.
+- **OTA Update (`/update`)**: Authenticated. Requires `web_user`/`web_password` if configured.
 - **Default AP Password**: `12345678` on first boot — change via the web UI immediately.
 - **Web Credentials**: Stored in plaintext in `config.json`. Protect your config backup files.
-- **Unauthenticated Endpoints**: `/test` and `/get_log_action` bypass auth. Logs may leak credentials, WiFi passwords, and IP addresses.
+- **Unauthenticated Endpoints**: `/test` bypasses auth for simple health checks. All data-sensitive endpoints (logs, power, stats) require authentication.
 
 ## Troubleshooting
 
