@@ -484,10 +484,17 @@ void StatsManager::streamStatsJson(AsyncWebServerRequest *request) {
 
     bool firstDay = true;
     char buf[128];
+    int iCount = 0;
 
     for (auto const& [key, ds] : snapshot) {
         if (!firstDay) response->print(",");
         firstDay = false;
+
+        // Bug #18: delay every ~30 entries to prevent IWDT reset on Core 0 during streaming.
+        if (iCount % 30 == 0) {
+            vTaskDelay(pdMS_TO_TICKS(1));
+            if (esp_task_wdt_status(NULL) == ESP_OK) esp_task_wdt_reset();
+        }
 
         // Bug #14: align precision with save() (.1f everywhere)
         snprintf(buf, sizeof(buf), "\"%s\":{\"import\":%.1f,\"redirect\":%.1f,\"export\":%.1f,\"active_time\":%u,",
@@ -509,6 +516,7 @@ void StatsManager::streamStatsJson(AsyncWebServerRequest *request) {
         printArray("h_export", ds.h_export);
 
         response->print("}");
+        iCount++;
     }
 
     response->print("}");
