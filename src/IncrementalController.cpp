@@ -46,7 +46,7 @@ int32_t IncrementalController::update(int32_t currentDutyMilli, int32_t gridPowe
         // value to avoid the INT32_MIN UB edge case.
         int64_t diff = (int64_t)gridPower_mw - (int64_t)deltaTarget;
         if (diff < 0) diff = -diff;
-        int32_t change = (int32_t)(diff * _compensation * CHANGE_SCALE / _maxPower);
+        int32_t change = (int32_t)((int64_t)diff * _compensation * CHANGE_SCALE / _maxPower);
 
         // Bug #1: symmetric cap. Original code had no cap on the reduce branch,
         // letting a single import surge swing the dimmer down by hundreds of
@@ -58,7 +58,7 @@ int32_t IncrementalController::update(int32_t currentDutyMilli, int32_t gridPowe
         // Exporting surplus -> increase load
         int64_t diff = (int64_t)deltaTarget - (int64_t)gridPower_mw;
         if (diff < 0) diff = -diff;
-        int32_t change = (int32_t)(diff * _compensation * CHANGE_SCALE / _maxPower);
+        int32_t change = (int32_t)((int64_t)diff * _compensation * CHANGE_SCALE / _maxPower);
 
         // SLOW START: cap the maximum increase to prevent rapid oscillations.
         if (change > MAX_STEP_MILLI) change = MAX_STEP_MILLI;

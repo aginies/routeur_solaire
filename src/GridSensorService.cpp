@@ -2,66 +2,159 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include "MqttManager.h"
+#include "Shelly1PMManager.h"
 #include "Logger.h"
 
 static constexpr float SENSOR_ERROR_VALUE = -99999.0f;
 
-float GridSensorService::currentGridPower = 0.0;
 float GridSensorService::currentEquip1PowerFromJsy = 0.0;
+volatile float GridSensorService::currentGridPower = 0.0f;
 float GridSensorService::currentGridVoltage = 230.0;
-bool GridSensorService::hasFreshData = false;
+std::atomic<bool> GridSensorService::hasFreshData{false};
 const Config* GridSensorService::_config = nullptr;
-HardwareSerial* GridSensorService::_jsySerial = nullptr;
+HardwareSerial* GridSensorService::_jsy1Serial = nullptr;
+HardwareSerial* GridSensorService::_jsy2Serial = nullptr;
+GridSensorService::JsyState GridSensorService::_jsy1State;
+GridSensorService::JsyState GridSensorService::_jsy2State;
 WiFiClient GridSensorService::_client;
 HTTPClient GridSensorService::_http;
 
+TaskHandle_t GridSensorService::_pollTaskHandle = nullptr;
+
 void GridSensorService::init(const Config& config) {
     _config = &config;
-    _jsySerial = nullptr;
+    _jsy1Serial = nullptr;
+    _jsy2Serial = nullptr;
+    _jsy1State.state = JsyState::IDLE;
+    _jsy2State.state = JsyState::IDLE;
     _http.setConnectTimeout(2000);
     // Bug #5: cast to uint32_t before *1000 to avoid overflow above ~32 s.
     _http.setTimeout((uint32_t)_config->shelly_timeout * 1000UL);
 
-    if (isGridSourceJsy() || isEquip1SourceJsy()) {
-        if (config.jsy_uart_id == 1) _jsySerial = &Serial1;
-        else if (config.jsy_uart_id == 2) _jsySerial = &Serial2;
-
-        if (_jsySerial) {
-            _jsySerial->begin(4800, SERIAL_8N1, config.jsy_rx, config.jsy_tx);
-            // Bug #11: avoid heap-fragmenting String concatenation
-            char buf[96];
-            snprintf(buf, sizeof(buf), "JSY-MK-194 initialized on UART %d (RX:%d TX:%d)",
-                     config.jsy_uart_id, config.jsy_rx, config.jsy_tx);
-            Logger::info(String(buf));
-        }
+    if (isJsy1Active()) {
+        _jsy1Serial = &Serial1;
+        _jsy1Serial->begin(4800, SERIAL_8N1, config.jsy1_rx, config.jsy1_tx);
+        char buf[96];
+        snprintf(buf, sizeof(buf), "JSY1 initialized on UART 1 (RX:%d TX:%d)",
+                 config.jsy1_rx, config.jsy1_tx);
+        Logger::info(String(buf));
     }
+
+    if (isJsy2Active()) {
+        _jsy2Serial = &Serial2;
+        _jsy2Serial->begin(4800, SERIAL_8N1, config.jsy2_rx, config.jsy2_tx);
+        char buf[96];
+        snprintf(buf, sizeof(buf), "JSY2 initialized on UART 2 (RX:%d TX:%d)",
+                 config.jsy2_rx, config.jsy2_tx);
+        Logger::info(String(buf));
+    }
+
+    startBackgroundPoll();
+}
+
+bool GridSensorService::isGridSourceJsy1() {
+    return _config && _config->grid_measure_source == "jsy1";
+}
+
+bool GridSensorService::isGridSourceJsy2() {
+    return _config && _config->grid_measure_source == "jsy2";
+}
+
+bool GridSensorService::isEquip1SourceJsy1() {
+    return _config && _config->equip1_measure_source == "jsy1";
+}
+
+bool GridSensorService::isEquip1SourceJsy2() {
+    return _config && _config->equip1_measure_source == "jsy2";
+}
+
+bool GridSensorService::isJsy1Active() {
+    return _config && (isGridSourceJsy1() || isEquip1SourceJsy1());
+}
+
+bool GridSensorService::isJsy2Active() {
+    return _config && (isGridSourceJsy2() || isEquip1SourceJsy2());
 }
 
 bool GridSensorService::isJsyActive() {
-    return _config && (isGridSourceJsy() || isEquip1SourceJsy());
+    return isJsy1Active() || isJsy2Active();
 }
 
-bool GridSensorService::isGridSourceJsy() {
-    return _config && _config->grid_measure_source == "jsy";
+void GridSensorService::stopBackgroundPoll() {
+    if (_pollTaskHandle != nullptr) {
+        vTaskDelete(_pollTaskHandle);
+        _pollTaskHandle = nullptr;
+    }
 }
 
-bool GridSensorService::isEquip1SourceJsy() {
-    return _config && _config->equip1_measure_source == "jsy";
+void GridSensorService::startBackgroundPoll() {
+    stopBackgroundPoll();
+    xTaskCreatePinnedToCore(networkPollTask, "netPollTask", 8192, NULL, 1, &_pollTaskHandle, 0);
+}
+
+void GridSensorService::networkPollTask(void* pvParameters) {
+    esp_task_wdt_add(NULL);
+    while (true) {
+        esp_task_wdt_reset();
+        
+        if (_config) {
+            // 1. Grid Shelly HTTP Poll (if source is shelly and MQTT is off)
+            if (_config->grid_measure_source == "shelly" && !_config->e_shelly_mqtt) {
+                float p = fetchShellyHttpData();
+                if (p != SENSOR_ERROR_VALUE) {
+                    currentGridPower = p;
+                    hasFreshData.store(true);
+                }
+            }
+
+            esp_task_wdt_reset();
+
+            // 2. Equipments Shelly HTTP Poll (if MQTT is off or stale)
+            Shelly1PMManager::performBackgroundHttpUpdate();
+
+            esp_task_wdt_reset();
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(100)); // Background frequency (10Hz)
+    }
 }
 
 bool GridSensorService::fetchGridData() {
     if (!_config) {
-        hasFreshData = false; // Bug #6
+        hasFreshData.store(false); // Bug #6
         return false;
     }
 
     float gridPower = SENSOR_ERROR_VALUE;
     bool fresh = false;
 
-    // JSY source for grid
-    if (isGridSourceJsy()) {
-        gridPower = readJSY();
-        if (gridPower != SENSOR_ERROR_VALUE) {
+    bool needsJsy1 = isGridSourceJsy1() || isEquip1SourceJsy1();
+    bool needsJsy2 = isGridSourceJsy2() || isEquip1SourceJsy2();
+
+    float jsy1_p1 = 0, jsy1_p2 = 0;
+    float jsy2_p1 = 0, jsy2_p2 = 0;
+    bool jsy1_ok = false;
+    bool jsy2_ok = false;
+
+    if (needsJsy1) jsy1_ok = pollJSY(_jsy1Serial, _jsy1State, jsy1_p1, jsy1_p2);
+    if (needsJsy2) jsy2_ok = pollJSY(_jsy2Serial, _jsy2State, jsy2_p1, jsy2_p2);
+
+    // Update currentEquip1PowerFromJsy
+    if (isEquip1SourceJsy1() && jsy1_ok) {
+        currentEquip1PowerFromJsy = (_config->jsy_equip1_channel == 2) ? jsy1_p2 : jsy1_p1;
+    } else if (isEquip1SourceJsy2() && jsy2_ok) {
+        currentEquip1PowerFromJsy = (_config->jsy_equip1_channel == 2) ? jsy2_p2 : jsy2_p1;
+    }
+
+    // Grid source for grid
+    if (isGridSourceJsy1()) {
+        if (jsy1_ok) {
+            gridPower = (_config->jsy_grid_channel == 2) ? jsy1_p2 : jsy1_p1;
+            fresh = true;
+        }
+    } else if (isGridSourceJsy2()) {
+        if (jsy2_ok) {
+            gridPower = (_config->jsy_grid_channel == 2) ? jsy2_p2 : jsy2_p1;
             fresh = true;
         }
     }
@@ -78,90 +171,68 @@ bool GridSensorService::fetchGridData() {
             fresh = true;
         }
     }
-    // Shelly HTTP Method (Fallback)
+    // Shelly HTTP Method (Handled by background task)
     else {
-        static uint32_t lastHttpPoll = 0;
-        uint32_t now = millis();
-        if (now - lastHttpPoll >= 1000) {
-            gridPower = getShellyPower();
-            lastHttpPoll = now;
-            if (gridPower != SENSOR_ERROR_VALUE) {
-                fresh = true;
-            }
+        if (hasFreshData.exchange(false)) {
+            gridPower = currentGridPower;
+            fresh = true;
         }
     }
 
     if (fresh && !isnan(gridPower)) {
         currentGridPower = gridPower;
-        hasFreshData = true;
         return true;
     }
 
-    // Bug #6: explicitly clear stale flag on any failure path so consumers
-    // can't mistake an old reading for fresh data.
-    hasFreshData = false;
     return false;
 }
 
-float GridSensorService::readJSY() {
-    if (!_jsySerial) return SENSOR_ERROR_VALUE;
+float GridSensorService::fetchShellyHttpData() {
+    return getShellyPower();
+}
 
-    // JSY-MK-194G: read block starting at 0x0048 (14 registers).
-    // Ch1 active power at 0x004A (u32, W = DATA/10000)
-    // Ch2 active power at 0x0052 (u32, W = DATA/10000)
-    uint8_t query[] = {0x01, 0x03, 0x00, 0x48, 0x00, 0x0E, 0x44, 0x18};
+bool GridSensorService::pollJSY(HardwareSerial* serial, JsyState& state, float& p1, float& p2) {
+    if (!serial) return false;
 
-    // Bug #8: cap clear-buffer loop to avoid infinite spin under RX storm.
-    {
+    // Timeout or manual reset
+    if (state.state == JsyState::WAITING && (millis() - state.queryTime > 150)) {
+        state.state = JsyState::IDLE;
+    }
+
+    if (state.state == JsyState::IDLE) {
+        // Drain garbage (capped to avoid infinite spin under RX storm)
         int drain = 0;
-        while (_jsySerial->available() && drain < 256) { _jsySerial->read(); drain++; }
+        while (serial->available() && drain < 256) { serial->read(); drain++; }
+        
+        uint8_t query[] = {0x01, 0x03, 0x00, 0x48, 0x00, 0x0E, 0x44, 0x18};
+        serial->write(query, 8);
+        serial->flush();
+        state.queryTime = millis();
+        state.state = JsyState::WAITING;
+        return false;
     }
 
-    _jsySerial->write(query, 8);
-    _jsySerial->flush();
-
-    // Expected response: addr(1)+func(1)+bytecount(1)+data(28)+crc(2)=33 bytes
+    // Check for response
     const int EXPECTED_LEN = 33;
-    uint8_t response[40];
-    uint32_t startTime = millis();
-    int idx = 0;
-    bool synced = false;
+    if (serial->available() < EXPECTED_LEN) return false;
 
-    // Bug #2: resync on slave address byte 0x01 to discard preceding garbage.
-    while ((millis() - startTime) < 150 && idx < EXPECTED_LEN) {
-        if (_jsySerial->available()) {
-            uint8_t b = _jsySerial->read();
-            if (!synced) {
-                if (b == 0x01) {
-                    response[0] = b;
-                    idx = 1;
-                    synced = true;
-                }
-                // else discard byte
-            } else {
-                response[idx++] = b;
-            }
-        } else {
-            // Bug #7: yield to avoid starving other tasks during the wait window
-            vTaskDelay(1);
-        }
+    // Modbus RTU Sync: find slave addr 0x01
+    while (serial->available() > 0 && serial->peek() != 0x01) {
+        serial->read();
     }
+    if (serial->available() < EXPECTED_LEN) return false;
 
-    if (idx < EXPECTED_LEN) return SENSOR_ERROR_VALUE;
+    uint8_t response[40];
+    serial->readBytes(response, EXPECTED_LEN);
 
-    // Bug #1: validate CRC. Modbus RTU CRC is over all bytes except the last 2,
-    // and is little-endian on the wire (low byte first).
     uint16_t crcCalc = calculateCRC(response, EXPECTED_LEN - 2);
     uint16_t crcWire = (uint16_t)response[EXPECTED_LEN - 2] | ((uint16_t)response[EXPECTED_LEN - 1] << 8);
+    
     if (crcCalc != crcWire) {
-        Logger::warn("JSY: CRC mismatch, discarding frame");
-        return SENSOR_ERROR_VALUE;
+        state.state = JsyState::IDLE;
+        return false;
     }
 
-    // Parse active power channels.
-    // Data payload begins at response[3]. Each register is BE 16-bit.
-    // 0x004A is 2 regs after start(0x0048), so byte offset = 2 * 2 = 4.
-    // 0x0052 is 10 regs after start(0x0048), so byte offset = 10 * 2 = 20.
     const int dataBase = 3;
     auto readU32 = [&](int byteOffset) -> uint32_t {
         return ((uint32_t)response[dataBase + byteOffset] << 24)
@@ -170,15 +241,11 @@ float GridSensorService::readJSY() {
              |  (uint32_t)response[dataBase + byteOffset + 3];
     };
 
-    uint32_t p1_raw = readU32(4);   // 0x004A
-    uint32_t p2_raw = readU32(20);  // 0x0052
-    float p1 = (float)p1_raw / 10000.0f;
-    float p2 = (float)p2_raw / 10000.0f;
+    p1 = (float)readU32(4) / 10000.0f;
+    p2 = (float)readU32(20) / 10000.0f;
 
-    currentEquip1PowerFromJsy = (_config->jsy_equip1_channel == 2) ? p2 : p1;
-    float power = (_config->jsy_grid_channel == 2) ? p2 : p1;
-
-    return power;
+    state.state = JsyState::IDLE;
+    return true;
 }
 
 uint16_t GridSensorService::calculateCRC(uint8_t *array, uint8_t len) {

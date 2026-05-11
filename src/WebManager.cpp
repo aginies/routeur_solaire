@@ -19,15 +19,25 @@
 #include <LittleFS.h>
 #include <Update.h>
 #include <ArduinoJson.h>
+#include <AsyncJson.h>
+#include <cstring>
+
+#ifndef REBOOT_COOLDOWN_MS
+#define REBOOT_COOLDOWN_MS 60000U  // 1 minute between reboots per endpoint
+#endif
 AsyncWebServer WebManager::_server(80);
 WiFiClient WebManager::_client;
 HTTPClient WebManager::_http;
 SemaphoreHandle_t WebManager::_httpMutex = nullptr;
 const Config* WebManager::_config = nullptr;
+uint32_t WebManager::_lastRebootTime[7] = {0};  // cooldown per action enum index (zeroed in init())
+static Config _cfg_copy;  // persistent copy, survives beyond init() caller scope
 bool WebManager::_rebootRequested = false;
 
 void WebManager::init(const Config& config) {
-    _config = &config;
+    memset(_lastRebootTime, 0, sizeof(_lastRebootTime));
+    _cfg_copy = config;     // store a self-owned copy instead of pointing at the parameter
+    _config = &_cfg_copy;
     _http.setConnectTimeout(1000);
     _http.setTimeout(2000);
     if (!_httpMutex) _httpMutex = xSemaphoreCreateMutex(); // Bug #6
@@ -94,7 +104,8 @@ void WebManager::applyRequestParams(AsyncWebServerRequest *request, Config &cfg)
     if (has("SHELLY_MQTT_TOPIC")) cfg.shelly_mqtt_topic = get("SHELLY_MQTT_TOPIC").substring(0, 128);
     if (has("GRID_MEASURE_SOURCE")) {
         String s = get("GRID_MEASURE_SOURCE");
-        if (s == "jsy" || s == "shelly") cfg.grid_measure_source = s;
+        if (s == "jsy1" || s == "jsy2" || s == "shelly") cfg.grid_measure_source = s;
+        else if (s == "jsy") cfg.grid_measure_source = "jsy1";
     }
     // Bug #15: these four fields are in SECONDS (code multiplies by 1000 before
     // comparing against millis()/setTimeout()). The previous clamp ranges
@@ -115,7 +126,8 @@ void WebManager::applyRequestParams(AsyncWebServerRequest *request, Config &cfg)
     if (has("EQUIP1_MQTT_TOPIC")) cfg.equip1_mqtt_topic = get("EQUIP1_MQTT_TOPIC").substring(0, 128);
     if (has("EQUIP1_MEASURE_SOURCE")) {
         String s = get("EQUIP1_MEASURE_SOURCE");
-        if (s == "shelly" || s == "jsy") cfg.equip1_measure_source = s;
+        if (s == "shelly" || s == "jsy1" || s == "jsy2") cfg.equip1_measure_source = s;
+        else if (s == "jsy") cfg.equip1_measure_source = "jsy1";
     }
 
     // Equipment 2
@@ -151,11 +163,21 @@ void WebManager::applyRequestParams(AsyncWebServerRequest *request, Config &cfg)
     if (has("SSR_MAX_TEMP")) cfg.ssr_max_temp = clampFloat(get("SSR_MAX_TEMP").toFloat(), 30.0f, 150.0f);
     if (has("ZX_PIN")) setRolePin(cfg.zx_pin, get("ZX_PIN").toInt(), PinRole::ZX_INPUT);
     if (has("CONTROL_MODE")) cfg.control_mode = get("CONTROL_MODE").substring(0, 32);
-    if (has("JSY_UART_ID")) cfg.jsy_uart_id = clampInt(get("JSY_UART_ID").toInt(), 1, 2);
+
+    // Phase-angle calibration (valid only when control_mode == "phase")
+    if (has("PHASE_CALIBRATE")) cfg.phase_calibrate = (get("PHASE_CALIBRATE") == "True");
+    if (has("PHASE_CAL_MIN_US")) cfg.phase_cal_min_us = clampInt(get("PHASE_CAL_MIN_US").toInt(), 10, 9990);
+    if (has("PHASE_CAL_MAX_US")) cfg.phase_cal_max_us = clampInt(get("PHASE_CAL_MAX_US").toInt(), 20, 10000);
+    if (has("PHASE_CAL_STEP_US")) cfg.phase_cal_step_us = clampInt(get("PHASE_CAL_STEP_US").toInt(), 10, 5000);
+    if (has("PHASE_CAL_HOLD_MS")) cfg.phase_cal_hold_ms = clampInt(get("PHASE_CAL_HOLD_MS").toInt(), 1000, 30000);
+
+    // JSY
+    if (has("JSY1_TX")) setRolePin(cfg.jsy1_tx, get("JSY1_TX").toInt(), PinRole::JSY1_TX);
+    if (has("JSY1_RX")) setRolePin(cfg.jsy1_rx, get("JSY1_RX").toInt(), PinRole::JSY1_RX);
+    if (has("JSY2_TX")) setRolePin(cfg.jsy2_tx, get("JSY2_TX").toInt(), PinRole::JSY2_TX);
+    if (has("JSY2_RX")) setRolePin(cfg.jsy2_rx, get("JSY2_RX").toInt(), PinRole::JSY2_RX);
     if (has("JSY_GRID_CHANNEL")) cfg.jsy_grid_channel = clampInt(get("JSY_GRID_CHANNEL").toInt(), 1, 2);
     if (has("JSY_EQUIP1_CHANNEL")) cfg.jsy_equip1_channel = clampInt(get("JSY_EQUIP1_CHANNEL").toInt(), 1, 2);
-    if (has("JSY_TX")) setRolePin(cfg.jsy_tx, get("JSY_TX").toInt(), PinRole::JSY_TX);
-    if (has("JSY_RX")) setRolePin(cfg.jsy_rx, get("JSY_RX").toInt(), PinRole::JSY_RX);
 
     // Force / Night
     if (has("BOOST_MINUTES")) cfg.boost_minutes = get("BOOST_MINUTES").toInt();
@@ -252,15 +274,18 @@ void WebManager::setupRoutes() {
         sendLogSnapshot(request, "/solar_data.txt", "solar_data.txt", "Data file not found");
     });
 
-    _server.on("/get_log_action", HTTP_GET, [](AsyncWebServerRequest *request) {
+    _server.on("/get_log_action", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
         Logger::streamLogs(request);
     });
 
-    _server.on("/get_solar_data", HTTP_GET, [](AsyncWebServerRequest *request) {
+    _server.on("/get_solar_data", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
         Logger::streamDataLogs(request);
     });
 
-    _server.on("/weather_refresh", HTTP_GET, [](AsyncWebServerRequest *request) {
+    _server.on("/weather_refresh", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
         WeatherManager::forceUpdate();
         request->send(200, "text/plain", "OK");
     });
@@ -424,6 +449,9 @@ void WebManager::setupRoutes() {
             LittleFS.remove("/stats.json");
             if (LittleFS.rename("/stats_upload.json", "/stats.json")) {
                 Logger::info("Stats upload complete (" + String(uploadedBytes) + " bytes)");
+#ifndef DISABLE_STATS
+                StatsManager::_importInProgress = true;
+#endif
                 setStatus(0);
             } else {
                 Logger::error("Stats upload: rename failed");
@@ -448,6 +476,72 @@ void WebManager::setupRoutes() {
         request->send(response);
     });
 
+    _server.on("/web_phase_cal", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
+        AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/web_phase_cal.html.gz", "text/html");
+        response->addHeader("Content-Encoding", "gzip");
+        request->send(response);
+    });
+
+    // Phase cal POST handler (replaces the _server.on HTTP_POST handler below)
+    auto phaseCalHandler = new AsyncCallbackJsonWebHandler("/api/phase_cal",
+        [authRequired](AsyncWebServerRequest *request, JsonVariant &json) {
+        if (!authRequired(request)) return;
+        const char* action = json["action"] | "";
+        const int jumpTo = json["jumpTo"] | -1;
+
+        if (strcmp(action, "start") == 0) {
+            // Start calibration sweep (will launch task on next config-save + reboot)
+            Config newCfg = *_config;
+            newCfg.phase_calibrate = true;
+            newCfg.phase_cal_min_us = json["min"] | newCfg.phase_cal_min_us;
+            newCfg.phase_cal_max_us = json["max"] | newCfg.phase_cal_max_us;
+            newCfg.phase_cal_step_us = json["step"] | newCfg.phase_cal_step_us;
+            newCfg.phase_cal_hold_ms = json["hold"] | newCfg.phase_cal_hold_ms;
+            ConfigManager::save(newCfg);
+            if (requestReboot(RebootAction::PhaseCalStart)) {
+                request->send(200, "application/json", "{\"ok\":true}");
+            } else {
+                request->send(429, "application/json", "{\"error\":\"Trop frequent\"}");
+            }
+        } else if (strcmp(action, "exit") == 0) {
+            // Exit calibration mode (SSR goes off)
+            Config newCfg = *_config;
+            newCfg.phase_calibrate = false;
+            ConfigManager::save(newCfg);
+            if (requestReboot(RebootAction::PhaseCalExit)) {
+                request->send(200, "application/json", "{\"ok\":true}");
+            } else {
+                request->send(429, "application/json", "{\"error\":\"Trop frequent\"}");
+            }
+        } else if (strcmp(action, "pause") == 0) {
+            ControlStrategy::setPhaseCalCommand("pause", -1);
+            request->send(200, "application/json", "{\"ok\":true,\"paused\":true}");
+        } else if (strcmp(action, "resume") == 0) {
+            ControlStrategy::setPhaseCalCommand("resume", -1);
+            request->send(200, "application/json", "{\"ok\":true,\"paused\":false}");
+        } else if (strcmp(action, "jump") == 0) {
+            ControlStrategy::setPhaseCalCommand("jump", jumpTo);
+            request->send(200, "application/json", "{\"ok\":true}");
+        } else if (strcmp(action, "status") == 0) {
+            // return live calibration status
+            bool active = ControlStrategy::getPhaseCalActive();
+            JsonDocument resp;
+            resp["active"] = active;
+            resp["paused"] = ControlStrategy::getPhaseCalPaused();
+            resp["delay_us"] = active ? ControlStrategy::getPhaseCalCurrentDelayUs() : 0;
+            resp["gridPower"] = active ? ControlStrategy::getPhaseCalGridPower() : 0;
+            resp["equipPower"] = active ? ControlStrategy::getPhaseCalEquipmentPower() : 0;
+            resp["progress"] = active ? ControlStrategy::getPhaseCalProgress() : 0;
+            String buf;
+            serializeJson(resp, buf);
+            request->send(200, "application/json", buf);
+        } else {
+            request->send(400, "application/json", "{\"error\":\"unknown action\"}");
+        }
+    });
+    _server.addHandler(phaseCalHandler);
+
     _server.on("/web_dev", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
         AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/web_dev.html.gz", "text/html");
@@ -461,11 +555,16 @@ void WebManager::setupRoutes() {
         Config newCfg = *_config;
         applyRequestParams(request, newCfg);
         
-        if (ConfigManager::save(newCfg)) {
+        if (ConfigManager::save(newCfg) && requestReboot(RebootAction::SaveConfigEq2)) {
             request->send(200, "text/plain", "OK");
-            _rebootRequested = true;
-        } else request->send(500);
+        } else if (!ConfigManager::save(newCfg)) {
+            request->send(500);
+        } else {
+            // save succeeded but reboot throttled
+            request->send(429, "application/json", "{\"error\":\"Trop frequent\"}");
+        }
     });
+
     _server.on("/save_eq2_schedule", HTTP_POST, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
         Config newCfg = *_config;
@@ -473,12 +572,13 @@ void WebManager::setupRoutes() {
             String schedStr = request->getParam("schedule", true)->value();
             if (schedStr.length() == 0) schedStr = "0";
             newCfg.equip2_schedule = strtoull(schedStr.c_str(), NULL, 10);
-            if (ConfigManager::save(newCfg)) {
-                // Bug #16: schedule is loaded once at boot; reboot so the change takes effect
-                request->send(200, "text/plain", "OK");
-                _rebootRequested = true;
-            } else {
+            bool saved = ConfigManager::save(newCfg);
+            if (!saved) {
                 request->send(500);
+            } else if (requestReboot(RebootAction::SaveSchedule)) {
+                request->send(200, "text/plain", "OK");
+            } else {
+                request->send(429, "application/json", "{\"error\":\"Trop frequent\"}");
             }
         } else {
             request->send(400, "text/plain", "Missing schedule parameter");
@@ -490,7 +590,8 @@ void WebManager::setupRoutes() {
         Eq2State s = Equipment2Manager::getState();
         String stateStr = "OFF";
         if (s == Eq2State::ON) stateStr = "MARCHE";
-        else if (s == Eq2State::PENDING_OFF) stateStr = "ARRÊT IMMINENT";
+        else if (s == Eq2State::PENDING_OFF || s == Eq2State::PENDING_OFF_DELAY) stateStr = "ARRÊT IMMINENT";
+        else if (s == Eq2State::PENDING_ON) stateStr = "MARCHE IMMINENTE";
         doc["state"] = stateStr;
         doc["power"] = Shelly1PMManager::getPower();
         doc["min_time"] = Equipment2Manager::getRemainingMinTime();
@@ -508,11 +609,13 @@ void WebManager::setupRoutes() {
         Config newCfg = *_config;
         applyRequestParams(request, newCfg);
 
-        if (ConfigManager::save(newCfg)) {
-            request->send(200, "text/plain", "Configuration sauvegardée. Redémarrage...");
-            _rebootRequested = true;
-        } else {
+        bool saved = ConfigManager::save(newCfg);
+        if (saved && requestReboot(RebootAction::SaveConfig)) {
+            request->send(200, "text/plain", "Configuration sauvegardee. Redemarrage...");
+        } else if (!saved) {
             request->send(500, "text/plain", "Erreur lors de la sauvegarde");
+        } else {
+            request->send(429, "application/json", "{\"error\":\"Trop frequent\"}");
         }
     });
 
@@ -563,13 +666,21 @@ void WebManager::setupRoutes() {
         doc["force_start"] = _config->force_start;
         doc["force_end"] = _config->force_end;
         doc["night_poll_interval"] = _config->night_poll_interval;
-        doc["jsy_uart_id"] = _config->jsy_uart_id;
+        doc["jsy1_tx"] = _config->jsy1_tx;
+        doc["jsy1_rx"] = _config->jsy1_rx;
+        doc["jsy2_tx"] = _config->jsy2_tx;
+        doc["jsy2_rx"] = _config->jsy2_rx;
         doc["jsy_grid_channel"] = _config->jsy_grid_channel;
         doc["jsy_equip1_channel"] = _config->jsy_equip1_channel;
-        doc["jsy_tx"] = _config->jsy_tx;
-        doc["jsy_rx"] = _config->jsy_rx;
         doc["zx_pin"] = _config->zx_pin;
         doc["control_mode"] = _config->control_mode;
+        // Phase-angle calibration settings
+        doc["phase_calibrate"] = _config->phase_calibrate;
+        doc["phase_cal_min_us"] = _config->phase_cal_min_us;
+        doc["phase_cal_max_us"] = _config->phase_cal_max_us;
+        doc["phase_cal_step_us"] = _config->phase_cal_step_us;
+        doc["phase_cal_hold_ms"] = _config->phase_cal_hold_ms;
+        // Fan settings
         doc["e_fan"] = _config->e_fan;
         doc["fan_pin"] = _config->fan_pin;
         doc["fan_temp_offset"] = _config->fan_temp_offset;
@@ -650,8 +761,18 @@ void WebManager::setupRoutes() {
 
     _server.on("/RESET_device", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
-        request->send(200, "text/plain", "Redémarrage en cours...");
-        _rebootRequested = true;
+        if (requestReboot(RebootAction::ResetDevice)) {
+            request->send(200, "text/plain", "Redemarrage en cours...");
+        } else {
+            request->send(429, "application/json", "{\"error\":\"Trop frequent\"}");
+        }
+    });
+
+    _server.on("/RESET_config", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
+        bool throttled = !requestReboot(RebootAction::ResetConfig);
+        ConfigManager::reset();
+        request->send(throttled ? 429 : 200, "text/plain", throttled ? "Redemarrage bloque (trop frequent)" : "Configuration effacee. Redemarrage en cours...");
     });
 
     _server.on("/RESET_config", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
@@ -776,11 +897,13 @@ void WebManager::setupRoutes() {
         request->send(200, "application/json", result);
     });
 
-    _server.on("/status", HTTP_GET, [](AsyncWebServerRequest *request) {
+    _server.on("/status", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
         streamStatusJson(request);
     });
 
-    _server.on("/history", HTTP_GET, [](AsyncWebServerRequest *request) {
+    _server.on("/history", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
+        if (!authRequired(request)) return;
         HistoryBuffer::streamHistoryJson(request);
     });
 }
@@ -788,7 +911,7 @@ void WebManager::setupRoutes() {
 void WebManager::streamStatusJson(AsyncWebServerRequest *request) {
     AsyncResponseStream *response = request->beginResponseStream("application/json");
     JsonDocument doc;
-    doc["grid_power"] = GridSensorService::currentGridPower;
+    doc["grid_power"] = (float)GridSensorService::currentGridPower;
     doc["equipment_power"] = ActuatorManager::equipmentPower;
     doc["eq1_real_power"] = Shelly1PMManager::getPowerEq1();
     doc["equip2_power"] = Shelly1PMManager::getPower();
@@ -840,8 +963,10 @@ void WebManager::streamStatusJson(AsyncWebServerRequest *request) {
 
     doc["esp_temp"] = cachedEspTemp;
 
-    if (_config->grid_measure_source == "jsy") {
-        doc["grid_source"] = "JSY";
+    if (_config->grid_measure_source == "jsy1" || _config->grid_measure_source == "jsy") {
+        doc["grid_source"] = "JSY1";
+    } else if (_config->grid_measure_source == "jsy2") {
+        doc["grid_source"] = "JSY2";
     } else {
         doc["grid_source"] = _config->e_shelly_mqtt ? "MQTT" : "HTTP";
     }
@@ -920,8 +1045,10 @@ void WebManager::streamStatusJson(AsyncWebServerRequest *request) {
     addPinValidation("zx_pin", _config->zx_pin, PinRole::ZX_INPUT);
     addPinValidation("ds18b20_pin", _config->ds18b20_pin, PinRole::DS18B20);
     addPinValidation("internal_led_pin", _config->internal_led_pin, PinRole::INTERNAL_LED);
-    addPinValidation("jsy_tx", _config->jsy_tx, PinRole::JSY_TX);
-    addPinValidation("jsy_rx", _config->jsy_rx, PinRole::JSY_RX);
+    addPinValidation("jsy1_tx", _config->jsy1_tx, PinRole::JSY1_TX);
+    addPinValidation("jsy1_rx", _config->jsy1_rx, PinRole::JSY1_RX);
+    addPinValidation("jsy2_tx", _config->jsy2_tx, PinRole::JSY2_TX);
+    addPinValidation("jsy2_rx", _config->jsy2_rx, PinRole::JSY2_RX);
     doc["pin_validation_ok"] = allPinsValid;
     
     time_t t_now_epoch;
@@ -969,3 +1096,17 @@ void WebManager::streamStatusJson(AsyncWebServerRequest *request) {
 String WebManager::getHistoryJson() {
     return HistoryBuffer::getHistoryJson();
 }
+
+bool WebManager::requestReboot(RebootAction action) {
+    uint32_t now = millis();
+    uint32_t elapsed = now - _lastRebootTime[(int)action];
+    if (elapsed < REBOOT_COOLDOWN_MS) {
+        uint32_t remaining = (REBOOT_COOLDOWN_MS - elapsed + 500) / 1000; // ceiling division
+        Logger::warn(String("Reboot throttled: ") + remaining + " seconds remain");
+        return false;
+    }
+    _rebootRequested = true;
+    _lastRebootTime[(int)action] = now;
+    return true;
+}
+

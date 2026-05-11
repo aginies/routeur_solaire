@@ -25,10 +25,7 @@ void Equipment2Manager::init(const Config& config) {
     Shelly1PMManager::init(config);
 
     if (!config.e_equip2) {
-        // Bug #6: log if disabling fails
-        if (!Shelly1PMManager::turnOff()) {
-            Logger::warn("Equipment2Manager::init: Shelly turnOff failed (equip2 disabled)");
-        }
+        Logger::info("Equipment2 is disabled by configuration");
     }
 }
 
@@ -98,13 +95,9 @@ void Equipment2Manager::loop() {
         case Eq2State::OFF:
             if (shouldBeOn && shellyAttemptAllowed()) {
                 s_lastShellyAttemptMs = now;
-                if (Shelly1PMManager::turnOn()) {
-                    _state = Eq2State::ON;
-                    _stateChangedMs = now;
-                    Logger::info("Eq2: OFF -> ON"); // Bug #7
-                } else {
-                    Logger::warn("Eq2: turnOn failed; backing off");
-                }
+                Shelly1PMManager::requestTurnOn();
+                _state = Eq2State::PENDING_ON;
+                Logger::info("Eq2: OFF -> PENDING_ON");
             }
             break;
 
@@ -114,49 +107,60 @@ void Equipment2Manager::loop() {
                 if (getRemainingMinTime() == 0) {
                     if (shellyAttemptAllowed()) {
                         s_lastShellyAttemptMs = now;
-                        if (Shelly1PMManager::turnOff()) {
-                            _state = Eq2State::OFF;
-                            _stateChangedMs = now;
-                            Logger::info("Eq2: ON -> OFF"); // Bug #7
-                        } else {
-                            Logger::warn("Eq2: turnOff failed; backing off");
-                        }
+                        Shelly1PMManager::requestTurnOff();
+                        _state = Eq2State::PENDING_OFF;
+                        Logger::info("Eq2: ON -> PENDING_OFF");
                     }
                 } else {
-                    _state = Eq2State::PENDING_OFF;
-                    Logger::info("Eq2: ON -> PENDING_OFF"); // Bug #7
+                    _state = Eq2State::PENDING_OFF_DELAY;
+                    Logger::info("Eq2: ON -> PENDING_OFF_DELAY");
                 }
             }
             break;
 
-        case Eq2State::PENDING_OFF:
+        case Eq2State::PENDING_OFF_DELAY:
             if (shouldBeOn) {
                 _state = Eq2State::ON; // Abort turn off
-                Logger::info("Eq2: PENDING_OFF -> ON (abort)"); // Bug #7
+                Logger::info("Eq2: PENDING_OFF_DELAY -> ON (abort)");
             } else if (getRemainingMinTime() == 0) {
                 if (shellyAttemptAllowed()) {
                     s_lastShellyAttemptMs = now;
-                    if (Shelly1PMManager::turnOff()) {
-                        _state = Eq2State::OFF;
-                        _stateChangedMs = now;
-                        Logger::info("Eq2: PENDING_OFF -> OFF"); // Bug #7
-                    } else {
-                        Logger::warn("Eq2: turnOff failed; backing off");
-                    }
+                    Shelly1PMManager::requestTurnOff();
+                    _state = Eq2State::PENDING_OFF;
+                    Logger::info("Eq2: PENDING_OFF_DELAY -> PENDING_OFF");
                 }
             }
             break;
 
         case Eq2State::PENDING_ON:
-            // Bug #5: defined in enum but never reached today; treat as a
-            // best-effort bridge to ON so it can't get stuck.
-            if (shellyAttemptAllowed()) {
-                s_lastShellyAttemptMs = now;
-                if (Shelly1PMManager::turnOn()) {
-                    _state = Eq2State::ON;
-                    _stateChangedMs = now;
-                    Logger::info("Eq2: PENDING_ON -> ON");
-                }
+            // Check if background task successfully updated the relay state
+            if (Shelly1PMManager::isRelayOn()) {
+                _state = Eq2State::ON;
+                _stateChangedMs = now;
+                Logger::info("Eq2: PENDING_ON -> ON (success)");
+            } else if (!shouldBeOn) {
+                _state = Eq2State::OFF;
+                Logger::info("Eq2: PENDING_ON -> OFF (aborted by logic)");
+            } else if (now - s_lastShellyAttemptMs > 10000) {
+                // Background task failed to turn it on within 10s
+                Logger::warn("Eq2: PENDING_ON timeout, retrying...");
+                s_lastShellyAttemptMs = 0; // force retry
+                _state = Eq2State::OFF;
+            }
+            break;
+
+        case Eq2State::PENDING_OFF:
+            if (!Shelly1PMManager::isRelayOn()) {
+                _state = Eq2State::OFF;
+                _stateChangedMs = now;
+                Logger::info("Eq2: PENDING_OFF -> OFF (success)");
+            } else if (shouldBeOn) {
+                _state = Eq2State::ON;
+                Logger::info("Eq2: PENDING_OFF -> ON (aborted by logic)");
+            } else if (now - s_lastShellyAttemptMs > 10000) {
+                Logger::warn("Eq2: PENDING_OFF timeout, retrying...");
+                s_lastShellyAttemptMs = 0;
+                _state = Eq2State::ON;
             }
             break;
 

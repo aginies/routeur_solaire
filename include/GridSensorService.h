@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <WiFiClient.h>
 #include <HTTPClient.h>
+#include <atomic>
 #include "Config.h"
 
 class GridSensorService {
@@ -11,31 +12,42 @@ public:
     static void init(const Config& config);
     static float getShellyPower();
     static bool fetchGridData();
+    static bool isJsy1Active();
+    static bool isJsy2Active();
     static bool isJsyActive();
-    static bool isGridSourceJsy();
-    static bool isEquip1SourceJsy();
+    static bool isGridSourceJsy1();
+    static bool isGridSourceJsy2();
+    static bool isEquip1SourceJsy1();
+    static bool isEquip1SourceJsy2();
     static float currentEquip1PowerFromJsy;
 
-    // Bug #4 (header audit) — REVERTED: marking these `volatile` broke ArduinoJson
-    // template overload resolution (`doc["grid_power"] = currentGridPower` produced
-    // wrong/empty JSON output, hiding grid power on the web UI). The previous
-    // non-volatile pattern is fine in practice: writers live in a single sensor task
-    // and ESP32 word-aligned float/bool reads are atomic at the hardware level. If
-    // strict freshness ever matters, add explicit snapshot accessors instead of
-    // making the storage volatile.
-    static float currentGridPower;
+    static volatile float currentGridPower;
     static float currentGridVoltage;
-    static bool hasFreshData;
+    static std::atomic<bool> hasFreshData;
+
+    static void startBackgroundPoll();
+    static void stopBackgroundPoll();
 
 private:
-    static float readJSY();
+    struct JsyState {
+        enum { IDLE, WAITING } state = IDLE;
+        uint32_t queryTime = 0;
+    };
+
+    static void networkPollTask(void* pvParameters);
+    static float fetchShellyHttpData();
+    static bool pollJSY(HardwareSerial* serial, JsyState& state, float& p1, float& p2);
     static uint16_t calculateCRC(uint8_t *array, uint8_t len);
 
     static WiFiClient _client;
     static HTTPClient _http;
 
     static const Config* _config;
-    static HardwareSerial* _jsySerial;
+    static HardwareSerial* _jsy1Serial;
+    static HardwareSerial* _jsy2Serial;
+    static JsyState _jsy1State;
+    static JsyState _jsy2State;
+    static TaskHandle_t _pollTaskHandle;
 };
 
 #endif

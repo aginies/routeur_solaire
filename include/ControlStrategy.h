@@ -28,10 +28,20 @@ public:
     static bool isPhaseTimerArmPending();
     static uint32_t getPhaseLastRequestedWaitUs();
 
+    // Phase calibration public API (used by WebManager)
+    static void setPhaseCalCommand(const char* action, int jumpTo);
+    static int getPhaseCalCurrentDelayUs();
+    static float getPhaseCalGridPower();
+    static float getPhaseCalEquipmentPower();
+    static float getPhaseCalProgress();
+    static bool getPhaseCalActive();
+    static bool getPhaseCalPaused();
+
 private:
     static void burstControlTask(void* pvParameters);
     static void cycleStealingTask(void* pvParameters);
     static void phaseControlTask(void* pvParameters);
+    static void phaseCalibrateTask(void* pvParameters); // phase-angle calibration sweep
     static void phaseFireSsr(void* arg); // esp_timer one-shot callback
 
     static const Config* _config;

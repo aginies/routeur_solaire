@@ -4,6 +4,21 @@
 #include <WiFi.h>
 #include <ArduinoJson.h>
 
+// Max topic length enforced by espMqttClient's internal buffer.
+// Longer topics would be silently truncated or rejected by the broker,
+// so we validate early with a clear warning (Bug #2).
+static const size_t MAX_MQTT_TOPIC_LENGTH = 128;
+
+static inline bool isTopicValid(const String& topic) {
+    if (topic.length() == 0 || topic.length() > MAX_MQTT_TOPIC_LENGTH) return false;
+    // Reject topics with null bytes or control characters — they confuse the MQTT stack.
+    for (size_t i = 0; i < topic.length(); ++i) {
+        char c = topic.charAt(i);
+        if (c == '\0' || (c < ' ' && c != '/')) return false;
+    }
+    return true;
+}
+
 espMqttClient MqttManager::_mqttClient;
 const Config* MqttManager::_config = nullptr;
 String MqttManager::_nodeId = "";
@@ -37,8 +52,13 @@ void MqttManager::init(const Config& config) {
         _mqttClient.setCredentials(config.mqtt_user.c_str(), config.mqtt_password.c_str());
     }
 
+    // Bug #2: validate LWT topic (built from user-controlled mqtt_name) before passing to the client.
     _lwtTopic = config.mqtt_name + "/status";
-    _mqttClient.setWill(_lwtTopic.c_str(), 0, true, "offline");
+    if (!isTopicValid(_lwtTopic)) {
+        Logger::warn("MQTT: LWT topic too long or contains invalid chars (" + _lwtTopic + "), skipping will");
+    } else {
+        _mqttClient.setWill(_lwtTopic.c_str(), 0, true, "offline");
+    }
 
     connectToMqtt();
     // Bug #13: prevent loop() from issuing a second connect() before the first completes
@@ -76,22 +96,52 @@ void MqttManager::connectToMqtt() {
 void MqttManager::onMqttConnect(bool sessionPresent) {
     if (!_config) return; // Bug #6: defensive null guard
     Logger::info("Connected to MQTT broker");
-    _mqttClient.publish((_config->mqtt_name + "/status").c_str(), 0, true, "online");
+
+    String statusTopic = _config->mqtt_name + "/status";
+    if (isTopicValid(statusTopic)) {
+        _mqttClient.publish(statusTopic.c_str(), 0, true, "online");
+    } else {
+        Logger::warn("MQTT: skipping publish to 'status' — invalid topic");
+    }
 
     if (_config->e_shelly_mqtt) {
-        _mqttClient.subscribe(_config->shelly_mqtt_topic.c_str(), 0);
+        String powerTopic = _config->shelly_mqtt_topic;
         String voltageTopic = _config->shelly_mqtt_topic.substring(0, _config->shelly_mqtt_topic.lastIndexOf('/')) + "/voltage";
-        _mqttClient.subscribe(voltageTopic.c_str(), 0);
-        Logger::info("Subscribed to Shelly topics: " + _config->shelly_mqtt_topic + " & " + voltageTopic);
+        bool validPower = isTopicValid(powerTopic);
+        bool validVoltage = isTopicValid(voltageTopic);
+
+        if (validPower) {
+            _mqttClient.subscribe(powerTopic.c_str(), 0);
+        } else {
+            Logger::warn("MQTT: skipping subscribe to Shelly power topic — invalid");
+        }
+        if (validVoltage) {
+            _mqttClient.subscribe(voltageTopic.c_str(), 0);
+        } else {
+            Logger::warn("MQTT: skipping subscribe to Shelly voltage topic — invalid");
+        }
+
+        String combined = powerTopic;
+        if (validPower && validVoltage) combined += " & ";
+        combined += voltageTopic;
+        Logger::info("Subscribed to Shelly topics: " + combined);
     }
 
     if (_config->e_equip1_mqtt && _config->equip1_mqtt_topic.length() > 0) {
-        _mqttClient.subscribe(_config->equip1_mqtt_topic.c_str(), 0);
-        Logger::info("Subscribed to Eq1 MQTT: " + _config->equip1_mqtt_topic);
+        String eq1Topic = _config->equip1_mqtt_topic;
+        if (isTopicValid(eq1Topic)) {
+            _mqttClient.subscribe(eq1Topic.c_str(), 0);
+        } else {
+            Logger::warn("MQTT: skipping subscribe to Eq1 topic — invalid");
+        }
     }
     if (_config->e_equip2_mqtt && _config->equip2_mqtt_topic.length() > 0) {
-        _mqttClient.subscribe(_config->equip2_mqtt_topic.c_str(), 0);
-        Logger::info("Subscribed to Eq2 MQTT: " + _config->equip2_mqtt_topic);
+        String eq2Topic = _config->equip2_mqtt_topic;
+        if (isTopicValid(eq2Topic)) {
+            _mqttClient.subscribe(eq2Topic.c_str(), 0);
+        } else {
+            Logger::warn("MQTT: skipping subscribe to Eq2 topic — invalid");
+        }
     }
 
     // Always send discovery on connect to ensure HA picks it up
@@ -201,7 +251,14 @@ void MqttManager::sendDiscovery() {
 
         String payload;
         serializeJson(doc, payload);
+        // Bug #2: validate the discovery topic before publishing.
+        // The prefix + deviceId + suffix can easily exceed espMqttClient's internal buffer
+        // if mqtt_name or mqtt_discovery_prefix are set to long values.
         String topic = _config->mqtt_discovery_prefix + "/sensor/" + deviceId + "/" + uniqueSuffix + "/config";
+        if (!isTopicValid(topic)) {
+            Logger::error("MQTT: discovery topic too long (" + topic.substring(0, 128) + "…), skipping");
+            return;
+        }
         _mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
     };
 
@@ -237,19 +294,33 @@ void MqttManager::publishStatus(float gridPower, float equipmentPower, bool equi
 
     char val[16];
     bool retain = _config->mqtt_retain;
+
+    // Bug #2: validate topic before publishing (topic built from user mqtt_name).
+    if (!isTopicValid(tPower)) return;
     snprintf(val, sizeof(val), "%.0f", gridPower);
     _mqttClient.publish(tPower.c_str(), 0, retain, val);
+
+    if (!isTopicValid(tEqPower)) goto skip_eq_power;
     snprintf(val, sizeof(val), "%.0f", equipmentPower);
     _mqttClient.publish(tEqPower.c_str(), 0, retain, val);
+skip_eq_power:
+
+    if (!isTopicValid(tEqPercent)) goto skip_eq_percent;
     snprintf(val, sizeof(val), "%.1f", equipmentPercent);
     _mqttClient.publish(tEqPercent.c_str(), 0, retain, val);
+skip_eq_percent:
+
+    if (!isTopicValid(tEspTemp)) goto skip_esp_temp;
     snprintf(val, sizeof(val), "%.1f", esp32Temp);
     _mqttClient.publish(tEspTemp.c_str(), 0, retain, val);
+skip_esp_temp:
+
+    // Fan topics are short and fixed — no validation needed.
     _mqttClient.publish(tFanActive.c_str(), 0, retain, fanActive ? "ON" : "OFF");
     snprintf(val, sizeof(val), "%d", fanPercent);
     _mqttClient.publish(tFanPercent.c_str(), 0, retain, val);
 
-    if (ssrTemp > -100.0) {
+    if (ssrTemp > -100.0 && isTopicValid(tSsrTemp)) {
         snprintf(val, sizeof(val), "%.1f", ssrTemp);
         _mqttClient.publish(tSsrTemp.c_str(), 0, retain, val);
     }
@@ -275,8 +346,14 @@ void MqttManager::publishStatus(float gridPower, float equipmentPower, bool equi
             forceMode ? "true" : "false", equipmentPercent,
             esp32Temp, fanActive ? "true" : "false", fanPercent);
     }
-    _mqttClient.publish(tStatusJson.c_str(), 0, retain, payload);
-    Logger::debug("MQTT: Data published");
+
+    // Bug #2: validate status_json topic before publishing.
+    if (isTopicValid(tStatusJson)) {
+        _mqttClient.publish(tStatusJson.c_str(), 0, retain, payload);
+        Logger::debug("MQTT: Data published");
+    } else {
+        Logger::warn("MQTT: skipping status publish — topic too long");
+    }
 }
 
 bool MqttManager::isConnected() {

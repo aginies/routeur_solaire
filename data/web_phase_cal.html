@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='20' fill='%23f0c040'/><g stroke='%23f0c040' stroke-width='4' stroke-linecap='round'><line x1='50' y1='10' x2='50' y2='22'/><line x1='50' y1='78' x2='50' y2='90'/><line x1='10' y1='50' x2='22' y2='50'/><line x1='78' y1='50' x2='90' y2='50'/></g></svg>">
+    <title>Phase Calibration</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0d0d1a; color: #eee; min-height: 100vh; }
+        .header { background: #16213e; padding: 20px; border-bottom: 2px solid #f0c040; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+        .header h1 { color: #f0c040; font-size: 1.5em; }
+        .header a { background: #555; color: #eee; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 0.9em; }
+        .container { max-width: 800px; margin: 30px auto; padding: 0 20px; }
+        .warning { background: rgba(230, 126, 34, 0.15); border: 1px solid #e67e22; color: #f0c040; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-size: 0.95em; line-height: 1.5; }
+        .card { background: #16213e; border-radius: 12px; padding: 25px; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+        .card h2 { color: #f0c040; font-size: 1.2em; margin-bottom: 15px; }
+        .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px; margin-bottom: 10px; }
+        .status-item { background: #0f3460; padding: 15px; border-radius: 8px; text-align: center; }
+        .status-label { color: #888; font-size: 0.75em; text-transform: uppercase; margin-bottom: 5px; }
+        .status-value { color: #f0c040; font-size: 1.5em; font-weight: 700; }
+        .status-unit { color: #aaa; font-size: 0.6em; }
+        .progress-bar { background: #0d0d1a; height: 20px; border-radius: 10px; overflow: hidden; margin: 10px 0; position: relative; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, #e67e22, #f0c040); transition: width 0.3s; border-radius: 10px; }
+        .progress-text { color: #aaa; font-size: 0.85em; text-align: center; }
+        .controls { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px; }
+        .btn { flex: 1; min-width: 120px; padding: 12px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 0.95em; font-weight: 600; transition: all 0.2s; }
+        .btn-start { background: #27ae60; color: #fff; }
+        .btn-start:hover { background: #2ecc71; }
+        .btn-pause { background: #e67e22; color: #fff; }
+        .btn-pause:hover { background: #f39c12; }
+        .btn-exit { background: #e74c3c; color: #fff; }
+        .btn-exit:hover { background: #c0392b; }
+        .btn-jump { background: #3498db; color: #fff; }
+        .btn-jump:hover { background: #2980b9; }
+        .btn:disabled { background: #333 !important; color: #666 !important; cursor: not-allowed; }
+        .config-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
+        .config-group label { color: #888; font-size: 0.85em; display: block; margin-bottom: 5px; }
+        .config-group input { width: 100%; padding: 10px; background: #0d0d1a; border: 1px solid #333; border-radius: 6px; color: #f0c040; font-size: 1em; }
+        .config-group input:focus { border-color: #f0c040; outline: none; }
+        .slider-container { margin: 15px 0; }
+        .slider-container input[type="range"] { width: 100%; height: 8px; -webkit-appearance: none; background: linear-gradient(90deg, #f0c040, #e67e22); border-radius: 4px; outline: none; }
+        .slider-container input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; background: #f0c040; border-radius: 50%; cursor: pointer; }
+        .delay-display { display: flex; justify-content: space-between; color: #f0c040; font-size: 0.85em; margin-top: 5px; }
+        .step-list { max-height: 300px; overflow-y: auto; background: #0d0d1a; border-radius: 8px; padding: 10px; margin-top: 10px; }
+        .step-row { display: flex; justify-content: space-between; padding: 6px 10px; border-bottom: 1px solid #222; font-size: 0.85em; }
+        .step-row:nth-child(odd) { background: rgba(255,255,255,0.03); }
+        .step-row.active { background: rgba(240, 192, 64, 0.2); border-left: 3px solid #f0c040; }
+        .step-row .delay { color: #f0c040; font-weight: 600; }
+        .step-row .power { color: #2ecc71; }
+        .step-row .power.high { color: #e74c3c; }
+        .footer { text-align: center; color: #666; font-size: 0.8em; padding: 30px 20px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>⚡ Phase Calibration</h1>
+        <a href="/web_config">← Back to Config</a>
+    </div>
+    <div class="container">
+        <div class="warning">
+            ⚠️ <strong>Warning:</strong> During calibration the SSR fires at full duty cycle with varying delay.
+            This means maximum power is applied to your load at each step. Do not leave unattended and keep
+            the SSR temperature monitoring active. The system will auto-exit if temperature exceeds safe limits.
+        </div>
+
+        <div class="card">
+            <h2>Status</h2>
+            <div class="status-grid">
+                <div class="status-item">
+                    <div class="status-label">Status</div>
+                    <div class="status-value" id="statusText">Idle</div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">Delay</div>
+                    <div class="status-value"><span id="delayValue">0</span> <span class="status-unit">μs</span></div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">Grid Power</div>
+                    <div class="status-value"><span id="gridPower">0</span> <span class="status-unit">W</span></div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">Equip Power</div>
+                    <div class="status-value"><span id="equipPower">0</span> <span class="status-unit">W</span></div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">Progress</div>
+                    <div class="status-value"><span id="progressValue">0</span> <span class="status-unit">%</span></div>
+                </div>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+            </div>
+            <div class="progress-text" id="progressText">0 / 0 steps</div>
+        </div>
+
+        <div class="card">
+            <h2>Delay Sweep</h2>
+            <div class="slider-container">
+                <input type="range" id="delaySlider" min="50" max="9950" step="10" value="50">
+                <div class="delay-display">
+                    <span>50μs (Less power)</span>
+                    <span>9950μs (More power)</span>
+                </div>
+            </div>
+            <div class="status-grid">
+                <div class="status-item">
+                    <div class="status-label">Min Delay</div>
+                    <div class="status-value" id="minDelay">50</div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">Max Delay</div>
+                    <div class="status-value" id="maxDelay">9950</div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">Step</div>
+                    <div class="status-value" id="stepSize">100</div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">Hold Time</div>
+                    <div class="status-value"><span id="holdTime">5000</span> <span class="status-unit">ms</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Sweep Settings</h2>
+            <div class="config-grid">
+                <div class="config-group">
+                    <label for="minInput">Min Delay (μs)</label>
+                    <input type="number" id="minInput" value="50" min="10" max="9990">
+                </div>
+                <div class="config-group">
+                    <label for="maxInput">Max Delay (μs)</label>
+                    <input type="number" id="maxInput" value="9950" min="20" max="10000">
+                </div>
+                <div class="config-group">
+                    <label for="stepInput">Step Size (μs)</label>
+                    <input type="number" id="stepInput" value="100" min="10" max="5000">
+                </div>
+                <div class="config-group">
+                    <label for="holdInput">Hold Time (ms)</label>
+                    <input type="number" id="holdInput" value="5000" min="1000" max="30000" step="500">
+                </div>
+            </div>
+            <div class="controls" id="mainControls">
+                <button class="btn btn-start" id="btnStart" onclick="startCalibration()">Start Sweep</button>
+                <button class="btn btn-exit" id="btnExit" onclick="exitCalibration()">Exit Calibration</button>
+            </div>
+            <div class="controls" id="sweepControls" style="display: none;">
+                <button class="btn btn-pause" id="btnPause" onclick="togglePause()">Pause</button>
+                <button class="btn btn-jump" onclick="jumpToStep()">Jump to Value</button>
+                <button class="btn btn-exit" onclick="exitCalibration()">Stop Sweep</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Sweep Data</h2>
+            <div class="step-list" id="stepList">
+                <div style="color: #666; padding: 20px; text-align: center;">No data yet. Start a sweep to see step-by-step results.</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    let sweepData = [];
+    let isPaused = false;
+
+    function formatNum(n, d=1) { return Number(n).toFixed(d); }
+
+    async function fetchStatus() {
+        try {
+            const resp = await fetch('/api/phase_cal', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({action: 'status'})
+            });
+            if (!resp.ok) return;
+            const data = await resp.json();
+            updateUI(data);
+            return data;
+        } catch (e) {
+            document.getElementById('statusText').textContent = 'Offline';
+            document.getElementById('statusText').style.color = '#e74c3c';
+        }
+    }
+
+    function updateUI(data) {
+        const active = data.active || false;
+        const paused = data.paused || false;
+        isPaused = paused;
+
+        let statusLabel = active ? (paused ? 'Paused' : 'Sweeping') : 'Idle';
+        let statusColor = active ? (paused ? '#f39c12' : '#2ecc71') : '#f0c040';
+        document.getElementById('statusText').textContent = statusLabel;
+        document.getElementById('statusText').style.color = statusColor;
+
+        document.getElementById('delayValue').textContent = data.delay_us || 0;
+        document.getElementById('gridPower').textContent = formatNum(data.gridPower || 0);
+        document.getElementById('equipPower').textContent = formatNum(data.equipPower || 0);
+        const pct = Math.round((data.progress || 0) * 100);
+        document.getElementById('progressValue').textContent = pct;
+        document.getElementById('progressFill').style.width = pct + '%';
+
+        const minD = parseInt(document.getElementById('minInput').value) || 50;
+        const maxD = parseInt(document.getElementById('maxInput').value) || 9950;
+        const stepD = parseInt(document.getElementById('stepInput').value) || 100;
+        const total = Math.floor((maxD - minD) / stepD);
+        const current = Math.round(pct * total / 100);
+        document.getElementById('progressText').textContent =
+            active ? current + ' / ' + total + ' steps' : '0 / 0 steps';
+
+        // Toggle controls
+        document.getElementById('mainControls').style.display = active ? 'none' : 'flex';
+        document.getElementById('sweepControls').style.display = active ? 'flex' : 'none';
+
+        // Update pause/resume button text
+        const btnPause = document.getElementById('btnPause');
+        if (paused) {
+            btnPause.textContent = 'Resume';
+            btnPause.classList.remove('btn-pause');
+            btnPause.classList.add('btn-start');
+        } else {
+            btnPause.textContent = 'Pause';
+            btnPause.classList.remove('btn-start');
+            btnPause.classList.add('btn-pause');
+        }
+
+        // Record sweep data if active and not paused
+        if (active && !paused && (data.delay_us || 0) > 0) {
+            const lastEntry = sweepData.length > 0 ? sweepData[sweepData.length - 1] : null;
+            if (!lastEntry || lastEntry.delay !== data.delay_us) {
+                sweepData.push({
+                    delay: data.delay_us,
+                    grid: data.gridPower || 0,
+                    equip: data.equipPower || 0
+                });
+                renderSweepData();
+            }
+        }
+    }
+
+    function renderSweepData() {
+        const list = document.getElementById('stepList');
+        if (sweepData.length === 0) {
+            list.innerHTML = '<div style="color: #666; padding: 20px; text-align: center;">No data yet. Start a sweep to see step-by-step results.</div>';
+            return;
+        }
+        let html = '';
+        for (let i = 0; i < sweepData.length; i++) {
+            const d = sweepData[i];
+            const isLast = (i === sweepData.length - 1);
+            const powerClass = Math.abs(d.grid) > 500 ? 'power high' : 'power';
+            html += '<div class="step-row' + (isLast ? ' active' : '') + '">'
+                + '<span class="delay">' + d.delay + ' us</span>'
+                + '<span class="' + powerClass + '">Grid: ' + formatNum(d.grid) + ' W</span>'
+                + '<span class="power">Equip: ' + formatNum(d.equip) + ' W</span>'
+                + '</div>';
+        }
+        list.innerHTML = html;
+        list.scrollTop = list.scrollHeight;
+    }
+
+    async function startCalibration() {
+        const minDelay = parseInt(document.getElementById('minInput').value) || 50;
+        const maxDelay = parseInt(document.getElementById('maxInput').value) || 9950;
+        const step = parseInt(document.getElementById('stepInput').value) || 100;
+        const hold = parseInt(document.getElementById('holdInput').value) || 5000;
+
+        if (minDelay >= maxDelay) {
+            alert('Min delay must be less than max delay.');
+            return;
+        }
+
+        sweepData = [];
+        renderSweepData();
+
+        const resp = await fetch('/api/phase_cal', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                action: 'start',
+                min: minDelay,
+                max: maxDelay,
+                step: step,
+                hold: hold
+            })
+        });
+        if (resp.ok) {
+            alert('Calibration saved. The device will reboot to start the sweep. This page will reconnect automatically.');
+            // Wait for reboot and reconnect
+            setTimeout(function() { waitForReconnect(); }, 3000);
+        }
+    }
+
+    function waitForReconnect() {
+        document.getElementById('statusText').textContent = 'Reconnecting...';
+        document.getElementById('statusText').style.color = '#e67e22';
+        const iv = setInterval(async function() {
+            try {
+                const resp = await fetch('/api/phase_cal', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({action: 'status'})
+                });
+                if (resp.ok) {
+                    clearInterval(iv);
+                    fetchStatus();
+                }
+            } catch(e) { /* still rebooting */ }
+        }, 2000);
+    }
+
+    async function togglePause() {
+        const action = isPaused ? 'resume' : 'pause';
+        await fetch('/api/phase_cal', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({action: action})
+        });
+        // UI will update on next status poll
+    }
+
+    async function exitCalibration() {
+        if (!confirm('Exit calibration? The SSR will turn off and the device will reboot.')) return;
+        await fetch('/api/phase_cal', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({action: 'exit'})
+        });
+        setTimeout(function() { waitForReconnect(); }, 3000);
+    }
+
+    async function jumpToStep() {
+        const minDelay = parseInt(document.getElementById('minInput').value) || 50;
+        const stepSize = parseInt(document.getElementById('stepInput').value) || 100;
+        const delay = parseInt(document.getElementById('delaySlider').value);
+        const stepIdx = Math.round((delay - minDelay) / stepSize);
+        await fetch('/api/phase_cal', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({action: 'jump', jumpTo: stepIdx})
+        });
+    }
+
+    // Slider updates display values
+    document.getElementById('delaySlider').addEventListener('input', function() {
+        // No-op for display; slider is used for jump-to target
+    });
+
+    document.getElementById('minInput').addEventListener('change', function() {
+        document.getElementById('minDelay').textContent = this.value;
+        document.getElementById('delaySlider').min = this.value;
+    });
+
+    document.getElementById('maxInput').addEventListener('change', function() {
+        document.getElementById('maxDelay').textContent = this.value;
+        document.getElementById('delaySlider').max = this.value;
+    });
+
+    document.getElementById('stepInput').addEventListener('change', function() {
+        document.getElementById('stepSize').textContent = this.value;
+        document.getElementById('delaySlider').step = this.value;
+    });
+
+    document.getElementById('holdInput').addEventListener('change', function() {
+        document.getElementById('holdTime').textContent = this.value;
+    });
+
+    // Periodic status updates
+    fetchStatus();
+    setInterval(fetchStatus, 1000);
+    </script>
+</body>
+</html>

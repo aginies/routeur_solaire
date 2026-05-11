@@ -121,12 +121,18 @@ void SolarMonitor::monitorTask(void* pvParameters) {
 
             char logBuf[128];
             snprintf(logBuf, sizeof(logBuf), "%s - G:%.1fW, E:%.1fW, T:%.1fC", 
-                     timeBuf, GridSensorService::currentGridPower, ActuatorManager::equipmentPower, TemperatureManager::currentSsrTemp);
+                     timeBuf, (float)GridSensorService::currentGridPower, ActuatorManager::equipmentPower, TemperatureManager::currentSsrTemp);
             Logger::logData(logBuf);
         }
 
         // 1. Update Safety (Internal ESP32 temp)
-        TemperatureManager::lastEspTemp = temperatureRead();
+        // Throttled to every 5s to avoid contention with WiFi's internal
+        // temperature sensor reads (SAR ADC spinlock deadlock on ESP32-S3).
+        static uint32_t lastTempRead = 0;
+        if (now - lastTempRead >= 5000 || lastTempRead == 0) {
+            lastTempRead = now;
+            TemperatureManager::lastEspTemp = temperatureRead();
+        }
 
         // 2. Night Mode & Boost Calculation (cached, changes only on minute boundaries)
         if (now - lastNightCheck >= 60000 || lastNightCheck == 0) {
@@ -173,15 +179,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
         if (now - lastPoll >= currentPollInterval * 1000UL) {
             lastPoll = now;
             
-            // Bug #21: Unsubscribe from WDT around network-dependent polls.
-            // If DNS is broken or a Shelly is hung, the HTTP stack can block for >30s,
-            // which exceeds the watchdog timeout even if we pet it before.
-            bool isNetworkPoll = (_config->grid_measure_source == "shelly") && !_config->e_shelly_mqtt;
-            if (isNetworkPoll) esp_task_wdt_delete(NULL);
-            
             bool pollOk = GridSensorService::fetchGridData();
-            
-            if (isNetworkPoll) esp_task_wdt_add(NULL);
             esp_task_wdt_reset();
 
             if (pollOk) {
@@ -259,7 +257,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
                         // unconditionally spamming Serial.
                         char ctrlBuf[96];
                         snprintf(ctrlBuf, sizeof(ctrlBuf), "Ctrl: Grid=%.1fW, Setpoint=%.0fW, Duty=%.1f%%",
-                            GridSensorService::currentGridPower, _config->export_setpoint, ActuatorManager::currentDuty * 100.0);
+                            (float)GridSensorService::currentGridPower, _config->export_setpoint, ActuatorManager::currentDuty * 100.0);
                         Logger::debug(ctrlBuf);
                     }
                 } else {
@@ -267,7 +265,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
                     // don't immediately fire a stale control update upon recovery.
                     freshDataCounter = 0;
                 }
-                GridSensorService::hasFreshData = false;
+                GridSensorService::hasFreshData.store(false);
             } else {
                 // Bug #3: reset the debounce counter on poll failure too.
                 // (The SafetyManager handles STATE_SAFE_TIMEOUT via _lastGoodPoll.)
@@ -281,7 +279,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
 
         // 5. Stats & MQTT
 #ifndef DISABLE_STATS
-        StatsManager::update(GridSensorService::currentGridPower, ActuatorManager::equipmentPower, now - lastStatsUpdate, nightActive, _config->e_equip1);
+        StatsManager::update((float)GridSensorService::currentGridPower, ActuatorManager::equipmentPower, now - lastStatsUpdate, nightActive, _config->e_equip1);
 #endif
         lastStatsUpdate = now;
         esp_task_wdt_reset();
@@ -292,7 +290,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
             
             // Bug #21: MqttManager::publishStatus can block if the stack is hung
             MqttManager::publishStatus(
-                GridSensorService::currentGridPower,
+                (float)GridSensorService::currentGridPower,
                 ActuatorManager::equipmentPower,
                 ActuatorManager::equipmentActive,
                 (SafetyManager::currentState == SystemState::STATE_BOOST),
@@ -317,7 +315,8 @@ void SolarMonitor::monitorTask(void* pvParameters) {
         if (mqttNetworkActive) esp_task_wdt_delete(NULL);
         MqttManager::loop();
         if (mqttNetworkActive) esp_task_wdt_add(NULL);
-        
+        // Yield CPU 1 so loopTask (priority 1) can pet its own WDT
+        vTaskDelay(1);
         esp_task_wdt_reset();
 
         // 7. Measured Power Update (Shelly 1PM)
@@ -335,6 +334,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
             Shelly1PMManager::update();
             
             if (shellyPollActive) esp_task_wdt_add(NULL);
+            vTaskDelay(1);
             esp_task_wdt_reset();
             
             if (_config->e_equip1) {
@@ -342,7 +342,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
                     if (Shelly1PMManager::hasValidEq1Data()) {
                         ActuatorManager::equipmentPower = Shelly1PMManager::getPowerEq1();
                     }
-                } else if (_config->equip1_measure_source == "jsy") {
+                } else if (GridSensorService::isEquip1SourceJsy1() || GridSensorService::isEquip1SourceJsy2()) {
                     ActuatorManager::equipmentPower = GridSensorService::currentEquip1PowerFromJsy;
                 }
             }

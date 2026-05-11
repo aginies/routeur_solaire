@@ -1,0 +1,32 @@
+{
+  "name": "routeur_solaire",
+  "version": "1.0.0",
+  "description": "This project is a high-performance C++ implementation of a Photovoltaic (PV) Router, optimized for the ESP32 platform using the Arduino framework and PlatformIO.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "test"
+  },
+  "scripts": {
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aginies/routeur_solaire.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/aginies/routeur_solaire/issues"
+  },
+  "homepage": "https://github.com/aginies/routeur_solaire#readme",
+  "devDependencies": {
+    "vitepress": "^1.6.4",
+    "vue": "^3.5.34"
+  }
+}

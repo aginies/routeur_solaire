@@ -6,17 +6,17 @@ You can find all the necessary components for this PCB on AliExpress or other ma
 
 | Component | Recommended Part | Purchase Links |
 | :--- | :--- | :--- |
-| **U1: ESP32-S3** | ESP32-S3-WROOM-1-N16R8 | [AliExpress Search](https://www.aliexpress.com/w/wholesale-ESP32-S3-WROOM-1-N16R8.html) |
-| **U2: Energy Meter** | JSY-MK-194G (Single Phase) | [AliExpress Link](https://www.aliexpress.com/item/1005006136142011.html) |
-| **U3: LDO Regulator** | AMS1117-3.3 (SOT-223) | [AliExpress Link](https://www.aliexpress.com/item/32832675358.html) |
-| **D1: ESD Diode** | PRTR5V0U2X or USBLC6 | [AliExpress Search](https://www.aliexpress.com/w/wholesale-PRTR5V0U2X.html) |
-| **J1: USB-C Port** | USB-C 2.0 (GCT USB4135 style) | [AliExpress Search](https://www.aliexpress.com/w/wholesale-USB-C-Vertical-Receptacle.html) |
-| **J4/J5: Terminals** | 2-pin 5.08mm Screw Terminals | [AliExpress Link](https://www.aliexpress.com/item/32845661413.html) |
-| **J6: Fan** | 4010 5V PWM Fan (e.g. Noctua) | [AliExpress Link (Generic)](https://www.aliexpress.com/w/wholesale-4010-5v-pwm-fan.html) / [Noctua Link](https://www.aliexpress.com/item/1005001936813874.html) |
-| **Relay Module** | 5V 1-Channel (High Level Trigger) | [AliExpress Link](https://www.aliexpress.com/item/32858302901.html) |
-| **J2/J7: Headers** | 2.54mm Pin Headers / JST-XH | [AliExpress Search](https://www.aliexpress.com/w/wholesale-2.54mm-header-JST-XH.html) |
-| **SW1/SW2: Buttons** | 6x6x5mm Tactile SMD 4-pin | [AliExpress Link](https://www.aliexpress.com/item/32858302188.html) |
-| **Passives** | 10µF Caps, 100nF Caps, 10k/4.7k Res | [SMD Passive Assortment](https://www.aliexpress.com/w/wholesale-0402-capacitor-resistor-sample-book.html) |
+| **U1: ESP32-S3** | ESP32-S3-WROOM-1-N16R8 | [Rechercher](https://www.aliexpress.com/wholesale?SearchText=ESP32+S3+WROOM+1+N16R8) |
+| **U2: Energy Meter** | JSY-MK-194G (Single Phase) | [Produit](https://www.aliexpress.com/item/1005006136142011.html) |
+| **U3: LDO Regulator** | AMS1117-3.3 (SOT-223) | [Produit](https://www.aliexpress.com/item/32832675358.html) |
+| **D1: ESD Diode** | PRTR5V0U2X or USBLC6 | [Rechercher](https://www.aliexpress.com/wholesale?SearchText=PRTR5V0U2X) |
+| **J1: USB-C Port** | USB-C 2.0 (GCT USB4135 style) | [Rechercher](https://www.aliexpress.com/wholesale?SearchText=USB+C+Vertical+SMD) |
+| **J4/J5: Terminals** | 2-pin 5.08mm Screw Terminals | [Produit](https://www.aliexpress.com/item/32845661413.html) |
+| **J6: Fan** | 4010 5V PWM Fan (e.g. Noctua) | [Generic](https://www.aliexpress.com/wholesale?SearchText=4010+5v+pwm+fan) / [Noctua NF-A4x20](https://www.aliexpress.com/item/1005001936813874.html) |
+| **Relay Module** | 5V 1-Channel (High Level Trigger) | [Produit](https://www.aliexpress.com/item/32858302901.html) |
+| **J2/J7: Headers** | 2.54mm Pin Headers / JST-XH | [Rechercher](https://www.aliexpress.com/wholesale?SearchText=JST+XH+2.54+header) |
+| **SW1/SW2: Buttons** | 6x6x5mm Tactile SMD 4-pin | [Produit](https://www.aliexpress.com/item/32858302188.html) |
+| **Passives** | 10µF Caps, 100nF Caps, 10k/4.7k Res | [Kit Assortment](https://www.aliexpress.com/wholesale?SearchText=0402+capacitor+resistor+assortment) |
 
 ---
 
@@ -28,7 +28,7 @@ You can find all the necessary components for this PCB on AliExpress or other ma
 | U2 | Energy meter | JSY-MK-194G | 1 | 2-channel, TTL Modbus-RTU |
 | U3 | LDO regulator | AMS1117-3.3 | 1 | SOT-223, 800mA (Requires 10µF caps) |
 | J1 | USB connector | USB-C 2.0 | 1 | Power + optional Serial (see notes) |
-| J2 | JSY connector | 5-pin JST-XH 2.54mm | 1 | VCC, GND, JSY_TX, JSY_RX, Zx |
+| J2 | JSY connector | 5-pin JST-XH 2.54mm | 1 | VCC, GND, JSY1_TX, JSY1_RX, Zx |
 | J4 | SSR Output | 2-pin screw terminal 5mm | 1 | SSR Control (IO17) |
 | J5 | Relay Output | 3-pin screw terminal 5mm | 1 | 5V, GND, Signal (IO6) |
 | J6 | Fan Header | 4-pin 2.54mm header | 1 | 5V, GND, TACH (NC), PWM (IO5) |
@@ -51,13 +51,13 @@ You can find all the necessary components for this PCB on AliExpress or other ma
 | 3V3 | Power | LDO output, JSY VCC | All VCC pins tied together |
 | GND | Ground | Common GND plane | Solid pour, connect all GND pads |
 | IO17 | PWM | J4 Pin 1 | Active-HIGH SSR Control |
-| IO17 | UART1 TX | J2 JSY TX | GPIO out (ESP) to JSY TX |
-| IO18 | UART1 RX | J2 JSY RX | GPIO in (ESP) from JSY RX |
+| IO5 | UART1 TX | J2 JSY RX | GPIO out (ESP) to JSY RX |
+| IO4 | UART1 RX | J2 JSY TX | GPIO in (ESP) from JSY TX |
 | IO6 | Output | J5 Pin 3 | Active-HIGH trigger for Safety Relay |
 | IO16 | Data | J7 Pin 2 | DS18B20 1-Wire Temp Sensor |
-| IO5 | PWM | J6 Pin 4 | 5V PWM Fan speed control |
+| IO7 | PWM | J6 Pin 4 | 5V PWM Fan speed control |
 | IO15 | Input | J2 JSY Zx | Zero-crossing sync from JSY |
-| IO2 | Status LED | Internal | WS2812 Onboard LED |
+| IO48 | Status LED | Internal | WS2812 Onboard LED |
 | IO0 | Boot mode | 10kΩ -> 3V3, SW1 to GND | Must be HIGH at normal boot |
 | EN | Reset | 10kΩ -> 3V3, SW2 to GND | Active-low reset |
 | IO46 | Strapping | 10kΩ -> GND | Must be LOW at boot |
@@ -69,7 +69,7 @@ The schematic is designed for a single mainboard where all peripherals (JSY, SSR
 Key design decisions:
 Power: The AMS1117-3.3 takes 5V from USB/J1. The 5V Fan (J6) is powered directly from the 5V rail to save regulator capacity.
 
-JSY Connection: IO17/IO18 are used for UART1 communication with the JSY-194G. This preserves IO19/IO20 for native USB serial/data.
+JSY Connection: IO4/IO5 are used for UART1 communication with the JSY-194G. This preserves IO19/IO20 for native USB serial/data.
 
 ---
 ## ESP32-S3 Pin-Out Map (Production Config)
@@ -79,18 +79,18 @@ This map groups the central ESP32-S3 module's pins by their physical/logical fun
       [ PERIPHERALS ]           [ ESP32-S3 PINS ]          [ SYSTEM / POWER ]
                                 ┌─────────────────┐
     ( Energy Meter )            │       GND   [1] │ <────┐ [ Common Ground ]
-    JSY TX ───────────(Data In)─│ IO17  3.3V  [2] │ <────┘ [ AMS1117-3.3 OUT ]
-    JSY RX ◀───────(Data Out)─→ │ IO18            │             + [ C1-C8 Caps ]
+    JSY TX ───────────(Data In)─│ IO4   3.3V  [2] │ <────┘ [ AMS1117-3.3 OUT ]
+    JSY RX ◀───────(Data Out)─→ │ IO5             │             + [ C1-C8 Caps ]
     JSY Zx ──────────(Sync In)->│IO15        IO19 │ ◀───->  USB D- (Serial/DFU)
                                 │            IO20 │ ◀───->  USB D+ (Serial/DFU)
     ( Load Control )            │ [ACTUATORS]     │
     SSR IN ◀──────────(PWM Out)─│ IO17         EN │ ◀────  Reset [ SW2 + R1 ]
     RELAY  ◀──────────(DRV Out)─│ IO6         IO0 │ ◀────  Boot  [ SW1 + R2 ]
-    FAN    <——───────(PWM Out)——│ IO5        IO46 │ ────->  [ R3 Pull-Down ]
+    FAN    <——───────(PWM Out)——│ IO7        IO46 │ ────->  [ R3 Pull-Down ]
                                 │                 │
     ( Sensing / UI )            │ [UI & SENSE]    │
     TEMP DAT ◀───────(1-Wire)─> │ IO16            │ <────  [ R4 Pull-Up ]
-    (WS2812) ◀───────(Status)── │ IO2             │
+    (WS2812) ◀───────(Status)── │ IO48            │
                                 └─────────────────┘
 
 ---

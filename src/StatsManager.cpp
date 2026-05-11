@@ -10,6 +10,8 @@
 #endif
 #include <time.h>
 #include <cmath>
+#include <vector>
+#include <algorithm>
 
 #ifdef NATIVE_TEST
 #define millis() 0
@@ -25,6 +27,10 @@ float StatsManager::totalRedirectToday = 0;
 float StatsManager::totalExportToday = 0;
 volatile bool StatsManager::_saveRequested = false;
 TaskHandle_t StatsManager::_taskHandle = nullptr;
+#ifndef NATIVE_TEST
+bool StatsManager::_importInProgress = false;
+#endif
+static uint32_t _activeTimeMsAccumulator = 0;
 #ifndef NATIVE_TEST
 SemaphoreHandle_t StatsManager::_statsMutex = nullptr;
 #endif
@@ -60,6 +66,40 @@ static void persistNvsTotals(const String& dayKey) {
         prefs.end();
     }
 }
+
+// Bug #16: PSRAM Allocator for ArduinoJson. deserializing 365 days of stats
+// can take >400KB of AST memory, exhausting internal SRAM.
+#ifndef NATIVE_TEST
+struct ArduinoJsonSpiRamAllocator : ArduinoJson::Allocator {
+    void* allocate(size_t size) override {
+#if defined(BOARD_HAS_PSRAM)
+        void* ptr = heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!ptr) ptr = malloc(size); // Fallback
+        return ptr;
+#else
+        return malloc(size);
+#endif
+    }
+
+    void deallocate(void* pointer) override {
+#if defined(BOARD_HAS_PSRAM)
+        heap_caps_free(pointer);
+#else
+        free(pointer);
+#endif
+    }
+
+    void* reallocate(void* ptr, size_t new_size) override {
+#if defined(BOARD_HAS_PSRAM)
+        void* new_ptr = heap_caps_realloc(ptr, new_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!new_ptr) new_ptr = realloc(ptr, new_size);
+        return new_ptr;
+#else
+        return realloc(ptr, new_size);
+#endif
+    }
+};
+#endif
 #endif
 
 void StatsManager::init() {
@@ -115,7 +155,12 @@ void StatsManager::init() {
     #define MAX_STATS_DAYS 30
     #endif
 
+#ifndef NATIVE_TEST
+    ArduinoJsonSpiRamAllocator ajAlloc;
+    JsonDocument doc(&ajAlloc);
+#else
     JsonDocument doc;
+#endif
     DeserializationError error = deserializeJson(doc, file);
     file.close();
 
@@ -134,30 +179,38 @@ void StatsManager::init() {
 
     JsonObject obj = doc.as<JsonObject>();
     int total = obj.size();
-    // Bug #1: keep last MAX_STATS_DAYS entries; previous formula off-by-one.
-    // We want to skip the first (total - MAX_STATS_DAYS) entries.
+
+    // Chronological sorting of keys to ensure only the oldest entries are pruned.
+    // JSON iteration order is not guaranteed.
+    std::vector<String> keys;
+    keys.reserve(total);
+    for (JsonPair p : obj) {
+        keys.push_back(String(p.key().c_str()));
+    }
+    std::sort(keys.begin(), keys.end());
+
     int skipFirst = (total > MAX_STATS_DAYS) ? (total - MAX_STATS_DAYS) : 0;
 
-    int idx = 0;
-    for (JsonPair p : obj) {
-        if (idx++ < skipFirst) continue;
+    for (int i = skipFirst; i < total; i++) {
+        const String& key = keys[i];
+        JsonObject val = obj[key];
 
         DailyStats ds;
-        ds.import = p.value()["import"];
-        ds.redirect = p.value()["redirect"];
-        ds.export_wh = p.value()["export"];
-        ds.active_time = p.value()["active_time"];
+        ds.import = val["import"];
+        ds.redirect = val["redirect"];
+        ds.export_wh = val["export"];
+        ds.active_time = val["active_time"];
 
-        JsonArray h_imp = p.value()["h_import"];
-        JsonArray h_red = p.value()["h_redirect"];
-        JsonArray h_exp = p.value()["h_export"];
+        JsonArray h_imp = val["h_import"];
+        JsonArray h_red = val["h_redirect"];
+        JsonArray h_exp = val["h_export"];
 
-        for (int i = 0; i < 24; i++) {
-            ds.h_import[i] = h_imp[i] | 0.0f;
-            ds.h_redirect[i] = h_red[i] | 0.0f;
-            ds.h_export[i] = h_exp[i] | 0.0f;
+        for (int j = 0; j < 24; j++) {
+            ds.h_import[j] = h_imp[j] | 0.0f;
+            ds.h_redirect[j] = h_red[j] | 0.0f;
+            ds.h_export[j] = h_exp[j] | 0.0f;
         }
-        _history[p.key().c_str()] = ds;
+        _history[key.c_str()] = ds;
     }
 
     // Bug #1 (continued): Today's entry — preserve hourly bins from JSON; only override
@@ -223,6 +276,7 @@ void StatsManager::update(float gridPower, float equipmentPower, uint32_t interv
             totalImportToday = 0;
             totalRedirectToday = 0;
             totalExportToday = 0;
+            _activeTimeMsAccumulator = 0; // Reset millisecond accumulator for the new day
 
             DailyStats ds;
             ds.import = 0;
@@ -243,7 +297,17 @@ void StatsManager::update(float gridPower, float equipmentPower, uint32_t interv
             ds.export_wh += energyExport;
         }
         ds.redirect += energyRedirect;
-        if (equipmentPower > 10) ds.active_time += (intervalMs / 1000);
+        
+        // Bug Fix: Accumulate milliseconds and only increment active_time (seconds) 
+        // when we cross a full second boundary. Integer division (intervalMs / 1000)
+        // was losing all data for typical ~110ms intervals.
+        if (equipmentPower > 10.0f) {
+            _activeTimeMsAccumulator += intervalMs;
+            if (_activeTimeMsAccumulator >= 1000) {
+                ds.active_time += (_activeTimeMsAccumulator / 1000);
+                _activeTimeMsAccumulator %= 1000;
+            }
+        }
 
         if (hour >= 0 && hour < 24) {
             ds.h_import[hour] += energyImport;
@@ -319,6 +383,7 @@ void StatsManager::statsTask(void* pvParameters) {
 
 void StatsManager::save() {
 #ifndef NATIVE_TEST
+    if (_importInProgress) return;
     if (_statsMutex == nullptr || xSemaphoreTake(_statsMutex, pdMS_TO_TICKS(2000)) != pdTRUE) {
         return;
     }
@@ -340,7 +405,7 @@ void StatsManager::save() {
     // cannot corrupt the existing /stats.json (LittleFS rename does not overwrite,
     // so we must remove the destination first).
     const char* finalPath = "/stats.json";
-    const char* tmpPath   = "/stats.json.tmp";
+    const char* tmpPath   = "/stats.tmp";
     if (LittleFS.exists(tmpPath)) LittleFS.remove(tmpPath);
 
     File file = LittleFS.open(tmpPath, "w");
@@ -419,10 +484,17 @@ void StatsManager::streamStatsJson(AsyncWebServerRequest *request) {
 
     bool firstDay = true;
     char buf[128];
+    int iCount = 0;
 
     for (auto const& [key, ds] : snapshot) {
         if (!firstDay) response->print(",");
         firstDay = false;
+
+        // Bug #18: delay every ~30 entries to prevent IWDT reset on Core 0 during streaming.
+        if (iCount % 30 == 0) {
+            vTaskDelay(pdMS_TO_TICKS(1));
+            if (esp_task_wdt_status(NULL) == ESP_OK) esp_task_wdt_reset();
+        }
 
         // Bug #14: align precision with save() (.1f everywhere)
         snprintf(buf, sizeof(buf), "\"%s\":{\"import\":%.1f,\"redirect\":%.1f,\"export\":%.1f,\"active_time\":%u,",
@@ -444,6 +516,7 @@ void StatsManager::streamStatsJson(AsyncWebServerRequest *request) {
         printArray("h_export", ds.h_export);
 
         response->print("}");
+        iCount++;
     }
 
     response->print("}");

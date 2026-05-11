@@ -165,19 +165,26 @@ struct Config {
     int shelly_timeout = 2;
     int safety_timeout = 10;
 
-    // JSY-MK-194
-    int jsy_uart_id = 2;
+    // JSY-MK-194 (Two hardware UARTs supported)
+    int jsy1_tx = 5;
+    int jsy1_rx = 4;
+    int jsy2_tx = 17;
+    int jsy2_rx = 16;
     int jsy_grid_channel = 1;
     int jsy_equip1_channel = 2;
-    int jsy_tx = 17;
-    int jsy_rx = 18;
 
     // SSR Mode
     String control_mode = "trame";
     int half_period_us = 9900;
     int zx_busypoll_us = 1000;
     int zx_timeout_ms = 500;
-    bool debug_phase = false;
+
+    // Phase-angle calibration (valid only when control_mode == "phase")
+    bool phase_calibrate = false;       // true = run automated sweep
+    int phase_cal_min_us = 50;          // minimum delay (microseconds) from ZX
+    int phase_cal_max_us = 9950;        // maximum delay
+    int phase_cal_step_us = 100;        // step size
+    int phase_cal_hold_ms = 5000;       // dwell time per step
 
     // MQTT
     bool e_mqtt = true;

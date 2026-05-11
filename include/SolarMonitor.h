@@ -35,7 +35,7 @@ private:
     static void monitorTask(void* pvParameters);
 
     static Config _config_copy;
-    static Config* _config;
+    static const Config* _config;
     static std::unique_ptr<IncrementalController> _ctrl;
     static std::atomic<uint32_t> _lastGoodPoll;
     static TaskHandle_t _monitorTaskHandle;

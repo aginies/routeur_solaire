@@ -11,6 +11,7 @@ This C++ version is a **migration from the original MicroPython implementation f
 - **High-Speed Diversion**: Implements a highly responsive power diversion algorithm (burst-fire/trame mode) to match excess solar production with a resistive load.
 - **Multi-Source Monitoring**: Supports data acquisition from Shelly EM (via HTTP or MQTT) and JSY-MK-194 (via UART). Equipment power measurement via Shelly Plus 1PM (HTTP or MQTT).
 - **Asynchronous Web Server**: Provides a rich web interface with a **sidebar-based configuration menu** for real-time monitoring, logging, and easy navigation between settings.
+- **Phase Angle Calibration Wizard**: Includes a dedicated automated sweep tool (`/web_phase_cal`) to map the power curve of resistive loads when using phase-cutting mode, ensuring precise linear power control.
 - **Improved Force Mode UI**: Clearly distinguishes between manual "Boost" and scheduled "Mode Forcé (Plage Horaire)" to avoid confusion.
 - **Advanced Statistics**: Tracks daily/hourly energy usage with a **compact horizontal distribution bar** and historical data retention.
 - **Safety & Protection**: Includes watchdog timers, temperature monitoring (Internal & SSR heatsink), and automatic fan control.
@@ -22,20 +23,20 @@ This C++ version is a **migration from the original MicroPython implementation f
 
 ```
                                   Core 1 (Application), Priority 3
-                                 ┌─────────────┐
+                                 ┌──────────────┐
                                  │  monitorTask │
                                  │ (8KB stack)  │
-                                 └──────┬──────┘
+                                 └──────┬───────┘
                                         │ reads shared state
         ┌───────────────────────────────┼───────────────────────────────┐
         │                               │                               │
         ▼                               ▼                               ▼
-  ┌───────────┐                 ┌─────────────┐                ┌──────────────┐
+  ┌────────────┐                 ┌──────────────┐                ┌──────────────┐
   │ GridSensor │                 │ SolarMonitor │                │ Incremental  │
   │ Service    │                 │ Safety       │                │ Controller   │
   │ HTTP/MQTT/ │                 │ PID Control  │                │ (delta/delta │
   │ JSY UART   │                 │ Eq2 logic    │                │  neg)        │
-  └───────────┘                 └──────┬──────┘                └──────────────┘
+  └────────────┘                 └─────┬────────┘                └──────────────┘
                                        │
                            ┌───────────┼───────────┐
                            ▼           ▼           ▼
@@ -48,7 +49,7 @@ This C++ version is a **migration from the original MicroPython implementation f
         ┌───────────────────────────────────────────────────────────────┐
         │  Core 1 (Application Core), Priority 5                        │
         │  ┌────────────────────────────────────────────────────────┐   │
-        │  │  ControlStrategy (task depends on mode):                │   │
+        │  │  ControlStrategy (task depends on mode):               │   │
         │  │  burst  → burstControlTask                             │   │
         │  │  trame  → cycleStealingTask (ISR Bresenham)            │   │
         │  │  phase  → phaseControlTask (+ ISR notify/timer)        │   │
@@ -56,10 +57,10 @@ This C++ version is a **migration from the original MicroPython implementation f
         │  └────────────────────────────────────────────────────────┘   │
         └───────────────────────────────────────────────────────────────┘
         
-  ┌─────────────┐  ┌─────────────┐  ┌────────────┐  ┌───────────┐
-  │ tempTask    │  │ ledTask     │  │ statsTask  │  │weatherTask│
+  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌────────────┐
+  │ tempTask    │  │ ledTask     │  │ statsTask   │  │weatherTask │
   │ Core 0/prim1│  │ Core 0/prim1│  │ Core 0/prim2│  │Core 0/prim1│
-  └─────────────┘  └─────────────┘  └────────────┘  └───────────┘
+  └─────────────┘  └─────────────┘  └─────────────┘  └────────────┘
   
   ┌────────────────────────────────────────────────────────────────┐
   │  ESPAsyncWebServer (port 80) · MQTT (espMqttClient) · WiFi     │
@@ -91,13 +92,15 @@ The system can be fully configured via the web interface. Below is a detailed br
 
 ### General & Connectivity
 - **System Name & Timezone**: Basic identification and local time synchronization (crucial for logs and night mode).
-- **WiFi Setup**: Support for Client mode (connecting to your router) or Access Point mode. Supports Static IP configuration.
+- **WiFi Setup**: Support for Client mode (connecting to your router) or Access Point mode. Supports Static IP configuration. If the configured Wi-Fi is unreachable for more than 2 minutes, the device automatically starts a fallback Access Point (`W_Solaire`) while continuing to attempt background reconnection (`WIFI_AP_STA` mode).
 - **Grid Measure Source (`grid_measure_source`)**:
     - `shelly`: Shelly EM (WiFi HTTP/MQTT)
-    - `jsy`: JSY-MK-194 (wired UART)
+    - `jsy1`: JSY-MK-194 sur UART 1 (filaire)
+    - `jsy2`: JSY-MK-194 sur UART 2 (filaire)
 - **Equipment 1 Measure Source (`equip1_measure_source`)**:
-    - `shelly`: measured by Shelly Plus 1PM
-    - `jsy`: measured by JSY channel
+    - `shelly`: Mesuré par un Shelly Plus 1PM
+    - `jsy1`: Mesuré par le canal JSY sur UART 1
+    - `jsy2`: Mesuré par le canal JSY sur UART 2
 - **Equipment 1 Enable (`e_equip1`)**: On/off for Eq1 logic only (not a measurement-source selector).
 - **Equipment 2 (+Gestion Marche/Arrêt)**: Optional Shelly Plus 1PM for on/off relay control of a secondary equipment.
 - **MQTT Broker**: Connection details for integration with Home Assistant or other automation tools.
@@ -151,7 +154,7 @@ The firmware supports four SSR control strategies (`zero_crossing` is an alias o
 | :--- | :--- | :--- | :--- |
 | **trame** | Bresenham line algorithm directly in ZX ISR. Decision is made once per full AC cycle, then applied on both half-cycles. | **Most SSRs** (recommended default). | ✅ Eliminates DC bias/hum. Uses the shared `cycleStealingTask` watchdog task. |
 | **cycle_stealing** | Toggles SSR at every zero-crossing event based on running duty accumulator. | SSRs that can switch instantaneously at zero-crossing. | ✅ Highest resolution (half-cycle). Can cause DC offset hum. |
-| **phase** | Phase-angle control — ZX ISR computes target delay and notifies `phaseControlTask`, which arms `esp_timer` from task context. | SSRs rated for **random-phase** (triac) triggering. | No `esp_timer` API calls inside ISR. Requires fast gate; produces harmonic distortion. |
+| **phase** | Phase-angle control — ZX ISR computes target delay and notifies `phaseControlTask`, which arms `esp_timer` from task context. | SSRs rated for **random-phase** (triac) triggering. | No `esp_timer` API calls inside ISR. Requires fast gate; produces harmonic distortion. **Requires running the `/web_phase_cal` wizard** to map the load power curve. |
 | **burst** | Fixed-period slow PWM (e.g., 500 ms ON/OFF). Not synchronized with mains zero-crossing. | Basic SSRs where flicker/EMI is not a concern. | ⚠️ Does not use ZX pin. Simplest mode, purely task-driven. |
 
 **Important:** `burst` mode ignores the ZX pin entirely. Using burst mode with a zero-crossing SSR will still work but offers no advantage over `trame`.
@@ -182,6 +185,17 @@ Equipment 2 (e.g., heat pump, pool heater) is managed with priority-aware logic:
 **Known Limitation:** When `max_duty_percent < 95%`, priority 1 mode is unreachable — Eq1 can never reach the 95% threshold needed to trigger Eq2 activation. Use priority 2, or raise `max_duty_percent` above 95.
 
 **Schedule Bitmask:** `equip2_schedule` is a 48-bit unsigned integer where each bit represents a 30-minute slot in a 24-hour day (bit 0 = 00:00-00:30, bit 47 = 23:30-24:00). To schedule Eq2 from 08:00 to 20:00, set bits 16 through 39 (binary: `0xFFFFFFFF00000000` = `1099511627775` decimal).
+
+### Practical Schedule Bitmask Examples
+| Time Range | Bits Set | Hex Value | Decimal Value |
+| :--- | :--- | :--- | :--- |
+| 08:00–20:00 (off-peak) | 16 – 39 | `0xFFFFFFFF00000000` | 1,099,511,627,775 |
+| 22:00–06:00 (night heating) | 44 – 47 + 0 – 11 | `0x000F0000FFFF` | 43,980,465,126,912 |
+| 06:00–08:00 (morning) | 12 – 15 | `0xF00000000000` | 17,390,461,408 |
+| 12:00–14:00 (lunch break) | 24 – 27 | `0xF00000000` | 4,026,531,840 |
+| All day (always on) | 0 – 47 | `0xFFFFFFFFFFFF` | 281,474,976,710,655 |
+
+**How to set in config:** Use the Eq2 page at `/web_equip2` — click individual slots to toggle. Alternatively, edit `config.json` directly and set `equip2_schedule` to the decimal value above, then save via `/save_config`.
 
 ## Safety State Machine
 
@@ -264,6 +278,7 @@ All endpoints except `/update` and `/RESET_device` respect the configured `web_u
 | GET | `/download_data` | Yes | Download `solar_data.txt` as attachment. |
 | GET | `/get_config` | Yes | Export full configuration as JSON. |
 | GET | `/web_config` | Yes | Config web page (`web_config.html.gz`). |
+| GET | `/web_phase_cal` | Yes | Phase Angle Calibration wizard (`web_phase_cal.html.gz`). |
 | GET | `/web_equip2` | Yes | Equipment 2 config page (`web_equip2.html.gz`). |
 | GET | `/web_dev` | Yes | Dev Telemetry page (`web_dev.html.gz`). |
 | GET | `/stats` | Yes | Stats web page (`web_stats.html.gz`). |
@@ -409,20 +424,39 @@ Default values are shown. All fields are editable via the Web UI.
 ### JSY-MK-194 (Wired Measurement)
 | Field | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `jsy_uart_id` | int | `2` | UART peripheral (1 or 2) |
-| `jsy_grid_channel` | int | `1` | Canal JSY reseau (used when `grid_measure_source = jsy`) |
-| `jsy_equip1_channel` | int | `2` | Canal JSY Eq1 (used when `equip1_measure_source = jsy`) |
-| `jsy_tx` | int | `17` | UART TX pin |
-| `jsy_rx` | int | `16` | UART RX pin |
+| `jsy_grid_channel` | int | `1` | Canal JSY réseau (utilisé si `grid_measure_source = jsy1/2`) |
+| `jsy_equip1_channel` | int | `2` | Canal JSY Eq1 (utilisé si `equip1_measure_source = jsy1/2`) |
+| `jsy1_tx` | int | `5` | UART1 TX pin |
+| `jsy1_rx` | int | `4` | UART1 RX pin |
+| `jsy2_tx` | int | `17` | UART2 TX pin |
+| `jsy2_rx` | int | `16` | UART2 RX pin |
 
 ### SSR Control Mode
 | Field | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `control_mode` | String | `"trame"` | `burst`, `trame`, `phase`, `cycle_stealing` |
-| `half_period_us` | int | `9900` | Legacy field (currently not used by runtime phase control path) |
 | `zx_busypoll_us` | int | `1000` | Legacy field from previous busy-wait phase implementation |
 | `zx_timeout_ms` | int | `500` | Legacy config field; watchdog timeout is currently fixed in control task |
-| `debug_phase` | bool | `false` | Reserved/legacy phase debug switch |
+| `phase_calibrate` | bool | `false` | Run automated phase-angle calibration sweep on boot |
+| `phase_cal_min_us` | int | `50` | Calibration sweep minimum delay from ZX (microseconds) |
+| `phase_cal_max_us` | int | `9950` | Calibration sweep maximum delay (microseconds) |
+| `phase_cal_step_us` | int | `100` | Calibration sweep step size (microseconds) |
+| `phase_cal_hold_ms` | int | `5000` | Calibration dwell time per step (milliseconds) |
+
+## Web UI Pages Overview
+
+The system exposes **six distinct web pages** for configuration and monitoring:
+
+| Page | URL | Purpose | Key Features |
+| :--- | :--- | :--- | :--- |
+| **Dashboard** | `/` (or `/web_command`) | Real-time status and control | Live power charts, SSR duty cycle, Eq2 status, boost controls, fan test |
+| **Configuration** | `/web_config` | All settings in one form | WiFi/MQTT, grid/equipment sources, regulation params, safety thresholds |
+| **Equipment 2** | `/web_equip2` | Schedule and control Eq2 (pool/heater) | 48-slot schedule grid (30 min each), bypass status, priority toggle |
+| **Phase Calibration** | `/web_phase_cal` | Automated phase-angle sweep | Start/Pause/Resume calibration, saves lookup table to config |
+| **Statistics** | `/web_stats` | Historical energy tracking | Daily/hourly charts, total import/export/redirect, 30-day history (configurable) |
+| **Dev Telemetry** | `/web_dev` | Debugging and diagnostics | RSSI, heap free, sensor values, state machine status, manual command buttons |
+
+> **Note:** Pages under `/web_*` serve a full HTML page with embedded JavaScript. Direct API endpoints (e.g., `/status`, `/stats`) return raw JSON — useful for MQTT integration or external monitoring tools.
 
 ### MQTT
 | Field | Type | Default | Description |
@@ -475,7 +509,8 @@ Default values are shown. All fields are editable via the Web UI.
 | **Zero-crossing** | `15` | `19` | ZX sensor output (open-collector, pull-up to 3.3V) |
 | **Common ground** | `GND` | `GND` | All sensor grounds |
 | **Power** | `3.3V` / `5V` | `3.3V` / `5V` | SSR control, relay, ZX (as rated) |
-| **UART1 RX/TX** | `4/5` | `18/15` | JSY-MK-194 RX/TX (4800 baud, 8N1) |
+| **UART1 RX/TX (JSY1)** | `4/5` | `18/15` | JSY-MK-194 RX/TX (4800 baud, 8N1) |
+| **UART2 RX/TX (JSY2)** | `16/17` | `32/33` | Second JSY-MK-194 RX/TX |
 | **NeoPixel** | `48` | `2` | Onboard WS2812 LED |
 
 > **Note: Config defaults vs. Wiring.** The Wiring Guide columns show the recommended physical pin assignments for each board target (used on this custom PCB). These differ from the `Config` struct defaults (e.g., `ssr_pin=12`), which are generic starting values for any build. When migrating from one board target to another, update both your wiring **and** the `Config` fields accordingly.
@@ -530,10 +565,10 @@ Tests use a `NATIVE_TEST` preprocessor flag to stub Arduino/ESP32 dependencies (
 
 ## Security Notes
 
-- **OTA Update (`/update`)**: No authentication required. Anyone on the same network can flash arbitrary firmware. Only enable on trusted networks.
+- **OTA Update (`/update`)**: Authenticated. Requires `web_user`/`web_password` if configured.
 - **Default AP Password**: `12345678` on first boot — change via the web UI immediately.
 - **Web Credentials**: Stored in plaintext in `config.json`. Protect your config backup files.
-- **Unauthenticated Endpoints**: `/test` and `/get_log_action` bypass auth. Logs may leak credentials, WiFi passwords, and IP addresses.
+- **Unauthenticated Endpoints**: `/test` bypasses auth for simple health checks. All data-sensitive endpoints (logs, power, stats) require authentication.
 
 ## Troubleshooting
 
@@ -562,7 +597,7 @@ Home Assistant entities not appearing after enabling MQTT:
 Check serial log for `task_wdt: Task watchdog got triggered`. This usually means a task exceeded its 60-second execution window. Common causes:
 - Shelly HTTP timeout too long (use `--erase` to reset to defaults).
 - `MAX_STATS_DAYS` very large (365) — `stats.json` save can take several seconds.
-- Network instability causing `WiFi.reconnect()` to flood (default is every 1 second).
+- Network instability causing `WiFi.reconnect()` to flood (default is every 10 seconds).
 
 ### Eq2 Never Turns On
 If Equipment 2 (priority=1) never activates:
@@ -573,10 +608,15 @@ If Equipment 2 (priority=1) never activates:
 - Verify `e_weather = true` and the ESP32 has internet access (Open-Meteo API requires HTTPS to `api.open-meteo.com`).
 - Verify `e_equip2 = true` and the Shelly is reachable.
 
+### Debugging Tips: Interpreting Sensor Data
+- **Grid Power (`grid_power`):** Positive values = importing from grid, negative = exporting to grid. Values near 0 indicate successful diversion. A sustained positive value above your export setpoint means Eq1 isn't absorbing enough surplus; a sustained negative value means the system is pushing too much power back.
+- **Equipment Percent (`equipment_percent`) during Phase Control:** In phase mode this represents the dimming angle (0° = fully off, 90° = fully on). During calibration at `/web_phase_cal`, you'll see a sweep from `phase_cal_min_us` to `phase_cal_max_us`. If power doesn't change as expected, check that your SSR supports random-phase triggering.
+- **RSSI for Shelly/MQTT Connectivity:** Use the Dev Telemetry page (`/web_dev`) to monitor RSSI (Wi-Fi signal strength). Below -70 dBm is considered weak — expect increased timeouts and higher latency for HTTP-based Shelly polling (<1s → 2–3s). MQTT mode is more resilient at lower RSSI.
+- **ZX Signal Health:** If using `trame`, `phase`, or `cycle_stealing` modes, the ZX pin must receive a consistent signal. No ZX = SSR stays OFF. Check your Zero-Crossing sensor wiring and that it outputs a TTL-compatible 3.3V signal.
+
 ## Known Limitations
 
 - **Controller Deadzone**: When `max_duty_percent < 95%`, Equipment 2 priority-1 mode (water heater first) is unreachable since the equation heater can never reach 95% duty cycle.
-- **Stats JSON Iteration**: Historical stats loaded from `stats.json` on boot use JSON key iteration order which is not guaranteed chronological. The oldest-by-key entries survive, not necessarily the oldest-by-time entries.
 - **Burst Mode SSR Compatibility**: Burst mode ignores zero-crossing — use only with true zero-crossing SSRs to avoid EMI and contact wear.
-- **WROOM Feature Parity**: The WROOM environment (`esp32dev`) completely disables stats, history, and data logging. Use ESP32-S3 for full feature set.
+- **WROOM Feature Parity**: The WROOM environment (`esp32dev`) completely disables stats, history, and data logging. Use ESP32-S3 for full feature set. Requires at least 8 MB PSRAM for 365-day statistics retention.
 - **Config Serialization Drift**: Config save/load manually maps ~100 fields between JSON and the `Config` struct. Adding a field to `Config` may require updating both `ConfigManager::load()` and `ConfigManager::save()`.

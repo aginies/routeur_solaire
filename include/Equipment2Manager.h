@@ -8,6 +8,7 @@ enum class Eq2State {
     OFF,
     PENDING_ON,
     ON,
+    PENDING_OFF_DELAY,
     PENDING_OFF
 };
 

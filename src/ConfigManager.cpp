@@ -7,7 +7,9 @@ const char* ConfigManager::CONFIG_FILE = "/config.json";
 const char* ConfigManager::CONFIG_TMP_FILE = "/config.json.tmp";
 SemaphoreHandle_t ConfigManager::_saveMutex = nullptr;
 
-void ConfigManager::ensureMutex() {
+// Bug #10: create the save mutex once at boot so that save() can be called from any task
+// without a race. This replaces the old ensureMutex() lazy-initialisation pattern.
+void ConfigManager::init() {
     if (_saveMutex == nullptr) {
         _saveMutex = xSemaphoreCreateMutex();
     }
@@ -46,9 +48,18 @@ static int validateCpuFreq(int f, int dflt) {
     return dflt;
 }
 
+// Bug #11: bounded JSON buffers to prevent OOM on corrupted config files.
+// ~4 KB covers all current fields with comfortable headroom (~2 KB raw JSON).
+static const size_t CONFIG_JSON_CAPACITY = 4096;
+
 Config ConfigManager::load() {
     Config config;
-    JsonDocument doc;
+    DynamicJsonDocument doc(CONFIG_JSON_CAPACITY);
+    if (doc.capacity() == 0) {
+        Logger::error("ConfigManager: insufficient memory for JSON");
+        save(config);
+        return config;
+    }
     bool loadedFromFile = false;
 
     // 1. Try loading from LittleFS
@@ -129,7 +140,10 @@ Config ConfigManager::load() {
     if (has(doc, "shelly_em_index")) config.shelly_em_index = doc["shelly_em_index"];
     if (has(doc, "e_shelly_mqtt")) config.e_shelly_mqtt = doc["e_shelly_mqtt"];
     if (has(doc, "shelly_mqtt_topic")) config.shelly_mqtt_topic = doc["shelly_mqtt_topic"].as<String>();
-    if (has(doc, "grid_measure_source")) config.grid_measure_source = doc["grid_measure_source"].as<String>();
+    if (has(doc, "grid_measure_source")) {
+        config.grid_measure_source = doc["grid_measure_source"].as<String>();
+        if (config.grid_measure_source == "jsy") config.grid_measure_source = "jsy1";
+    }
     if (has(doc, "fake_shelly")) config.fake_shelly = doc["fake_shelly"];
     if (has(doc, "poll_interval")) config.poll_interval = doc["poll_interval"];
     if (has(doc, "shelly_timeout")) config.shelly_timeout = doc["shelly_timeout"];
@@ -150,7 +164,10 @@ Config ConfigManager::load() {
     if (has(doc, "equip1_shelly_index")) config.equip1_shelly_index = doc["equip1_shelly_index"];
     if (has(doc, "e_equip1_mqtt")) config.e_equip1_mqtt = doc["e_equip1_mqtt"];
     if (has(doc, "equip1_mqtt_topic")) config.equip1_mqtt_topic = doc["equip1_mqtt_topic"].as<String>();
-    if (has(doc, "equip1_measure_source")) config.equip1_measure_source = doc["equip1_measure_source"].as<String>();
+    if (has(doc, "equip1_measure_source")) {
+        config.equip1_measure_source = doc["equip1_measure_source"].as<String>();
+        if (config.equip1_measure_source == "jsy") config.equip1_measure_source = "jsy1";
+    }
 
     // Equipment 2
     if (has(doc, "e_equip2")) config.e_equip2 = doc["e_equip2"];
@@ -206,18 +223,30 @@ Config ConfigManager::load() {
     if (has(doc, "fan_temp_offset")) config.fan_temp_offset = doc["fan_temp_offset"];
 
     // JSY
-    if (has(doc, "jsy_uart_id")) config.jsy_uart_id = clampInt(doc["jsy_uart_id"].as<int>(), 1, 2, config.jsy_uart_id, "jsy_uart_id");
+    if (has(doc, "jsy1_tx")) config.jsy1_tx = validatePinRole(doc["jsy1_tx"].as<int>(), config.jsy1_tx, PinRole::JSY1_TX);
+    else if (has(doc, "jsy_tx")) config.jsy1_tx = validatePinRole(doc["jsy_tx"].as<int>(), config.jsy1_tx, PinRole::JSY1_TX);
+
+    if (has(doc, "jsy1_rx")) config.jsy1_rx = validatePinRole(doc["jsy1_rx"].as<int>(), config.jsy1_rx, PinRole::JSY1_RX);
+    else if (has(doc, "jsy_rx")) config.jsy1_rx = validatePinRole(doc["jsy_rx"].as<int>(), config.jsy1_rx, PinRole::JSY1_RX);
+
+    if (has(doc, "jsy2_tx")) config.jsy2_tx = validatePinRole(doc["jsy2_tx"].as<int>(), config.jsy2_tx, PinRole::JSY2_TX);
+    if (has(doc, "jsy2_rx")) config.jsy2_rx = validatePinRole(doc["jsy2_rx"].as<int>(), config.jsy2_rx, PinRole::JSY2_RX);
+
     if (has(doc, "jsy_grid_channel")) config.jsy_grid_channel = clampInt(doc["jsy_grid_channel"].as<int>(), 1, 2, config.jsy_grid_channel, "jsy_grid_channel");
     if (has(doc, "jsy_equip1_channel")) config.jsy_equip1_channel = clampInt(doc["jsy_equip1_channel"].as<int>(), 1, 2, config.jsy_equip1_channel, "jsy_equip1_channel");
-    if (has(doc, "jsy_tx")) config.jsy_tx = validatePinRole(doc["jsy_tx"].as<int>(), config.jsy_tx, PinRole::JSY_TX);
-    if (has(doc, "jsy_rx")) config.jsy_rx = validatePinRole(doc["jsy_rx"].as<int>(), config.jsy_rx, PinRole::JSY_RX);
 
     // SSR Control
     if (has(doc, "control_mode")) config.control_mode = doc["control_mode"].as<String>();
     if (has(doc, "half_period_us")) config.half_period_us = doc["half_period_us"];
     if (has(doc, "zx_busypoll_us")) config.zx_busypoll_us = doc["zx_busypoll_us"];
     if (has(doc, "zx_timeout_ms")) config.zx_timeout_ms = doc["zx_timeout_ms"];
-    if (has(doc, "debug_phase")) config.debug_phase = doc["debug_phase"];
+
+    // Phase-angle calibration (valid only when control_mode == "phase")
+    if (has(doc, "phase_calibrate")) config.phase_calibrate = doc["phase_calibrate"];
+    if (has(doc, "phase_cal_min_us")) config.phase_cal_min_us = clampInt(doc["phase_cal_min_us"].as<int>(), 10, 9990, config.phase_cal_min_us, "phase_cal_min_us");
+    if (has(doc, "phase_cal_max_us")) config.phase_cal_max_us = clampInt(doc["phase_cal_max_us"].as<int>(), 20, 10000, config.phase_cal_max_us, "phase_cal_max_us");
+    if (has(doc, "phase_cal_step_us")) config.phase_cal_step_us = clampInt(doc["phase_cal_step_us"].as<int>(), 10, 5000, config.phase_cal_step_us, "phase_cal_step_us");
+    if (has(doc, "phase_cal_hold_ms")) config.phase_cal_hold_ms = clampInt(doc["phase_cal_hold_ms"].as<int>(), 1000, 30000, config.phase_cal_hold_ms, "phase_cal_hold_ms");
 
     // MQTT
     if (has(doc, "e_mqtt")) config.e_mqtt = doc["e_mqtt"];
@@ -244,13 +273,15 @@ bool ConfigManager::save(const Config& config) {
 
     // Bug #7: take the save mutex so concurrent web/MQTT triggers don't trample each other
     // mid-write. Wait up to 5 s; if we can't get it, refuse the save.
-    ensureMutex();
+    // Bug #10: ensureMutex() removed — init() is called at boot time now.
     if (xSemaphoreTake(_saveMutex, pdMS_TO_TICKS(5000)) != pdTRUE) {
         Logger::error("ConfigManager: save() could not acquire mutex (timeout)");
         return false;
     }
 
-    JsonDocument doc;
+    // Bug #11: bounded allocation — prevents OOM if config is unexpectedly large.
+    DynamicJsonDocument doc(CONFIG_JSON_CAPACITY);
+
     doc["name"] = config.name;
     doc["timezone"] = config.timezone;
     doc["cpu_freq"] = config.cpu_freq;
@@ -336,16 +367,22 @@ bool ConfigManager::save(const Config& config) {
     doc["ssr_max_temp"] = config.ssr_max_temp;
     doc["e_fan"] = config.e_fan;
     doc["fan_temp_offset"] = config.fan_temp_offset;
-    doc["jsy_uart_id"] = config.jsy_uart_id;
+    doc["jsy1_tx"] = config.jsy1_tx;
+    doc["jsy1_rx"] = config.jsy1_rx;
+    doc["jsy2_tx"] = config.jsy2_tx;
+    doc["jsy2_rx"] = config.jsy2_rx;
     doc["jsy_grid_channel"] = config.jsy_grid_channel;
     doc["jsy_equip1_channel"] = config.jsy_equip1_channel;
-    doc["jsy_tx"] = config.jsy_tx;
-    doc["jsy_rx"] = config.jsy_rx;
     doc["control_mode"] = config.control_mode;
     doc["half_period_us"] = config.half_period_us;
     doc["zx_busypoll_us"] = config.zx_busypoll_us;
     doc["zx_timeout_ms"] = config.zx_timeout_ms;
-    doc["debug_phase"] = config.debug_phase;
+    // Phase-angle calibration (persisted so config survives reboot)
+    doc["phase_calibrate"] = config.phase_calibrate;
+    doc["phase_cal_min_us"] = config.phase_cal_min_us;
+    doc["phase_cal_max_us"] = config.phase_cal_max_us;
+    doc["phase_cal_step_us"] = config.phase_cal_step_us;
+    doc["phase_cal_hold_ms"] = config.phase_cal_hold_ms;
     doc["e_mqtt"] = config.e_mqtt;
     doc["mqtt_ip"] = config.mqtt_ip;
     doc["mqtt_port"] = config.mqtt_port;

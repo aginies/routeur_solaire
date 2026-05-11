@@ -37,6 +37,7 @@ public:
     static void save();
 #ifndef NATIVE_TEST
     static void streamStatsJson(AsyncWebServerRequest *request);
+    static bool _importInProgress;
 #endif
 
     static float totalImportToday;

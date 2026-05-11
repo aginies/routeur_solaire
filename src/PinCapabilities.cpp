@@ -15,11 +15,15 @@ static bool isOutputRole(PinRole role) {
 }
 
 static bool isInputRole(PinRole role) {
-    return role == PinRole::ZX_INPUT || role == PinRole::DS18B20 || role == PinRole::JSY_RX;
+    return role == PinRole::ZX_INPUT || role == PinRole::DS18B20 || role == PinRole::JSY1_RX || role == PinRole::JSY2_RX;
 }
 
 static bool isTxRole(PinRole role) {
-    return role == PinRole::JSY_TX;
+    return role == PinRole::JSY1_TX || role == PinRole::JSY2_TX;
+}
+
+static bool isOutputOnly(PinRole role) {
+    return role == PinRole::JSY1_TX || role == PinRole::JSY2_TX;
 }
 
 } // namespace
@@ -32,8 +36,10 @@ const char* pinRoleName(PinRole role) {
         case PinRole::ZX_INPUT: return "zx_pin";
         case PinRole::DS18B20: return "ds18b20_pin";
         case PinRole::INTERNAL_LED: return "internal_led_pin";
-        case PinRole::JSY_TX: return "jsy_tx";
-        case PinRole::JSY_RX: return "jsy_rx";
+        case PinRole::JSY1_TX: return "jsy1_tx";
+        case PinRole::JSY1_RX: return "jsy1_rx";
+        case PinRole::JSY2_TX: return "jsy2_tx";
+        case PinRole::JSY2_RX: return "jsy2_rx";
     }
     return "pin";
 }

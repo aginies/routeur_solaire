@@ -1,6 +1,6 @@
 #!/bin/bash
 # Exit on any error
-set -e
+set -euo pipefail
 
 # Default values
 ENV="s3"
@@ -11,6 +11,21 @@ RUN_TESTS=false
 MONITOR=false
 ERASE=false
 USB_CDC=false
+FLASH=""
+PSRAM=""
+
+# --- CLI check ---
+command -v platformio >/dev/null 2>&1 || { echo "Error: 'platformio' CLI not found in PATH." >&2; exit 1; }
+command -v pio >/dev/null 2>&1 || { echo "Error: 'pio' CLI not found (is 'platformio cli' installed?)." >&2; exit 1; }
+
+# --- Trap for config.json cleanup (set BEFORE any possible swap) ---
+cleanup() {
+    if [ -f "data/config.json.bak" ]; then
+        echo "--- Restoring original config.json ---"
+        mv data/config.json.bak data/config.json
+    fi
+}
+trap cleanup EXIT
 
 usage() {
     echo "Usage: $0 [options]"
@@ -21,42 +36,33 @@ usage() {
     echo "  -t, --test  Run unit tests on host (native environment)"
     echo "  -m, --monitor Launch serial monitor after flashing"
     echo "  -u, --usb   Build with native USB-CDC Serial (faster flash, native USB-OTG port);"
-    echo "              default uses UART0 / USB-to-serial bridge (/dev/ttyUSB0)"
+    echo "              (requires ESP32-S3 or similar with native USB; ESP32-DevKit cannot use this)"
     echo "  --erase     Full chip erase (clears NVS/Stats) before upload"
     echo "  --skip-fs   Skip building and uploading filesystem"
     echo "  -h, --help  Show this help message"
 }
 
-# Cleanup function to restore config if swapped
-cleanup() {
-    if [ -f "data/config.json.bak" ]; then
-        echo "--- Restoring original config.json ---"
-        mv data/config.json.bak data/config.json
-    fi
-}
-trap cleanup EXIT
-
-# Parse options
+# --- Parse options ---
 while [[ "$#" -gt 0 ]]; do
     case $1 in
-        -e) 
-            if [[ -n "$2" && "$2" != -* ]]; then
+        -e)
+            if [[ -n "${2:-}" && "$2" != -* ]]; then
                 ENV="$2"; shift
             else
                 echo "Error: Argument for $1 is missing" >&2
                 exit 1
             fi
             ;;
-        -v|--variant) 
-            if [[ -n "$2" && "$2" != -* ]]; then
+        -v|--variant)
+            if [[ -n "${2:-}" && "$2" != -* ]]; then
                 VARIANT="$2"; shift
             else
                 echo "Error: Argument for $1 is missing" >&2
                 exit 1
             fi
             ;;
-        -d) 
-            if [[ -n "$2" && "$2" != -* ]]; then
+        -d)
+            if [[ -n "${2:-}" && "$2" != -* ]]; then
                 STATS_DAYS="$2"; shift
             else
                 echo "Error: Argument for $1 is missing" >&2
@@ -74,27 +80,24 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-# 1. Handle Unit Tests if requested
+# --- Handle Unit Tests if requested ---
 if [ "$RUN_TESTS" = true ]; then
     echo "--- RUNNING UNIT TESTS (NATIVE) ---"
     pio test -e native
     echo "--- TESTS PASSED ---"
-    # If we only wanted tests, we can exit here
-    if [ "$ENV" == "s3" ] && [ "$SKIP_FS" == false ] && [ -z "$STATS_DAYS" ] && [ -z "$VARIANT" ]; then
-         echo "Tests finished."
-         exit 0
-    fi
+    echo "Tests finished."
+    exit 0
 fi
 
-# Map shortcut to full pio env name
+# --- Map shortcut to full pio env name ---
 if [ "$ENV" == "s3" ]; then
     PIO_ENV="esp32s3"
     echo "--- TARGET: ESP32-S3 ---"
 elif [ "$ENV" == "wroom" ]; then
     PIO_ENV="esp32dev"
     echo "--- TARGET: ESP32 WROOM (Mini Kit) ---"
-    
-    # Check if we should swap config for WROOM
+
+    # Swap config for WROOM
     if [ -f "data/config_wroom.json" ]; then
         echo "--- Swapping config.json with config_wroom.json ---"
         [ -f "data/config.json" ] && mv data/config.json data/config.json.bak
@@ -102,14 +105,13 @@ elif [ "$ENV" == "wroom" ]; then
     fi
 elif [ "$ENV" == "native" ]; then
     echo "Environment 'native' selected. Running tests only."
-    pio test -e native
     exit 0
 else
     echo "Error: Invalid environment '$ENV'. Use 's3', 'wroom', or 'native'."
     exit 1
 fi
 
-# Handle Hardware Variant overrides for S3
+# --- Handle Hardware Variant overrides for S3 ---
 if [ -n "$VARIANT" ]; then
     if [ "$PIO_ENV" != "esp32s3" ]; then
         echo "Warning: -v/--variant only applies to 's3' environment."
@@ -117,7 +119,7 @@ if [ -n "$VARIANT" ]; then
         # Force uppercase
         VARIANT=$(echo "$VARIANT" | tr '[:lower:]' '[:upper:]')
         echo "--- Applying hardware variant: $VARIANT ---"
-        
+
         # Regex parsing for N<flash>R<psram>
         # e.g., N8R2, N16R8, N8
         if [[ "$VARIANT" =~ N([0-9]+)(R([0-9]+))? ]]; then
@@ -127,7 +129,7 @@ if [ -n "$VARIANT" ]; then
             echo "Error: Unknown variant format '$VARIANT'. Expected N<flash>R<psram> (e.g., N8R2, N16R8, N8)."
             exit 1
         fi
-        
+
         # Flash Overrides via Environment Variables
         if [ -n "$FLASH" ]; then
             export PLATFORMIO_BOARD_UPLOAD_FLASH_SIZE="${FLASH}MB"
@@ -138,10 +140,10 @@ if [ -n "$VARIANT" ]; then
                 export PLATFORMIO_BOARD_BUILD_PARTITIONS="default_${FLASH}MB.csv"
             fi
         fi
-        
+
         # PSRAM Overrides via Environment Variables
         if [ -n "$PSRAM" ]; then
-            export PLATFORMIO_BUILD_FLAGS="${PLATFORMIO_BUILD_FLAGS} -DBOARD_HAS_PSRAM"
+            export PLATFORMIO_BUILD_FLAGS="${PLATFORMIO_BUILD_FLAGS:-} -DBOARD_HAS_PSRAM"
             # 8MB and 16MB PSRAM are usually OPI (Octal)
             if [ "$PSRAM" -eq 8 ] || [ "$PSRAM" -eq 16 ]; then
                 export PLATFORMIO_BOARD_BUILD_ARDUINO_MEMORY_TYPE="qio_opi"
@@ -155,51 +157,72 @@ if [ -n "$VARIANT" ]; then
             fi
         else
             # Unset PSRAM flag for variants like N8 (no PSRAM)
-            export PLATFORMIO_BUILD_UNFLAGS="${PLATFORMIO_BUILD_UNFLAGS} -DBOARD_HAS_PSRAM"
+            export PLATFORMIO_BUILD_UNFLAGS="${PLATFORMIO_BUILD_UNFLAGS:-} -DBOARD_HAS_PSRAM"
             export PLATFORMIO_BOARD_BUILD_FLASH_MODE="qio"
         fi
     fi
 fi
 
-# Handle Stats Days override
+# --- Handle Stats Days override ---
 if [ -n "$STATS_DAYS" ]; then
-    export PLATFORMIO_BUILD_FLAGS="${PLATFORMIO_BUILD_FLAGS} -D MAX_STATS_DAYS=$STATS_DAYS"
-    echo "--- OVERRIDE: MAX_STATS_DAYS=$STATS_DAYS ---"
+    export PLATFORMIO_BUILD_FLAGS="${PLATFORMIO_BUILD_FLAGS:-} -D MAX_STATS_DAYS=${STATS_DAYS}"
+    echo "--- OVERRIDE: MAX_STATS_DAYS=${STATS_DAYS} ---"
 fi
 
-# Handle USB-CDC override (only meaningful for s3 — wroom has no native USB)
+# --- Handle USB-CDC override (only meaningful for s3 — wroom has no native USB) ---
 if [ "$USB_CDC" = true ]; then
     if [ "$ENV" != "s3" ]; then
         echo "Warning: --usb only applies to ESP32-S3; ignoring for env '$ENV'."
     else
         # Drop the CDC=0 from platformio.ini and re-add CDC=1. PIO honors these env vars.
-        export PLATFORMIO_BUILD_UNFLAGS="${PLATFORMIO_BUILD_UNFLAGS} -DARDUINO_USB_CDC_ON_BOOT=0"
-        export PLATFORMIO_BUILD_FLAGS="${PLATFORMIO_BUILD_FLAGS} -DARDUINO_USB_CDC_ON_BOOT=1"
+        export PLATFORMIO_BUILD_UNFLAGS="${PLATFORMIO_BUILD_UNFLAGS:-} -DARDUINO_USB_CDC_ON_BOOT=0"
+        export PLATFORMIO_BUILD_FLAGS="${PLATFORMIO_BUILD_FLAGS:-} -DARDUINO_USB_CDC_ON_BOOT=1"
         echo "--- OVERRIDE: USB-CDC Serial ENABLED (use the native USB-OTG port, /dev/ttyACMx) ---"
     fi
 fi
 
+# --- Confirm destructive erase ---
+if [ "$ERASE" = true ]; then
+    echo "WARNING: This will erase all data on the device (NVS, WiFi credentials, stats)."
+    read -rp "Continue? [y/N] " confirm
+    if [[ "$confirm" != [yY]* ]]; then
+        echo "Erase cancelled." >&2
+        exit 1
+    fi
+fi
+
 echo "--- 1. Cleaning project ---"
-pio run -e $PIO_ENV -t clean
+pio --no-ansi run -e "$PIO_ENV" -t clean
 
 if [ "$ERASE" = true ]; then
     echo "--- 1b. Erasing Full Chip (NVS/Flash) ---"
-    pio run -e $PIO_ENV -t erase
+    pio --no-ansi run -e "$PIO_ENV" -t erase
 fi
 
 echo "--- 2. Building and Uploading Firmware ($PIO_ENV) ---"
-pio run -e $PIO_ENV -t upload
+echo "    Hardware: ESP32-S3 Variant: $VARIANT (Flash: ${FLASH:-default}MB, PSRAM: ${PSRAM:-none}MB)"
+pio --no-ansi run -e "$PIO_ENV" -t upload
 
 if [ "$SKIP_FS" = false ]; then
     echo "--- 3a. Compressing HTML assets ---"
-    bash data/compress.sh
+    if [ -f "data/compress.sh" ]; then
+        bash data/compress.sh
+    else
+        echo "Warning: data/compress.sh not found, skipping HTML compression."
+    fi
     echo "--- 3b. Building and Uploading Filesystem (LittleFS) ---"
-    pio run -e $PIO_ENV -t uploadfs
+    pio --no-ansi run -e "$PIO_ENV" -t uploadfs
 fi
 
 echo "--- DONE! ---"
 if [ "$MONITOR" = true ]; then
     echo "Starting Serial Monitor (Press Ctrl+C to stop)..."
     sleep 2
-    pio device monitor -e $PIO_ENV --filter time --filter colorize --filter debug
+    # If stdout is redirected (not a TTY), use a cleaner monitor output
+    if [ ! -t 1 ]; then
+        # Raw mode prevents PIO from adding ANSI/CR codes that break file viewing
+        pio device monitor -e "$PIO_ENV" --raw
+    else
+        pio device monitor -e "$PIO_ENV" --filter time --filter colorize --filter debug
+    fi
 fi
