@@ -23,20 +23,20 @@ This C++ version is a **migration from the original MicroPython implementation f
 
 ```
                                   Core 1 (Application), Priority 3
-                                 ┌─────────────┐
+                                 ┌──────────────┐
                                  │  monitorTask │
                                  │ (8KB stack)  │
-                                 └──────┬──────┘
+                                 └──────┬───────┘
                                         │ reads shared state
         ┌───────────────────────────────┼───────────────────────────────┐
         │                               │                               │
         ▼                               ▼                               ▼
-  ┌───────────┐                 ┌─────────────┐                ┌──────────────┐
+  ┌────────────┐                 ┌──────────────┐                ┌──────────────┐
   │ GridSensor │                 │ SolarMonitor │                │ Incremental  │
   │ Service    │                 │ Safety       │                │ Controller   │
   │ HTTP/MQTT/ │                 │ PID Control  │                │ (delta/delta │
   │ JSY UART   │                 │ Eq2 logic    │                │  neg)        │
-  └───────────┘                 └──────┬──────┘                └──────────────┘
+  └────────────┘                 └─────┬────────┘                └──────────────┘
                                        │
                            ┌───────────┼───────────┐
                            ▼           ▼           ▼
@@ -49,7 +49,7 @@ This C++ version is a **migration from the original MicroPython implementation f
         ┌───────────────────────────────────────────────────────────────┐
         │  Core 1 (Application Core), Priority 5                        │
         │  ┌────────────────────────────────────────────────────────┐   │
-        │  │  ControlStrategy (task depends on mode):                │   │
+        │  │  ControlStrategy (task depends on mode):               │   │
         │  │  burst  → burstControlTask                             │   │
         │  │  trame  → cycleStealingTask (ISR Bresenham)            │   │
         │  │  phase  → phaseControlTask (+ ISR notify/timer)        │   │
@@ -57,10 +57,10 @@ This C++ version is a **migration from the original MicroPython implementation f
         │  └────────────────────────────────────────────────────────┘   │
         └───────────────────────────────────────────────────────────────┘
         
-  ┌─────────────┐  ┌─────────────┐  ┌────────────┐  ┌───────────┐
-  │ tempTask    │  │ ledTask     │  │ statsTask  │  │weatherTask│
+  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌────────────┐
+  │ tempTask    │  │ ledTask     │  │ statsTask   │  │weatherTask │
   │ Core 0/prim1│  │ Core 0/prim1│  │ Core 0/prim2│  │Core 0/prim1│
-  └─────────────┘  └─────────────┘  └────────────┘  └───────────┘
+  └─────────────┘  └─────────────┘  └─────────────┘  └────────────┘
   
   ┌────────────────────────────────────────────────────────────────┐
   │  ESPAsyncWebServer (port 80) · MQTT (espMqttClient) · WiFi     │
@@ -185,6 +185,17 @@ Equipment 2 (e.g., heat pump, pool heater) is managed with priority-aware logic:
 **Known Limitation:** When `max_duty_percent < 95%`, priority 1 mode is unreachable — Eq1 can never reach the 95% threshold needed to trigger Eq2 activation. Use priority 2, or raise `max_duty_percent` above 95.
 
 **Schedule Bitmask:** `equip2_schedule` is a 48-bit unsigned integer where each bit represents a 30-minute slot in a 24-hour day (bit 0 = 00:00-00:30, bit 47 = 23:30-24:00). To schedule Eq2 from 08:00 to 20:00, set bits 16 through 39 (binary: `0xFFFFFFFF00000000` = `1099511627775` decimal).
+
+### Practical Schedule Bitmask Examples
+| Time Range | Bits Set | Hex Value | Decimal Value |
+| :--- | :--- | :--- | :--- |
+| 08:00–20:00 (off-peak) | 16 – 39 | `0xFFFFFFFF00000000` | 1,099,511,627,775 |
+| 22:00–06:00 (night heating) | 44 – 47 + 0 – 11 | `0x000F0000FFFF` | 43,980,465,126,912 |
+| 06:00–08:00 (morning) | 12 – 15 | `0xF00000000000` | 17,390,461,408 |
+| 12:00–14:00 (lunch break) | 24 – 27 | `0xF00000000` | 4,026,531,840 |
+| All day (always on) | 0 – 47 | `0xFFFFFFFFFFFF` | 281,474,976,710,655 |
+
+**How to set in config:** Use the Eq2 page at `/web_equip2` — click individual slots to toggle. Alternatively, edit `config.json` directly and set `equip2_schedule` to the decimal value above, then save via `/save_config`.
 
 ## Safety State Machine
 
@@ -424,7 +435,6 @@ Default values are shown. All fields are editable via the Web UI.
 | Field | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `control_mode` | String | `"trame"` | `burst`, `trame`, `phase`, `cycle_stealing` |
-| `half_period_us` | int | `9900` | Legacy field (currently not used by runtime phase control path) |
 | `zx_busypoll_us` | int | `1000` | Legacy field from previous busy-wait phase implementation |
 | `zx_timeout_ms` | int | `500` | Legacy config field; watchdog timeout is currently fixed in control task |
 | `phase_calibrate` | bool | `false` | Run automated phase-angle calibration sweep on boot |
@@ -432,6 +442,21 @@ Default values are shown. All fields are editable via the Web UI.
 | `phase_cal_max_us` | int | `9950` | Calibration sweep maximum delay (microseconds) |
 | `phase_cal_step_us` | int | `100` | Calibration sweep step size (microseconds) |
 | `phase_cal_hold_ms` | int | `5000` | Calibration dwell time per step (milliseconds) |
+
+## Web UI Pages Overview
+
+The system exposes **six distinct web pages** for configuration and monitoring:
+
+| Page | URL | Purpose | Key Features |
+| :--- | :--- | :--- | :--- |
+| **Dashboard** | `/` (or `/web_command`) | Real-time status and control | Live power charts, SSR duty cycle, Eq2 status, boost controls, fan test |
+| **Configuration** | `/web_config` | All settings in one form | WiFi/MQTT, grid/equipment sources, regulation params, safety thresholds |
+| **Equipment 2** | `/web_equip2` | Schedule and control Eq2 (pool/heater) | 48-slot schedule grid (30 min each), bypass status, priority toggle |
+| **Phase Calibration** | `/web_phase_cal` | Automated phase-angle sweep | Start/Pause/Resume calibration, saves lookup table to config |
+| **Statistics** | `/web_stats` | Historical energy tracking | Daily/hourly charts, total import/export/redirect, 30-day history (configurable) |
+| **Dev Telemetry** | `/web_dev` | Debugging and diagnostics | RSSI, heap free, sensor values, state machine status, manual command buttons |
+
+> **Note:** Pages under `/web_*` serve a full HTML page with embedded JavaScript. Direct API endpoints (e.g., `/status`, `/stats`) return raw JSON — useful for MQTT integration or external monitoring tools.
 
 ### MQTT
 | Field | Type | Default | Description |
@@ -583,9 +608,15 @@ If Equipment 2 (priority=1) never activates:
 - Verify `e_weather = true` and the ESP32 has internet access (Open-Meteo API requires HTTPS to `api.open-meteo.com`).
 - Verify `e_equip2 = true` and the Shelly is reachable.
 
+### Debugging Tips: Interpreting Sensor Data
+- **Grid Power (`grid_power`):** Positive values = importing from grid, negative = exporting to grid. Values near 0 indicate successful diversion. A sustained positive value above your export setpoint means Eq1 isn't absorbing enough surplus; a sustained negative value means the system is pushing too much power back.
+- **Equipment Percent (`equipment_percent`) during Phase Control:** In phase mode this represents the dimming angle (0° = fully off, 90° = fully on). During calibration at `/web_phase_cal`, you'll see a sweep from `phase_cal_min_us` to `phase_cal_max_us`. If power doesn't change as expected, check that your SSR supports random-phase triggering.
+- **RSSI for Shelly/MQTT Connectivity:** Use the Dev Telemetry page (`/web_dev`) to monitor RSSI (Wi-Fi signal strength). Below -70 dBm is considered weak — expect increased timeouts and higher latency for HTTP-based Shelly polling (<1s → 2–3s). MQTT mode is more resilient at lower RSSI.
+- **ZX Signal Health:** If using `trame`, `phase`, or `cycle_stealing` modes, the ZX pin must receive a consistent signal. No ZX = SSR stays OFF. Check your Zero-Crossing sensor wiring and that it outputs a TTL-compatible 3.3V signal.
+
 ## Known Limitations
 
 - **Controller Deadzone**: When `max_duty_percent < 95%`, Equipment 2 priority-1 mode (water heater first) is unreachable since the equation heater can never reach 95% duty cycle.
 - **Burst Mode SSR Compatibility**: Burst mode ignores zero-crossing — use only with true zero-crossing SSRs to avoid EMI and contact wear.
-- **WROOM Feature Parity**: The WROOM environment (`esp32dev`) completely disables stats, history, and data logging. Use ESP32-S3 for full feature set.
+- **WROOM Feature Parity**: The WROOM environment (`esp32dev`) completely disables stats, history, and data logging. Use ESP32-S3 for full feature set. Requires at least 8 MB PSRAM for 365-day statistics retention.
 - **Config Serialization Drift**: Config save/load manually maps ~100 fields between JSON and the `Config` struct. Adding a field to `Config` may require updating both `ConfigManager::load()` and `ConfigManager::save()`.
