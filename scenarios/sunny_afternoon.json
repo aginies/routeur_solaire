@@ -1,0 +1,14 @@
+{
+    "name": "sunny_afternoon",
+    "description": "Typical sunny afternoon with a microwave event during peak solar",
+    "scenarios": [
+        {"name": "MORNING_CLOUD", "solar": 300, "base_load": 600, "min_dur": 120, "max_dur": 180},
+        {"name": "BUILDING_SUN", "solar": 900, "base_load": 500, "min_dur": 90, "max_dur": 120},
+        {"name": "FULL_SUN", "solar": 1800, "base_load": 400, "min_dur": 60, "max_dur": 120},
+        {"name": "PEAK_SUN", "solar": 2200, "base_load": 450, "min_dur": 30, "max_dur": 60},
+        {"name": "AFTERNOON_CLEAR", "solar": 1600, "base_load": 500, "min_dur": 60, "max_dur": 90}
+    ],
+    "microwave_chance": 0.25,
+    "microwave_load": 1200,
+    "microwave_start_after_minutes": 30
+}
