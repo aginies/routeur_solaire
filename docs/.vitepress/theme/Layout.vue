@@ -40,24 +40,22 @@ onMounted(() => {
   }
 
   // Scroll-to-top handler (update display directly)
-  const updateScrollTop = () => { btn.style.display = window.scrollY > 300 ? 'block' : 'none' }
+  const updateScrollTop = () => { document.getElementById('scrollToTop').style.display = window.scrollY > 300 ? 'block' : 'none' }
   window.addEventListener('scroll', updateScrollTop, { passive: true })
   updateScrollTop() // initial state
 
-  // Inject scroll-to-top button into body (after all content)
+  // Inject scroll-to-top button into body (after all content) with hover style inline
   const btn = document.createElement('button')
-  btn.id = 'scroll-top'
+  btn.id = 'scrollToTop'
   btn.setAttribute('style', `position: fixed; right: 24px; bottom: 28px; width: 46px; height: 46px; border-radius: 50%; background: #1a1a2e; color: #f0c040; font-size: 20px; border: none; cursor: pointer; transition: opacity 0.3s ease, transform 0.3s ease; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);`)
   btn.textContent = '↑'
   btn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }))
+  // hover effect via CSS (injected after DOM ready to avoid Vue parser)
+  const hoverStyle = document.createElement('style')
+  hoverStyle.textContent = '#scrollToTop:hover { transform: scale(1.1); }'
+  document.head.appendChild(hoverStyle)
   document.body.appendChild(btn)
 })
-
-/* ── Scroll-to-top button hover effect (global style) ─── */
-
-#scroll-top:hover {
-  transform: scale(1.1);
-}
 </script>
 
 <template>
@@ -236,28 +234,6 @@ onMounted(() => {
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(20px); }
   to   { opacity: 1; transform: translateY(0); }
-}
-
-/* ── Scroll-to-top button (visible on scroll) ─── */
-
-#scroll-top {
-  position: fixed;
-  right: 24px;
-  bottom: 28px;
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  background: #1a1a2e;
-  color: #f0c040;
-  font-size: 20px;
-  border: none;
-  cursor: pointer;
-  transition: opacity 0.3s ease, transform 0.3s ease;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
-}
-
-#scroll-top:hover {
-  transform: scale(1.1);
 }
 
 /* ── License badge container (same width as feature cards) ─── */
