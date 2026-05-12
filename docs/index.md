@@ -4,7 +4,7 @@ layout: home
 hero:
   name: "Routeur Solaire"
   text: "Optimisez votre Autoconsommation"
-  tagline: "Firmware libre pour ESP32 — optimisez votre autoconsommation photovoltaïque avec un matériel à moins de 30€."
+  tagline: "Firmware libre pour ESP32"
   actions:
     - theme: brand
       text: Commencer →
