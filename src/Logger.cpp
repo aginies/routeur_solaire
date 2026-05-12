@@ -1,6 +1,8 @@
 #include "Logger.h"
 #include <time.h>
 #ifndef NATIVE_TEST
+#include <LittleFS.h>
+#include <freertos/semphr.h>
 #include <esp_task_wdt.h>
 #include <ESPAsyncWebServer.h>
 #endif

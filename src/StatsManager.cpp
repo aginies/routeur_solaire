@@ -356,6 +356,12 @@ void StatsManager::stopTask() {
 #endif
 }
 
+#ifdef NATIVE_TEST
+// For unit testing: zero the static accumulator so tests don't interfere with each other.
+static uint32_t _activeTimeMsAccumulator_saved = 0;
+void StatsManager::_test_reset_accumulator() { _activeTimeMsAccumulator_saved = _activeTimeMsAccumulator; _activeTimeMsAccumulator = 0; }
+#endif
+
 void StatsManager::startTask() {
 #ifndef NATIVE_TEST
     stopTask();

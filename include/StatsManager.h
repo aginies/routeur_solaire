@@ -34,6 +34,10 @@ public:
     static void update(float gridPower, float equipmentPower, uint32_t intervalMs, bool isNight, bool isMeasured = false);
     static void startTask();
     static void stopTask();
+#ifdef NATIVE_TEST
+    // Unit-test helper: save the _activeTimeMsAccumulator so tests can reset it.
+    static void _test_reset_accumulator();
+#endif
     static void save();
 #ifndef NATIVE_TEST
     static void streamStatsJson(AsyncWebServerRequest *request);
