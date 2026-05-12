@@ -39,4 +39,4 @@ Grâce à l'intégration de l'API **Open-Meteo**, le routeur ne se contente pas 
 - **Mode Nuit :** Les heures de lever et coucher du soleil permettent au routeur de passer en mode basse consommation durant la nuit.
 
 ### Calibration d'angle de phase (Phase-angle)
-Le mode **Contrôle de Phase** ajuste précisément la découpe des demi-ondes du signal AC pour un contrôle fin de la puissance délivrée au SSR. Le routeur dispose d'une tâche dédiée qui calcule et applique les calibrages automatiques via l'interface web (`/phase_cal`).
+Le mode **Contrôle de Phase** ajuste précisément la découpe des demi-ondes du signal AC pour un contrôle fin de la puissance délivrée au SSR. Le routeur dispose d'une interface dédiée qui calcule et applique les calibrages automatiques via l'interface web (`/web_phase_cal`). [Détails complets](configuration.md#calibration-dangle-de-phase-phase-angle).

@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://aginies.github.io/routeur_solaire/sitemap.xml

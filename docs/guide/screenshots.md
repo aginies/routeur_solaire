@@ -40,6 +40,8 @@ Outils de diagnostic et monitoring en temps réel :
 - Puissance réseau mesurée vs estimée.
 - Journal d'événements (logs) accessible via téléchargement.
 
+Pour plus de détails sur les endpoints API (`/status`, `/test_shelly`, etc.), consultez la page [API & Diagnostics](diagnostics.md).
+
 ---
 
 ## Aperçu du système

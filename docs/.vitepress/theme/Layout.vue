@@ -144,9 +144,28 @@ const injectLicenseBadge = () => {
   document.body.appendChild(btn)
 }
 
+// Retry injection until VPHomeFeatures is rendered (handles client-side nav timing).
+const scheduleInjectLicenseBadge = () => {
+  let attempts = 0
+  const maxAttempts = 30  /* ~2.5s total */
+  const check = () => {
+    if (document.getElementById('license-badge-container')) return
+    if (attempts++ >= maxAttempts) return  // give up — badge not needed on non-home pages
+    injectLicenseBadge()
+    if (document.getElementById('license-badge-container')) return
+    setTimeout(check, 50)
+  }
+  check()
+}
+
+// Observe DOM mutations for late-rendered content.
+const observer = new MutationObserver(() => {
+  scheduleInjectLicenseBadge()
+})
+
 // Re-inject on page entry (handles VitePress client-side navigation back to homepage)
-onMounted(() => { injectHero(); injectLicenseBadge() })
-watch(route, () => { injectHero(); injectLicenseBadge() }, { deep: true })
+onMounted(() => { injectHero(); scheduleInjectLicenseBadge(); setTimeout(() => observer.observe(document.body, { childList: true, subtree: true }), 100) })
+watch(route, () => { injectHero(); scheduleInjectLicenseBadge() }, { deep: true })
 </script>
 
 <template>

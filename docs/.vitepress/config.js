@@ -2,9 +2,10 @@ import { defineConfig } from 'vitepress'
 
 export default defineConfig({
   title: "Routeur Solaire",
-  description: "Routeur PV haute performance pour ESP32",
+  description: "Optimisez votre autoconsommation avec un routeur PV intelligent pour ESP32",
   base: '/routeur_solaire/',
   appearance: 'dark',
+  lang: 'fr-FR',
   ignoreDeadLinks: true,
   theme: {
     default: 'custom'
@@ -20,18 +21,22 @@ export default defineConfig({
     /* Open Graph / social share */
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:title', content: 'Routeur Solaire — Optimisez votre autoconsommation' }],
-    ['meta', { property: 'og:description', content: 'Solution haute performance pour ESP32 et compteurs JSY. Routage intelligent, anticipation météo, intégration MQTT.' }],
+    ['meta', { property: 'og:description', content: 'Firmware libre pour ESP32 — routeur photovoltaïque haute performance qui optimise votre autoconsommation en redirigeant l\'énergie solaire excédentaire vers vos chauffe-eau et pompes.' }],
     ['meta', { property: 'og:image', content: 'https://aginies.github.io/routeur_solaire/config.png' }],
     ['meta', { property: 'og:url', content: 'https://aginies.github.io/routeur_solaire/' }],
 
     /* Twitter */
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
     ['meta', { name: 'twitter:title', content: 'Routeur Solaire — Optimisez votre autoconsommation' }],
+
+    /* JSON-LD structured data */
+    ['script', { type: 'application/ld+json' }, `{"@context":"https://schema.org","@type":["WebSite","SoftwareApplication"],"name":"Routeur Solaire","description":"Firmware libre pour ESP32 — routeur photovoltaïque haute performance.","url":"https://aginies.github.io/routeur_solaire/","applicationCategory":"IoTApplication","operatingSystem":"ESP32","license":"https://opensource.org/licenses/GPL-3.0"}`],
   ],
   themeConfig: {
     nav: [
       { text: 'Accueil', link: '/' },
-      { text: 'Guide', link: '/guide/introduction' }
+      { text: 'Guide', link: '/guide/introduction' },
+      { icon: 'github', link: 'https://github.com/aginies/routeur_solaire' }
     ],
     sidebar: [
       {
@@ -40,7 +45,9 @@ export default defineConfig({
           { text: 'Introduction', link: '/guide/introduction' },
           { text: 'Matériel', link: '/guide/hardware' },
           { text: 'Configuration', link: '/guide/configuration' },
+          { text: 'Sécurité & Maintenance', link: '/guide/safety' },
           { text: "Captures d'écran", link: '/guide/screenshots' },
+          { text: 'API & Diagnostics', link: '/guide/diagnostics' },
           { text: 'Installation', link: '/guide/installation' }
         ]
       }
