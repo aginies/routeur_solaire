@@ -78,9 +78,9 @@ void test_energy_accumulation_zero_power(void) {
 }
 
 void test_energy_accumulation_small_interval(void) {
-    // 10W for 110ms ≈ 0.003055 Wh — should still accumulate
+    // 10W for 110ms ≈ 0.000306 Wh — should still accumulate
     StatsManager::update(10.0f, 0.0f, 110, false, false);
-    TEST_ASSERT_FLOAT_WITHIN(0.0001f, 0.003056f, StatsManager::totalImportToday);
+    TEST_ASSERT_FLOAT_WITHIN(0.0001f, 0.000306f, StatsManager::totalImportToday);
 }
 
 // =============================================================================
@@ -161,9 +161,9 @@ void test_active_time_accumulates_ms(void) {
     StatsManager::update(0.0f, 20.0f, 110, false, false);
     TEST_ASSERT_EQUAL_UINT32(1, it->second.active_time);
 
-    // Remainder: (990 + 110) % 1000 = 100ms leftover
+    // Remainder: (990 + 110) % 1000 = 100ms leftover; adding 890ms → 990ms total < 1s → no increment
     StatsManager::update(0.0f, 20.0f, 890, false, false);
-    TEST_ASSERT_EQUAL_UINT32(2, it->second.active_time);
+    TEST_ASSERT_EQUAL_UINT32(1, it->second.active_time);
 
     // Remainder now: (100 + 890) = 990ms — no more increment
 }
@@ -188,7 +188,7 @@ void test_hourly_import_bin(void) {
     StatsManager::update(500.0f, 0.0f, 3600, false, false);
     String today = get_system_date();
     auto it = StatsManager::_history.find(today.c_str());
-    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.5f, it->second.h_import[current_hour]);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, (500.0f * 3600 / 3600000.0f), it->second.h_import[current_hour]);
 }
 
 void test_hourly_export_bin(void) {
@@ -199,7 +199,8 @@ void test_hourly_export_bin(void) {
     StatsManager::update(-300.0f, 0.0f, 3600, false, false);
     String today = get_system_date();
     auto it = StatsManager::_history.find(today.c_str());
-    TEST_ASSERT_FLOAT_WITHIN(0.001f, (300.0f / 3600.0f), it->second.h_export[current_hour]);
+    // export = 300W * (3600/3600000)h ≈ 0.3 Wh in current hour bin
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, (300.0f * 3600 / 3600000.0f), it->second.h_export[current_hour]);
 }
 
 void test_hourly_redirect_bin(void) {
@@ -209,8 +210,8 @@ void test_hourly_redirect_bin(void) {
     StatsManager::update(500.0f, 2000.0f, 3600, false, false);
     String today = get_system_date();
     auto it = StatsManager::_history.find(today.c_str());
-    // redirect = (2000 - 500) * (3600/3600)h = 1500 Wh in current hour bin
-    TEST_ASSERT_FLOAT_WITHIN(0.01f, 1500.0f, it->second.h_redirect[current_hour]);
+    // redirect = (2000 - 500) * (3600/3600000)h ≈ 1.5 Wh in current hour bin
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, (1500.0f * 3600 / 3600000.0f), it->second.h_redirect[current_hour]);
 }
 
 // =============================================================================
@@ -268,6 +269,8 @@ void test_today_key_is_valid_date(void) {
 
 void test_history_has_today_entry(void) {
     // The history map should contain an entry for the current date after update()
+    StatsManager::update(10.0f, 20.0f, 3600, false, false);
+    
     String today = get_system_date();
     auto it = StatsManager::_history.find(today.c_str());
     TEST_ASSERT_TRUE(it != StatsManager::_history.end());
@@ -280,18 +283,18 @@ void test_history_preserves_multiple_calls(void) {
     }
     String today = get_system_date();
     auto it = StatsManager::_history.find(today.c_str());
-    // 10 × 10W × (3600/3600)h = 100 Wh import
-    TEST_ASSERT_FLOAT_WITHIN(0.5f, 100.0f, it->second.import);
+    // 10 × 10W × (3600/3600000)h ≈ 0.1 Wh import
+    TEST_ASSERT_FLOAT_WITHIN(0.5f, 0.1f, it->second.import);
 }
 
 void test_history_accumulates_all_totals(void) {
     // Each call should update all three totals (import + redirect) in _history and globals
-    StatsManager::update(100.0f, 500.0f, 7200, false, false);  // 2h interval
+    StatsManager::update(100.0f, 500.0f, 7200, false, false);  // 7.2s interval
     String today = get_system_date();
     auto it = StatsManager::_history.find(today.c_str());
 
-    float expected_import   = 100.0f * (7200 / 3600000.0f);       // import from grid
-    float expected_redirect = 400.0f * (7200 / 3600000.0f);      // redirect
+    float expected_import   = 100.0f * (7200 / 3600000.0f);       // import from grid (~0.2 Wh)
+    float expected_redirect = 400.0f * (7200 / 3600000.0f);      // redirect (~0.8 Wh)
 
     TEST_ASSERT_FLOAT_WITHIN(0.1f, expected_import,   it->second.import);
     TEST_ASSERT_FLOAT_WITHIN(0.1f, expected_redirect, it->second.redirect);
@@ -323,9 +326,9 @@ void test_zero_grid_power_no_import_no_export(void) {
 }
 
 void test_high_power_equipment(void) {
-    // Very high equipment power with small grid draw
+    // Very high equipment power with small grid draw — redirect accounts for intervalMs
     StatsManager::update(100.0f, 50000.0f, 3600, false, false);
-    TEST_ASSERT_EQUAL_FLOAT(50000.0f - 100.0f, StatsManager::totalRedirectToday);
+    TEST_ASSERT_FLOAT_WITHIN(0.5f, (50000.0f - 100.0f) * (3600 / 3600000.0f), StatsManager::totalRedirectToday);
 }
 
 // =============================================================================
