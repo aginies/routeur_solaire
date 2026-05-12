@@ -9,7 +9,7 @@ Eq2State Equipment2Manager::_state = Eq2State::OFF;
 uint32_t Equipment2Manager::_stateChangedMs = 0;
 bool Equipment2Manager::_powerRequested = false;
 
-// Bug #3: back-off for failed Shelly transitions; #4: freshness for power request.
+// Back-off for failed Shelly transitions, freshness tracking for power requests.
 static uint32_t s_lastShellyAttemptMs = 0;
 static const uint32_t SHELLY_RETRY_BACKOFF_MS = 30000; // 30 s
 static uint32_t s_powerReqMs = 0;
@@ -31,8 +31,8 @@ void Equipment2Manager::init(const Config& config) {
 
 bool Equipment2Manager::isScheduled(int currentMinutes) {
     if (!_config) return false;
-    // Bug #2: guard against negative or out-of-range minutes (clock not synced
-    // can't actually return negative here, but defensive against future changes).
+    // Guard against negative or out-of-range minutes (clock not synced, though
+    // getCurrentMinutes can't actually return negative here — defensive for future changes).
     if (currentMinutes < 0) return false;
     int slot = currentMinutes / 30;
     if (slot < 0 || slot >= 48) return false;
@@ -41,7 +41,7 @@ bool Equipment2Manager::isScheduled(int currentMinutes) {
 
 void Equipment2Manager::requestPower(bool canHavePower) {
     _powerRequested = canHavePower;
-    s_powerReqMs = millis(); // Bug #4: timestamp the request
+    s_powerReqMs = millis(); // Timestamp the request for freshness check.
 }
 
 bool Equipment2Manager::isCurrentlyOn() {
@@ -61,7 +61,7 @@ bool Equipment2Manager::isBypassedByCloud() {
 
 uint32_t Equipment2Manager::getRemainingMinTime() {
     if (_state != Eq2State::ON && _state != Eq2State::PENDING_OFF) return 0;
-    // Bug #1: guard against null config
+    // Guard against null config.
     if (!_config) return 0;
     uint32_t elapsed = (millis() - _stateChangedMs) / 1000;
     uint32_t minSecs = (uint32_t)_config->equip2_min_on_time * 60UL;
@@ -76,7 +76,7 @@ void Equipment2Manager::loop() {
     int currentMin = Utils::getCurrentMinutes();
     bool scheduled = isScheduled(currentMin);
 
-    // Bug #4: ignore a stale power request (no fresh data in POWER_REQ_STALE_MS).
+    // Ignore a stale power request (no fresh data in POWER_REQ_STALE_MS).
     bool powerRequestFresh = (s_powerReqMs != 0)
                           && ((uint32_t)(now - s_powerReqMs) <= POWER_REQ_STALE_MS);
     bool effectivePowerRequest = powerRequestFresh && _powerRequested;
@@ -84,7 +84,7 @@ void Equipment2Manager::loop() {
     // Eq2 should be on if scheduled OR if (fresh) solar power request AND not bypassed by clouds
     bool shouldBeOn = scheduled || (effectivePowerRequest && !isBypassedByCloud());
 
-    // Bug #3: rate-limit Shelly attempts so unreachable Shelly doesn't get
+    // Rate-limit Shelly attempts so unreachable Shelly doesn't get
     // hammered every poll cycle.
     auto shellyAttemptAllowed = [&]() {
         if (s_lastShellyAttemptMs == 0) return true;

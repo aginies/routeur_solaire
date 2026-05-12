@@ -26,19 +26,19 @@ WiFiClientSecure WeatherManager::_client;
 HTTPClient WeatherManager::_http;
 TaskHandle_t WeatherManager::_taskHandle = nullptr;
 
-// Bug #4: serialize String access (sunrise/sunset/weatherIcon) between
-// the weather task (writer) and reader contexts (web handlers, monitor task).
+// Serialize String access (sunrise/sunset/weatherIcon) between the weather task
+// (writer) and reader contexts (web handlers, monitor task).
 // String assignment is not atomic — the heap pointer can be torn.
 static SemaphoreHandle_t _weatherStringMutex = nullptr;
 
-// Bug #6: minimum interval between actual HTTP fetches even on forceUpdate()
+// Minimum interval between actual HTTP fetches even on forceUpdate().
 static const uint32_t WEATHER_MIN_REFRESH_MS = 60UL * 1000UL;
 static uint32_t _lastFetchAttemptMs = 0;
 
 void WeatherManager::init(const Config& config) {
     _config = &config;
 
-    // Bug #8: warn (don't fatal) if lat/lon empty — task will skip fetch
+    // Warn if lat/lon empty — task will skip fetch instead of crashing.
     if (config.weather_lat.length() == 0 || config.weather_lon.length() == 0) {
         Logger::warn("Weather: lat/lon not configured; updates will be skipped");
     }
@@ -47,8 +47,7 @@ void WeatherManager::init(const Config& config) {
         _weatherStringMutex = xSemaphoreCreateMutex();
     }
 
-    _client.setInsecure();
-    // Bug #2: setInsecure() disables TLS cert verification.
+    _client.setInsecure(); // Disables TLS cert verification (insecure mode).
     _client.setTimeout(15);
     _http.useHTTP10(true); 
     _http.setTimeout(15000);
@@ -120,10 +119,10 @@ bool WeatherManager::isTooCloudy() {
     return getSolarConfidence() < _config->weather_cloud_threshold;
 }
 
-// Bug #4 helper: copy sunrise/sunset via the public getters, which themselves
-// take _weatherStringMutex (Bug #1, header-audit). Calling them here is safe
-// (they grab+release the lock for each call); we MUST NOT take the mutex
-// ourselves first, that would deadlock the now-locking getters.
+// Helper: copy sunrise/sunset via the public getters, which themselves take
+// _weatherStringMutex. Calling them here is safe (they grab+release the lock for
+// each call); we MUST NOT take the mutex ourselves first — that would deadlock
+// the now-locking getters.
 static void snapshotSunTimes(String& sunriseOut, String& sunsetOut) {
     sunriseOut = WeatherManager::getSunrise();
     sunsetOut  = WeatherManager::getSunset();
@@ -156,7 +155,7 @@ String WeatherManager::getWeatherIcon() {
     return _weatherIcon;
 }
 
-// Bug #7: parse "YYYY-MM-DDTHH:MM" robustly. Returns -1 on malformed input.
+// Parse "YYYY-MM-DDTHH:MM" robustly. Returns -1 on malformed input.
 static int parseHourMinute(const String& iso) {
     if (iso.length() < 16) return -1;
     if (iso.charAt(13) != ':') return -1;
@@ -263,8 +262,8 @@ bool WeatherManager::isNight() {
     if (!_config || !_config->e_weather) return false;
 
     String sr, ss;
-    snapshotSunTimes(sr, ss); // Bug #4
-    int sunriseMin = parseHourMinute(sr); // Bug #7
+    snapshotSunTimes(sr, ss);
+    int sunriseMin = parseHourMinute(sr);
     int sunsetMin  = parseHourMinute(ss);
     if (sunriseMin < 0 || sunsetMin < 0) return false;
 
@@ -342,8 +341,7 @@ void WeatherManager::updateWeather() {
             if (!error) {
                 JsonVariant cur = doc["current"];
 
-                // Bug #3: typed checks; only update on valid numeric values, otherwise
-                // keep the previous reading.
+                // Typed checks; only update on valid numeric values, otherwise keep the previous reading.
                 if (cur["cloud_cover"].is<int>())      _cloudCover     = cur["cloud_cover"].as<int>();
                 if (cur["cloud_cover_low"].is<int>())  _cloudCoverLow  = cur["cloud_cover_low"].as<int>();
                 if (cur["cloud_cover_mid"].is<int>())  _cloudCoverMid  = cur["cloud_cover_mid"].as<int>();
@@ -376,7 +374,7 @@ void WeatherManager::updateWeather() {
                 else if (code <= 86) iconBuf = "snowy-5";
                 else if (code <= 99) iconBuf = "thunder";
 
-                // Bug #4: assign String fields under the mutex
+                // Assign String fields under the mutex to avoid torn reads by getters.
                 String newSunrise = doc["daily"]["sunrise"][0] | "";
                 String newSunset  = doc["daily"]["sunset"][0]  | "";
                 if (_weatherStringMutex && xSemaphoreTake(_weatherStringMutex, pdMS_TO_TICKS(500)) == pdTRUE) {
@@ -388,7 +386,6 @@ void WeatherManager::updateWeather() {
 
                 _lastUpdate = millis();
 
-                // Bug #12: snprintf instead of String concatenation
                 char logBuf[160];
                 snprintf(logBuf, sizeof(logBuf),
                          "Weather updated: %.1fC, %d%% clouds, icon: %s",
@@ -396,12 +393,12 @@ void WeatherManager::updateWeather() {
                 Logger::info(String(logBuf));
             } else {
                 char buf[80];
-                snprintf(buf, sizeof(buf), "Weather JSON error: %s", error.c_str()); // Bug #12
+                snprintf(buf, sizeof(buf), "Weather JSON error: %s", error.c_str());
                 Logger::warn(String(buf));
             }
         } else {
             char buf[60];
-            snprintf(buf, sizeof(buf), "Weather HTTP error: %d", httpCode); // Bug #12
+            snprintf(buf, sizeof(buf), "Weather HTTP error: %d", httpCode);
             Logger::warn(String(buf));
         }
         _http.end();

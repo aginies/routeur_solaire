@@ -28,8 +28,7 @@ void GridSensorService::init(const Config& config) {
     _jsy1State.state = JsyState::IDLE;
     _jsy2State.state = JsyState::IDLE;
     _http.setConnectTimeout(2000);
-    // Bug #5: cast to uint32_t before *1000 to avoid overflow above ~32 s.
-    _http.setTimeout((uint32_t)_config->shelly_timeout * 1000UL);
+    _http.setTimeout((uint32_t)_config->shelly_timeout * 1000UL); // Cast before multiplying to avoid overflow above ~32s.
 
     if (isJsy1Active()) {
         _jsy1Serial = &Serial1;
@@ -121,7 +120,7 @@ void GridSensorService::networkPollTask(void* pvParameters) {
 
 bool GridSensorService::fetchGridData() {
     if (!_config) {
-        hasFreshData.store(false); // Bug #6
+        hasFreshData.store(false);
         return false;
     }
 
@@ -162,7 +161,7 @@ bool GridSensorService::fetchGridData() {
     else if (_config->e_shelly_mqtt) {
         if (MqttManager::hasLatestMqttGridPower) {
             gridPower = MqttManager::latestMqttGridPower;
-            // Bug #4: clamp upper bound on voltage too
+            // Clamp upper bound on voltage too
             float v = MqttManager::latestMqttGridVoltage;
             if (v > 100.0f && v < 300.0f) {
                 currentGridVoltage = v;
@@ -268,10 +267,10 @@ float GridSensorService::getShellyPower() {
     if (!_config) return SENSOR_ERROR_VALUE;
 
     if (_config->fake_shelly) {
-        // Bug #9: seed once so successive boots produce different noise sequences.
+        // Seed once so successive boots produce different noise sequences.
         static bool seeded = false;
         if (!seeded) { randomSeed((uint32_t)esp_random()); seeded = true; }
-        // Bug #12: wrap phase to avoid float precision drift over weeks.
+        // Wrap phase to avoid float precision drift over weeks.
         static float phase = 0;
         phase += 0.1f;
         if (phase > 6283.0f) phase -= 6283.0f; // ~1000 * 2pi
@@ -292,9 +291,7 @@ float GridSensorService::getShellyPower() {
         JsonDocument doc;
         DeserializationError error = deserializeJson(doc, _http.getStream());
         if (!error) {
-            // Bug #3: validate the "power" key is actually present and numeric.
-            // ArduinoJson's implicit conversion otherwise returns 0.0 silently
-            // for a missing key, which would be treated as a real reading.
+            // Validate the "power" key is actually present and numeric — ArduinoJson's implicit conversion would otherwise return 0.0 silently for a missing key, which would be treated as a real reading.
             if (doc["power"].is<float>() || doc["power"].is<int>()) {
                 power = doc["power"].as<float>();
                 if (doc["voltage"].is<float>() || doc["voltage"].is<int>()) {

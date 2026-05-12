@@ -4,9 +4,7 @@
 #include <WiFi.h>
 #include <ArduinoJson.h>
 
-// Max topic length enforced by espMqttClient's internal buffer.
-// Longer topics would be silently truncated or rejected by the broker,
-// so we validate early with a clear warning (Bug #2).
+// Longer topics would be silently truncated or rejected by the broker, so we validate early.
 static const size_t MAX_MQTT_TOPIC_LENGTH = 128;
 
 static inline bool isTopicValid(const String& topic) {
@@ -52,7 +50,7 @@ void MqttManager::init(const Config& config) {
         _mqttClient.setCredentials(config.mqtt_user.c_str(), config.mqtt_password.c_str());
     }
 
-    // Bug #2: validate LWT topic (built from user-controlled mqtt_name) before passing to the client.
+    // Validate LWT topic (built from user-controlled mqtt_name) before passing to the client.
     _lwtTopic = config.mqtt_name + "/status";
     if (!isTopicValid(_lwtTopic)) {
         Logger::warn("MQTT: LWT topic too long or contains invalid chars (" + _lwtTopic + "), skipping will");
@@ -61,7 +59,7 @@ void MqttManager::init(const Config& config) {
     }
 
     connectToMqtt();
-    // Bug #13: prevent loop() from issuing a second connect() before the first completes
+    // Prevent loop() from issuing a second connect before the first completes.
     _lastReconnectAttempt = millis();
 }
 
@@ -79,7 +77,7 @@ void MqttManager::loop() {
     }
 
     // Periodic Discovery Refresh (every hour). onMqttConnect already triggers an
-    // initial discovery, so no need for a sentinel value here (Bug #11).
+    // initial discovery, so no need for a sentinel value here.
     static uint32_t lastDiscoveryRefresh = 0;
     if (_mqttClient.connected() && (now - lastDiscoveryRefresh > 3600000)) {
         lastDiscoveryRefresh = now;
@@ -88,13 +86,13 @@ void MqttManager::loop() {
 }
 
 void MqttManager::connectToMqtt() {
-    // Bug #12: log connect attempts so the user has visibility when the broker is unreachable
+    // Log connect attempts so the user has visibility when the broker is unreachable.
     Logger::info("MQTT: connecting to " + _config->mqtt_ip + ":" + String(_config->mqtt_port));
     _mqttClient.connect();
 }
 
 void MqttManager::onMqttConnect(bool sessionPresent) {
-    if (!_config) return; // Bug #6: defensive null guard
+    if (!_config) return; // Defensive null guard.
     Logger::info("Connected to MQTT broker");
 
     String statusTopic = _config->mqtt_name + "/status";
@@ -155,9 +153,7 @@ void MqttManager::onMqttDisconnect(espMqttClientTypes::DisconnectReason reason) 
 void MqttManager::onMqttMessage(const espMqttClientTypes::MessageProperties& properties,
                                  const char* topic, const uint8_t* payload,
                                  size_t len, size_t index, size_t total) {
-    // Bugs #1 & #2: drop fragmented messages. Shelly payloads are small (<256B) and
-    // should always arrive as a single chunk. Processing only the first fragment
-    // would feed garbage to atof()/deserializeJson().
+    // Drop fragmented messages — Shelly payloads are small (<256B) and should always arrive as a single chunk.
     if (index != 0 || len != total) {
         Logger::warn("MQTT: ignoring fragmented message on " + String(topic));
         return;
@@ -170,7 +166,6 @@ void MqttManager::onMqttMessage(const espMqttClientTypes::MessageProperties& pro
     memcpy(buffer, payload, cplen);
     buffer[cplen] = '\0';
 
-    // Bug #4: only handle Shelly topics when Shelly MQTT is enabled
     if (_config->e_shelly_mqtt && _config->shelly_mqtt_topic.length() > 0) {
         if (strcmp(topic, _config->shelly_mqtt_topic.c_str()) == 0) {
             latestMqttGridPower = atof(buffer);
@@ -186,7 +181,7 @@ void MqttManager::onMqttMessage(const espMqttClientTypes::MessageProperties& pro
         }
         if (strcmp(topic, cachedVoltageTopic.c_str()) == 0) {
             float v = atof(buffer);
-            // Bug #7: widen accepted range to cover 100V regions and brown-out edges
+            // Widen accepted range to cover 100V regions and brown-out edges.
             if (v >= 90.0 && v <= 280.0) {
                 latestMqttGridVoltage = v;
             }
@@ -210,10 +205,7 @@ void MqttManager::onMqttMessage(const espMqttClientTypes::MessageProperties& pro
 float MqttManager::parseShellySwitchPower(const uint8_t* payload, size_t len) {
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, payload, len);
-    // Bug #10: ArduinoJson v7 deprecates containsKey(); use is<T>() instead.
-    // Bug #10b (followup): in v7 `is<float>()` is strict and returns false for
-    // integer JSON tokens (e.g. `apower: 0` with no decimal). Accept both
-    // float and int — matches the pattern used in Shelly1PMManager / GridSensorService.
+    // ArduinoJson v7 is strict with is<T>() — returns false for integer tokens (e.g. apower: 0). Accept both float and int to match the pattern used in Shelly1PMManager / GridSensorService.
     if (!err && (doc["apower"].is<float>() || doc["apower"].is<int>())) {
         return doc["apower"].as<float>();
     }
@@ -251,9 +243,7 @@ void MqttManager::sendDiscovery() {
 
         String payload;
         serializeJson(doc, payload);
-        // Bug #2: validate the discovery topic before publishing.
-        // The prefix + deviceId + suffix can easily exceed espMqttClient's internal buffer
-        // if mqtt_name or mqtt_discovery_prefix are set to long values.
+        // Validate the discovery topic before publishing — long mqtt_name or discovery_prefix can exceed espMqttClient's internal buffer.
         String topic = _config->mqtt_discovery_prefix + "/sensor/" + deviceId + "/" + uniqueSuffix + "/config";
         if (!isTopicValid(topic)) {
             Logger::error("MQTT: discovery topic too long (" + topic.substring(0, 128) + "…), skipping");
@@ -295,7 +285,7 @@ void MqttManager::publishStatus(float gridPower, float equipmentPower, bool equi
     char val[16];
     bool retain = _config->mqtt_retain;
 
-    // Bug #2: validate topic before publishing (topic built from user mqtt_name).
+    // Validate topic before publishing (topic built from user mqtt_name).
     if (!isTopicValid(tPower)) return;
     snprintf(val, sizeof(val), "%.0f", gridPower);
     _mqttClient.publish(tPower.c_str(), 0, retain, val);
@@ -326,8 +316,8 @@ skip_esp_temp:
     }
 
     char payload[256];
-    // Bug #8: omit ssr_temp from JSON when sensor is invalid/disconnected
-    // Bug #9: drop redundant round() — %.1f already rounds to one decimal
+    // Omit ssr_temp from JSON when sensor is invalid/disconnected.
+    // %.1f already rounds to one decimal, so no redundant round() needed.
     bool ssrValid = (ssrTemp > -100.0);
     if (ssrValid) {
         snprintf(payload, sizeof(payload),
@@ -347,7 +337,7 @@ skip_esp_temp:
             esp32Temp, fanActive ? "true" : "false", fanPercent);
     }
 
-    // Bug #2: validate status_json topic before publishing.
+    // Validate status_json topic before publishing.
     if (isTopicValid(tStatusJson)) {
         _mqttClient.publish(tStatusJson.c_str(), 0, retain, payload);
         Logger::debug("MQTT: Data published");

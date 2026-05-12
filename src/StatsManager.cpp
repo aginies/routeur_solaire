@@ -36,7 +36,7 @@ SemaphoreHandle_t StatsManager::_statsMutex = nullptr;
 #endif
 
 #ifndef NATIVE_TEST
-// Bug #15: cache today's key (avoid String alloc every update())
+// Cache today's key to avoid allocating a String on every update().
 static String _cachedTodayKey;
 static int _cachedTodayMday = -1;
 static int _cachedTodayMonth = -1;
@@ -56,7 +56,7 @@ static const String& cachedTodayKey() {
     return _cachedTodayKey;
 }
 
-// Bug #9/#10: persist daily totals to NVS immediately (used on day change & shutdown)
+// Persist daily totals to NVS immediately (used on day change & shutdown).
 static void persistNvsTotals(const String& dayKey) {
     if (prefs.begin("solar_stats", false)) {
         prefs.putFloat("import", StatsManager::totalImportToday);
@@ -67,7 +67,7 @@ static void persistNvsTotals(const String& dayKey) {
     }
 }
 
-// Bug #16: PSRAM Allocator for ArduinoJson. deserializing 365 days of stats
+// PSRAM Allocator for ArduinoJson: deserializing 365 days of stats
 // can take >400KB of AST memory, exhausting internal SRAM.
 #ifndef NATIVE_TEST
 struct ArduinoJsonSpiRamAllocator : ArduinoJson::Allocator {
@@ -106,7 +106,7 @@ void StatsManager::init() {
 #ifndef NATIVE_TEST
     _statsMutex = xSemaphoreCreateMutex();
 
-    // Bug #13: detect NVS init failure
+    // Detect NVS init failure
     if (!prefs.begin("solar_stats", false)) {
         Logger::error("StatsManager: NVS open failed; running without persistent counters");
         // Continue with zeros; do not return so we still load JSON history.
@@ -130,7 +130,7 @@ void StatsManager::init() {
         totalRedirectToday = 0;
         totalExportToday = 0;
         Logger::info("New day detected: " + today + ". Resetting daily stats.");
-        // Bug #10: persist the reset immediately so a reboot before next save doesn't
+        // Persist the reset immediately so a reboot before next save doesn't
         // re-load yesterday's totals as today's.
         prefs.putFloat("import", 0);
         prefs.putFloat("redirect", 0);
@@ -165,7 +165,7 @@ void StatsManager::init() {
     file.close();
 
     if (error) {
-        // Bug #8: snprintf instead of String + .c_str() concat
+        // Use snprintf instead of String + .c_str() concat
         char ebuf[80];
         snprintf(ebuf, sizeof(ebuf), "Failed to load stats.json: %s", error.c_str());
         Logger::error(String(ebuf));
@@ -213,7 +213,7 @@ void StatsManager::init() {
         _history[key.c_str()] = ds;
     }
 
-    // Bug #1 (continued): Today's entry — preserve hourly bins from JSON; only override
+    // Today's entry — preserve hourly bins from JSON; only override
     // the totals if NVS holds a non-zero value (i.e. NVS was actually saved today).
     {
         auto it = _history.find(today);
@@ -249,7 +249,7 @@ void StatsManager::update(float gridPower, float equipmentPower, uint32_t interv
 #endif
 
     String key = getTodayKey();
-    // Bug #12: use float literal to avoid implicit float->double->float
+    // Use float literal (.0f suffix) to avoid implicit float->double->float conversion.
     float intervalHours = intervalMs / 3600000.0f;
     int hour = ti.tm_hour;
 
@@ -284,7 +284,7 @@ void StatsManager::update(float gridPower, float equipmentPower, uint32_t interv
             ds.export_wh = 0;
             _history[key] = ds;
             Logger::info("New day detected in update: " + key);
-            dayChanged = true; // Bug #9
+            dayChanged = true;
         }
 
         DailyStats& ds = _history[key];
@@ -292,7 +292,7 @@ void StatsManager::update(float gridPower, float equipmentPower, uint32_t interv
             energyImport = gridPower * intervalHours;
             ds.import += energyImport;
         } else {
-            // Bug #11: explicit fabsf for float
+            // Use fabsf for float to avoid double precision overhead.
             energyExport = fabsf(gridPower) * intervalHours;
             ds.export_wh += energyExport;
         }
@@ -324,13 +324,13 @@ void StatsManager::update(float gridPower, float equipmentPower, uint32_t interv
 #endif
 
 #ifndef NATIVE_TEST
-    // Bug #9: on day change, persist NVS immediately
+    // On day change, persist NVS immediately.
     if (dayChanged) {
         persistNvsTotals(key);
     }
 #endif
 
-    // Bug #3: prime lastNvsSave so first call after boot doesn't trigger immediate write.
+    // Prime lastNvsSave so first call after boot doesn't trigger an immediate write.
     static uint32_t lastNvsSave = 0;
 #ifndef NATIVE_TEST
     if (lastNvsSave == 0) lastNvsSave = millis();
@@ -366,8 +366,7 @@ void StatsManager::startTask() {
 void StatsManager::statsTask(void* pvParameters) {
 #ifndef NATIVE_TEST
     esp_task_wdt_add(NULL);
-    // Bug #5: WDT default is ~5s; vTaskDelay(10000) was longer than the timeout
-    // and would trigger a watchdog reset. Sleep in 1s slices and pet between them.
+    // WDT default is ~5s; vTaskDelay(10000) exceeds the timeout and would trigger a watchdog reset. Sleep in 1s slices and pet between them.
     while (true) {
         if (_saveRequested) {
             save();
@@ -394,14 +393,14 @@ void StatsManager::save() {
 
     while (_history.size() > MAX_STATS_DAYS) _history.erase(_history.begin());
 
-    // Bug #7: pre-flight disk-space check (each day ~ 250 bytes; need ~10 KB headroom)
+    // Pre-flight disk-space check (each day ~250 bytes; need ~10 KB headroom).
     if (LittleFS.totalBytes() - LittleFS.usedBytes() < 12288) {
         Logger::error("StatsManager::save: insufficient FS space, skipping write");
         xSemaphoreGive(_statsMutex);
         return;
     }
 
-    // Bug #2: atomic write via tmp file then rename, so a power loss mid-write
+    // Atomic write via tmp file then rename, so a power loss mid-write
     // cannot corrupt the existing /stats.json (LittleFS rename does not overwrite,
     // so we must remove the destination first).
     const char* finalPath = "/stats.json";
@@ -419,7 +418,7 @@ void StatsManager::save() {
     int iCount = 0;
 
     for (auto const& [date, ds] : _history) {
-        // Bug #17: vTaskDelay(1) every 2 days to prevent IWDT on Core 0 during heavy Flash I/O
+        // Yield every 2 days to prevent IWDT on Core 0 during heavy Flash I/O.
         if (iCount % 2 == 0) {
             vTaskDelay(pdMS_TO_TICKS(1));
             if (esp_task_wdt_status(NULL) == ESP_OK) esp_task_wdt_reset();
@@ -455,7 +454,7 @@ void StatsManager::save() {
     file.print("}");
     file.close();
 
-    // Bug #2: rename tmp -> final (LittleFS.rename does NOT overwrite)
+    // Rename tmp -> final (LittleFS.rename does NOT overwrite).
     LittleFS.remove(finalPath);
     if (!LittleFS.rename(tmpPath, finalPath)) {
         Logger::error("StatsManager::save: rename tmp->final failed");
@@ -468,7 +467,7 @@ void StatsManager::save() {
 }
 
 #ifndef NATIVE_TEST
-// Bug #6: snapshot _history under the mutex, then release it before doing any
+// Snapshot _history under the mutex, then release it before doing any
 // network I/O. Streaming 30 days * ~300 bytes through AsyncResponseStream can
 // hold the mutex for seconds otherwise, blocking update() and save().
 void StatsManager::streamStatsJson(AsyncWebServerRequest *request) {
@@ -490,13 +489,13 @@ void StatsManager::streamStatsJson(AsyncWebServerRequest *request) {
         if (!firstDay) response->print(",");
         firstDay = false;
 
-        // Bug #18: delay every ~30 entries to prevent IWDT reset on Core 0 during streaming.
+        // Delay every ~30 entries to prevent IWDT reset on Core 0 during streaming.
         if (iCount % 30 == 0) {
             vTaskDelay(pdMS_TO_TICKS(1));
             if (esp_task_wdt_status(NULL) == ESP_OK) esp_task_wdt_reset();
         }
 
-        // Bug #14: align precision with save() (.1f everywhere)
+        // Align precision with save() (.1f everywhere).
         snprintf(buf, sizeof(buf), "\"%s\":{\"import\":%.1f,\"redirect\":%.1f,\"export\":%.1f,\"active_time\":%u,",
                  key.c_str(), ds.import, ds.redirect, ds.export_wh, ds.active_time);
         response->print(buf);
@@ -504,7 +503,7 @@ void StatsManager::streamStatsJson(AsyncWebServerRequest *request) {
         auto printArray = [&](const char* name, const float* arr) {
             response->printf("\"%s\":[", name);
             for (int i = 0; i < 24; i++) {
-                response->printf("%.1f%s", arr[i], (i < 23 ? "," : "")); // Bug #14
+                response->printf("%.1f%s", arr[i], (i < 23 ? "," : ""));
             }
             response->print("]");
         };
@@ -526,7 +525,7 @@ void StatsManager::streamStatsJson(AsyncWebServerRequest *request) {
 
 String StatsManager::getTodayKey() {
 #ifndef NATIVE_TEST
-    return cachedTodayKey(); // Bug #15
+    return cachedTodayKey();
 #else
     time_t now; time(&now); struct tm ti; localtime_r(&now, &ti);
     char buffer[11]; strftime(buffer, sizeof(buffer), "%Y-%m-%d", &ti);
