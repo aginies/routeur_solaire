@@ -183,20 +183,18 @@ void ControlStrategy::stopTasks() {
         _currentTaskHandle = nullptr;
     }
 
-    // Bug #12: tear down the phase-mode hardware timer if it was running.
+    // Tear down the phase-mode hardware timer if it was running.
     if (_phaseTimer != nullptr) {
         esp_timer_stop(_phaseTimer);
         esp_timer_delete(_phaseTimer);
         _phaseTimer = nullptr;
     }
 
-    // Bug #1: guard against writing to invalid GPIO if ActuatorManager::init()
-    // never ran (ssrPin defaults to -1).
+    // Guard against writing to invalid GPIO if ActuatorManager::init() never ran (ssrPin defaults to -1).
     if (ActuatorManager::ssrPin >= 0) {
         digitalWrite(ActuatorManager::ssrPin, LOW);
     }
-    // Bug #6: clear stale equipmentActive so a freshly-started strategy doesn't
-    // inherit "on" state.
+    // Clear stale equipmentActive so a freshly-started strategy doesn't inherit "on" state.
     ActuatorManager::equipmentActive = false;
     portENTER_CRITICAL(&_controlMux);
     _fireFullCycle = false;
@@ -215,7 +213,7 @@ void ControlStrategy::stopTasks() {
 void ControlStrategy::startTasks() {
     if (!_config) return;
 
-    // Bug #5: validate critical params before starting any task.
+    // Validate critical params before starting any task.
     if (!isPinValidForRole(_config->zx_pin, PinRole::ZX_INPUT)) {
         Logger::error("ControlStrategy: invalid zx_pin " + String(_config->zx_pin)
                       + " (" + pinValidationReason(_config->zx_pin, PinRole::ZX_INPUT) + ") - tasks not started");
@@ -263,8 +261,8 @@ void ControlStrategy::startTasks() {
             _phaseCalActive = true;
             portEXIT_CRITICAL(&_phaseCalMux);
         } else {
-            // Bug #12: create the one-shot hardware timer used to fire the SSR at
-            // the precise phase angle. Created BEFORE attaching the ISR so the
+            // Create the one-shot hardware timer used to fire the SSR at
+            // the precise phase angle. Created before attaching the ISR so the
             // ISR can never see a NULL handle.
             const esp_timer_create_args_t targs = {
                 .callback = &phaseFireSsr,
@@ -284,13 +282,13 @@ void ControlStrategy::startTasks() {
             _isrAttached = true;
         }
     } else {
-        // Bug #8: unrecognized control_mode silently leaves SSR dead. Warn loudly.
+        // Unrecognized control_mode silently leaves SSR dead. Warn loudly.
         Logger::warn("ControlStrategy: unknown control_mode '" + _config->control_mode + "' - SSR will remain OFF");
     }
 }
 
 void IRAM_ATTR ControlStrategy::handleZxInterrupt() {
-    // Bug #4: guard against ISR firing before init() created the event group.
+    // Guard against ISR firing before init() created the event group.
     if (!_zxEventGroup) return;
     uint32_t nowUs = micros();
     uint32_t prevUs = _zxTime;
@@ -315,6 +313,7 @@ void IRAM_ATTR ControlStrategy::handleZxInterrupt() {
             // "Trame" Mode: Full Cycle switching to eliminate DC component hum.
             // We make a decision at the start of every full cycle (odd count).
             if (_zxCounter % 2 != 0) {
+                portENTER_CRITICAL_ISR(&_controlMux);
                 _accumulator += _dutyMilli;
                 if (_accumulator >= 1000) {
                     _accumulator -= 1000;
@@ -322,6 +321,7 @@ void IRAM_ATTR ControlStrategy::handleZxInterrupt() {
                 } else {
                     _fireFullCycle = false;
                 }
+                portEXIT_CRITICAL_ISR(&_controlMux);
                 _lastTrameDecisionUs = nowUs;
             }
             ssrSetFromIsr(ActuatorManager::ssrPin, _fireFullCycle);
@@ -329,6 +329,7 @@ void IRAM_ATTR ControlStrategy::handleZxInterrupt() {
         } else {
             // "Cycle Stealing" Mode: Half Cycle switching for maximum resolution.
             // Note: can create DC offset hum on some grids/transformers.
+            portENTER_CRITICAL_ISR(&_controlMux);
             _accumulator += _dutyMilli;
             bool on = false;
             if (_accumulator >= 1000) {
@@ -354,14 +355,14 @@ void ControlStrategy::burstControlTask(void* pvParameters) {
     uint32_t burstStart = millis();
     bool ssrState = false;
 
-    // Bug #5: defensive minimum burst_period to avoid div-by-zero / always-on.
+    // Defensive minimum burst_period to avoid div-by-zero / always-on.
     float burstPeriod = _config->burst_period;
     if (burstPeriod < 0.1f) burstPeriod = 1.0f;
 
     while (true) {
         esp_task_wdt_reset();
 
-        // Bug #3: clamp duty to [0,1] before any uint32_t cast.
+        // Clamp duty to [0,1] before any uint32_t cast.
         float duty = ActuatorManager::currentDuty;
         if (duty < 0.0f) duty = 0.0f;
         if (duty > 1.0f) duty = 1.0f;
@@ -393,15 +394,15 @@ void ControlStrategy::cycleStealingTask(void* pvParameters) {
     if (!_config) { vTaskDelete(NULL); return; }
     esp_task_wdt_add(NULL);
 
-    // Bug #12: avoid heap-fragmenting String concatenation; use snprintf.
+    // Avoid heap-fragmenting String concatenation; use snprintf.
     {
         char buf[80];
         snprintf(buf, sizeof(buf), "Synchronized Cycle Task Started on pin %d (ISR-driven)", _config->zx_pin);
         Logger::info(String(buf));
     }
 
-    // Bug #7: lastCheck/lastCount were function-static; would persist across task
-    // restarts. Move them into the task's stack so they reset cleanly.
+    // lastCheck/lastCount were function-static; would persist across task restarts.
+    // Move them into the task's stack so they reset cleanly.
     uint32_t lastCheck = millis();
     uint32_t lastCount = _zxCounter;
 
@@ -581,9 +582,9 @@ void ControlStrategy::phaseControlTask(void* pvParameters) {
 // for the resistive load to settle and the user to read power/temperature.
 
 // esp_timer callback used DURING calibration sweep to fire the SSR at the
-// current step delay. Uses direct register write for minimum latency.
-// The 150µs pulse width is sufficient to trigger a TRIAC gate.
-static void IRAM_ATTR phaseCalFire(void* /*arg*/) {
+// current step delay. Runs in task context (not ISR) so a brief busy-wait
+// pulse is safe here; 150µs width needed for TRIAC gate triggering.
+static void phaseCalFire(void* /*arg*/) {
     if (ActuatorManager::ssrPin < 0) return;
     // Use register-level GPIO for speed (same as ssrSetFromIsr)
     int pin = ActuatorManager::ssrPin;

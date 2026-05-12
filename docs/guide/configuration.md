@@ -74,7 +74,7 @@ Le choix du mode dépend de votre SSR et de votre besoin de précision :
 | **Burst** | Allume/éteint le SSR sur une période fixe (ex: 10s ON, 5s OFF) | Standard | Moyenne |
 | **Cycle Stealing** | Change l'état du SSR au passage par zéro (réduit les parasites EMI) | Standard avec ZX | Bonne |
 | **Mode Trame (Bresenham)** | Répartition uniforme des cycles ON/OFF via algorithme de Bresenham | Standard avec ZX | Excellente |
-| **Contrôle de Phase** | Coupe chaque demi-onde du signal AC (dimmer-like) | SSR "Random Phase" + ZX précis | Très haute |
+| **Contrôle de Phase** | Coupe chaque demi-onde du signal AC (dimmer-like) | SSR « phase aléatoire » + détection Zero-Crossing précise | Très haute |
 
 > **Note :** Le mode Contrôle de Phase nécessite un SSR compatible (type TRIAC à phase aléatoire) et une détection Zero-Crossing précise. Les modes Burst et Cycle Stealing fonctionnent avec la plupart des SSR standards.
 
@@ -82,12 +82,13 @@ Le choix du mode dépend de votre SSR et de votre besoin de précision :
 
 ## Fonctions Spéciales
 
-### Mode Force & Boost Manuel
+### Mode Force — Boost Manuel & Forçage Horaires
 
 Le **Mode Force** active la chauffe indépendamment du surplus solaire. Il existe deux variantes :
 
-- **Force Mode (manuel, durée fixée)** — Permet de forcer l'équipement 1 à 100% de sa puissance immédiatement. Le boost est activé pour une durée définie (`boost_minutes`) ou jusqu'à ce que la température cible soit atteinte.
-- **Plage Force Horizontale** — Configurez un créneau horaire (ex: `22:05` → `05:55`) pendant lequel le SSR se force à chauffer indépendamment du soleil, utile pour les tarifs heures creuses ou les périodes de forte production prévue.
+- **Boost Manuel** — Permet de forcer l'équipement 1 à 100% immédiatement, pour une durée définie (`boost_minutes`) ou jusqu'à ce que la température cible soit atteinte.
+
+- **Forçage Horaires** — Configurez un créneau horaire (ex: `22:05` → `05:55`) pendant lequel le SSR se force à chauffer indépendamment du soleil, utile pour les tarifs heures creuses ou les périodes de forte production prévue.
 
 ### Mode Vacances
 Le **Mode Vacances** permet de suspendre intelligemment l'activité du routeur lors d'absences prolongées.

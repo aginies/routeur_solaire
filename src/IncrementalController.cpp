@@ -23,6 +23,10 @@ IncrementalController::IncrementalController(int32_t delta_mw, int32_t deltaneg_
         _delta = _deltaneg;
         _deltaneg = tmp;
     }
+    // Enforce an internal minimum deadzone (±50W) so that zero grid power
+    // always maps to a neutral state. Prevents SSR chatter from sensor noise.
+    if (_deltaneg > -50000) _deltaneg = -50000;   // Force non-positive export threshold.
+    if (_delta < 50000)    _delta = 50000;       // Force non-negative import threshold.
     // Bug #2: clamp compensation to a strictly positive value. A negative or
     // zero value would invert / disable the control loop.
     if (_compensation <= 0) {

@@ -4,8 +4,8 @@
 #include "ActuatorManager.h"
 #include <esp_task_wdt.h>
 
-// Bug #5: pin 48 here is just a placeholder; init() overrides it via setPin()
-// using the value from Config.internal_led_pin.
+// pin 48 here is a placeholder; init() overrides it via setPin() using the
+// value from Config.internal_led_pin.
 Adafruit_NeoPixel LedManager::_pixel(1, 48, NEO_GRB + NEO_KHZ800);
 const Config* LedManager::_config = nullptr;
 TaskHandle_t LedManager::_taskHandle = nullptr;
@@ -34,16 +34,14 @@ void LedManager::setColor(uint8_t r, uint8_t g, uint8_t b) {
     _pixel.show();
 }
 
-// Bug #7 (header audit): LedManager::blink() removed — had no callers anywhere
-// in the codebase. The previous comment ("Bug #6 — currently unused — but
-// defensive") is no longer accurate; dead code was a maintenance hazard.
+void LedManager::blink() — currently unused, no callers in the codebase; dead code removed for maintenance.
 
 void LedManager::ledTask(void* pvParameters) {
     esp_task_wdt_add(NULL);
     while (true) {
         esp_task_wdt_reset();
 
-        // Bug #1: defensive null-config / divide-by-zero guard.
+        // Defensive null-config / divide-by-zero guard.
         if (!_config) {
             vTaskDelay(pdMS_TO_TICKS(1000));
             continue;
@@ -60,8 +58,6 @@ void LedManager::ledTask(void* pvParameters) {
         }
 
         // 2. Boost check
-        // Bug #2: rollover-safe comparison. The naive `boostEndTime > now` form
-        // breaks at the 49.7-day wraparound of millis()/1000.
         uint32_t nowSec = millis() / 1000;
         bool boostActive = (ActuatorManager::boostEndTime != 0)
                         && ((int32_t)(ActuatorManager::boostEndTime - nowSec) > 0);
@@ -72,7 +68,6 @@ void LedManager::ledTask(void* pvParameters) {
         }
 
         // 3. Status
-        // Bug #1: divide-by-zero guard on equip1_max_power.
         float maxPower = _config->equip1_max_power;
         if (maxPower <= 0.0f) maxPower = 1.0f;
 
@@ -94,14 +89,14 @@ void LedManager::ledTask(void* pvParameters) {
             for (int i = 10; i <= 100; i += 10) {
                 float intensity = i / 100.0f;
                 setColor((uint8_t)(r * intensity), (uint8_t)(g * intensity), (uint8_t)(b * intensity));
-                esp_task_wdt_reset(); // Bug #4
+                esp_task_wdt_reset();
                 vTaskDelay(pdMS_TO_TICKS(100));
             }
             // Pulse Down
             for (int i = 100; i >= 10; i -= 10) {
                 float intensity = i / 100.0f;
                 setColor((uint8_t)(r * intensity), (uint8_t)(g * intensity), (uint8_t)(b * intensity));
-                esp_task_wdt_reset(); // Bug #4
+                esp_task_wdt_reset();
                 vTaskDelay(pdMS_TO_TICKS(100));
             }
         }

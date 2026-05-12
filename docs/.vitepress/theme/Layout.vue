@@ -1,14 +1,19 @@
 <script setup>
 import DefaultTheme from 'vitepress/theme'
-import { onMounted } from 'vue'
+import { onMounted, watch } from 'vue'
+import { useRoute } from 'vitepress'
 import './custom.css'
 
 const { Layout } = DefaultTheme
+const route = useRoute()
 
 // Inject sun + particles into hero container at runtime (after hydration)
-onMounted(() => {
+const injectHero = () => {
   const heroContainer = document.querySelector('.VPHero .container')
   if (!heroContainer) return
+
+  // Only create wrapper once per route to avoid duplicates on VitePress navigation
+  if (heroContainer.querySelector('.hero-bg')) return
 
   const wrapper = document.createElement('div')
   wrapper.className = 'hero-bg'
@@ -23,12 +28,21 @@ onMounted(() => {
   if (!canvasEl) return
 
   function resize() {
-    const cw = Math.max(heroContainer.clientWidth, window.innerWidth * 0.6, 400)
-    const ch = Math.max(heroContainer.clientHeight, window.innerHeight * 0.8, 350)
+    let cw = 0, ch = 0
+    try {
+      const rect = heroContainer.getBoundingClientRect()
+      cw = Math.max(Math.ceil(rect.width), window.innerWidth * 0.6, 400)
+      ch = Math.max(Math.ceil(rect.height), 350)
+    } catch {
+      // Fallback: estimate from viewport if getBoundingClientRect fails
+      const w_ = Math.max(window.innerWidth * 0.6, 400)
+      cw = w_; ch = Math.min(w_ * 0.5, 700)
+    }
     canvasEl.width = cw; canvasEl.height = ch
     canvasEl.style.width = cw + 'px'; canvasEl.style.height = ch + 'px'
   }
 
+  // Hero container may have zero dimensions on first paint — retry after layout
   setTimeout(resize, 80); resize()
   window.addEventListener('resize', resize)
 
@@ -50,12 +64,12 @@ onMounted(() => {
   }
 
   function initP(p) {
-    // Spawn right at the sun center (x=72% of canvas width, y=-80px)
+    // Spawn from the sun's edge (r≈100px around center at x=72%, y=-80+165, higher)
     const sx = canvasEl.width * 0.72
-    const sy = -80 + 260
-    p.x = sx; p.y = sy
-    // Random direction — full circle
+    const sy = -80 + 165
     const a = Math.random() * Math.PI * 2
+    p.x = sx + Math.cos(a) * 100
+    p.y = sy + Math.sin(a) * 100
     // Speed outward from center (not purely radial, just directional)
     const spd = 0.15 + Math.random() * 0.3
     p.vx = Math.cos(a) * spd
@@ -74,7 +88,7 @@ onMounted(() => {
     // Mini circle — constant radius, no glow
     ctx.fillStyle = '#f0c040'
     ctx.beginPath()
-    ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2)
+    ctx.arc(p.x, p.y, 2.0, 0, Math.PI * 2)   /* smaller particles */
     ctx.fill()
     ctx.restore()
   }
@@ -82,7 +96,7 @@ onMounted(() => {
   function loop() {
     ctx.clearRect(0, 0, canvasEl.width, canvasEl.height)   // wipe before each frame
     for (const p of particles) {
-      if (p.life >= p.ml) initP(p)   // recycle: send back to sun center
+      if (p.life >= p.ml) initP(p)   // recycle: send back to sun's edge
       drawP(ctx, p); p.x += p.vx; p.y += p.vy; p.life++
     }
     rafId = requestAnimationFrame(loop)
@@ -91,14 +105,18 @@ onMounted(() => {
   // Start with a full batch so we see them moving outwards immediately
   for (let i = 0; i < 120; i++) { const p = {}; initP(p); particles.push(p); p.life = Math.random() * 700 | 0 }
   rafId = requestAnimationFrame(loop)
-})
+}
 
 // Inject license badge after features section (inside VPHome)
-onMounted(() => {
+const injectLicenseBadge = () => {
   const homeFeatures = document.querySelector('.VPHomeFeatures')
   if (!homeFeatures || !homeFeatures.parentNode) return
 
+  // Only insert once per route
+  if (document.getElementById('license-badge-container')) return
+
   const container = document.createElement('div')
+  container.id = 'license-badge-container'   /* for duplicate check */
   container.className = 'license-container'
   container.innerHTML = `
     <p class="license-badge" style="display: block; text-align: center; margin-top: 32px; padding: 8px 16px; background: rgba(240, 192, 64, 0.06); border: 1px solid rgba(240, 192, 64, 0.2); border-radius: 8px; font-size: 13px !important; color: #a89b70 !important;">
@@ -124,7 +142,11 @@ onMounted(() => {
   hoverStyle.textContent = '#scrollToTop:hover { transform: scale(1.1); }'
   document.head.appendChild(hoverStyle)
   document.body.appendChild(btn)
-})
+}
+
+// Re-inject on page entry (handles VitePress client-side navigation back to homepage)
+onMounted(() => { injectHero(); injectLicenseBadge() })
+watch(route, () => { injectHero(); injectLicenseBadge() }, { deep: true })
 </script>
 
 <template>
@@ -186,14 +208,14 @@ onMounted(() => {
 }
 
 @keyframes sunPulse {
-  0%   { opacity: 0.28; transform: translateX(-50%) scale(0.96); }
-  14%  { opacity: 0.58; transform: translateX(-50%) scale(1.01); }
-  27%  { opacity: 0.18; transform: translateX(-50%) scale(0.94); }
+  0%   { opacity: 0.55; transform: translateX(-50%) scale(0.96); }
+  14%  { opacity: 0.72; transform: translateX(-50%) scale(1.01); }
+  27%  { opacity: 0.48; transform: translateX(-50%) scale(0.94); }
   44%  { opacity: 0.78; transform: translateX(-50%) scale(1.03); }
-  56%  { opacity: 0.12; transform: translateX(-50%) scale(0.93); }
-  72%  { opacity: 0.82; transform: translateX(-50%) scale(1.04); }
-  86%  { opacity: 0.20; transform: translateX(-50%) scale(0.95); }
-  100% { opacity: 0.34; transform: translateX(-50%) scale(0.97); }
+  56%  { opacity: 0.42; transform: translateX(-50%) scale(0.93); }
+  72%  { opacity: 0.85; transform: translateX(-50%) scale(1.04); }
+  86%  { opacity: 0.52; transform: translateX(-50%) scale(0.95); }
+  100% { opacity: 0.58; transform: translateX(-50%) scale(0.97); }
 }
 
 /* ── Particle Canvas ─── */

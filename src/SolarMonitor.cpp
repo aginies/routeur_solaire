@@ -146,12 +146,10 @@ void SolarMonitor::monitorTask(void* pvParameters) {
             nightActive = ntpSynced ? isNight(currMin) : false;
         }
         bool forcedWindow = ActuatorManager::inForceWindow();
-        // Bug #4: signed-difference comparison is wrap-safe across the 49.7-day millis() rollover
+        // Signed-difference comparison is wrap-safe across the 49.7-day millis() rollover
         // (the unsigned subtraction wraps correctly, then the signed cast yields the right sign).
         uint32_t nowSec = millis() / 1000;
         bool boostActive = ((int32_t)(nowSec - ActuatorManager::boostEndTime) < 0);
-        // Bug #5: cast to uint32_t BEFORE multiplying by 1000 to avoid int overflow
-        // (a poll_interval > 32 seconds would otherwise overflow a signed int).
         uint32_t currentPollInterval = (uint32_t)(nightActive ? _config->night_poll_interval : _config->poll_interval);
 
         // 3. Keep safety timer alive if MQTT data is flowing
@@ -200,7 +198,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
                 bool eq2Requested = false;
                 if (_config->e_equip2 && SafetyManager::currentState == SystemState::STATE_NORMAL) {
                     float maxDuty = _config->max_duty_percent / 100.0f;
-                    // Bugs #7/#8: hysteresis — use a higher ON threshold and lower OFF threshold so the
+                    // Hysteresis — use a higher ON threshold and lower OFF threshold so the
                     // relay does not chatter around the setpoint. When already ON, only turn off if
                     // surplus drops below (max_power - delta); when OFF, only turn on if surplus
                     // exceeds (max_power + delta).
@@ -253,7 +251,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
                         if (newDuty > maxDuty) newDuty = maxDuty;
                         
                         ActuatorManager::setDuty(newDuty);
-                        // Bug #20: route through Logger so it respects log level / sinks instead of
+                        // Route through Logger so it respects log level / sinks instead of
                         // unconditionally spamming Serial.
                         char ctrlBuf[96];
                         snprintf(ctrlBuf, sizeof(ctrlBuf), "Ctrl: Grid=%.1fW, Setpoint=%.0fW, Duty=%.1f%%",
@@ -261,18 +259,18 @@ void SolarMonitor::monitorTask(void* pvParameters) {
                         Logger::debug(ctrlBuf);
                     }
                 } else {
-                    // Bug #3: reset the fresh-data debounce counter whenever we leave NORMAL so we
+                    // Reset the fresh-data debounce counter whenever we leave NORMAL so we
                     // don't immediately fire a stale control update upon recovery.
                     freshDataCounter = 0;
                 }
                 GridSensorService::hasFreshData.store(false);
             } else {
-                // Bug #3: reset the debounce counter on poll failure too.
+                // Reset the debounce counter on poll failure too.
                 // (The SafetyManager handles STATE_SAFE_TIMEOUT via _lastGoodPoll.)
                 freshDataCounter = 0;
             }
-            // Bug #9: run the Eq2 state machine on every poll cycle, even when the grid sensor
-            // failed — otherwise an OFF transition / safety release can hang while Shelly is down.
+                // Run the Eq2 state machine on every poll cycle, even when the grid sensor
+                // failed — otherwise an OFF transition / safety release can hang while Shelly is down.
             Equipment2Manager::loop();
             esp_task_wdt_reset();
         }
@@ -288,7 +286,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
             lastMqttReport = now;
             esp_task_wdt_reset();
             
-            // Bug #21: MqttManager::publishStatus can block if the stack is hung
+            // MqttManager::publishStatus can block if the stack is hung
             MqttManager::publishStatus(
                 (float)GridSensorService::currentGridPower,
                 ActuatorManager::equipmentPower,
@@ -310,7 +308,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
         WebManager::loop();
         esp_task_wdt_reset();
         
-        // Bug #21: MQTT loop handles reconnections which might involve DNS
+        // MQTT loop handles reconnections which might involve DNS
         bool mqttNetworkActive = _config->e_mqtt || _config->e_shelly_mqtt || _config->e_equip1_mqtt || _config->e_equip2_mqtt;
         if (mqttNetworkActive) esp_task_wdt_delete(NULL);
         MqttManager::loop();
@@ -320,12 +318,12 @@ void SolarMonitor::monitorTask(void* pvParameters) {
         esp_task_wdt_reset();
 
         // 7. Measured Power Update (Shelly 1PM)
-        // Bug #14: rate-limit Shelly1PM polling to ~once per 2 s.
+        // Rate-limit Shelly1PM polling to ~once per 2 s.
         static uint32_t lastShelly1PMUpdate = 0;
         if (now - lastShelly1PMUpdate >= 2000) {
             lastShelly1PMUpdate = now;
             
-            // Bug #21: Shelly1PMManager::update() does blocking HTTP/DNS
+            // Shelly1PMManager::update() does blocking HTTP/DNS
             bool eq1ShellySource = (_config->equip1_measure_source == "shelly");
             bool shellyPollActive = (eq1ShellySource && !_config->e_equip1_mqtt && _config->equip1_shelly_ip.length() > 0) ||
                                    (!_config->e_equip2_mqtt && _config->equip2_shelly_ip.length() > 0);

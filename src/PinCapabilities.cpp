@@ -22,10 +22,6 @@ static bool isTxRole(PinRole role) {
     return role == PinRole::JSY1_TX || role == PinRole::JSY2_TX;
 }
 
-static bool isOutputOnly(PinRole role) {
-    return role == PinRole::JSY1_TX || role == PinRole::JSY2_TX;
-}
-
 } // namespace
 
 const char* pinRoleName(PinRole role) {

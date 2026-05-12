@@ -8,7 +8,7 @@ String SafetyManager::emergencyReason = "";
 EmergencyKind SafetyManager::emergencyKind = EmergencyKind::NONE;
 const Config* SafetyManager::_config = nullptr;
 
-// Bug #5: single source of truth for the human-readable reason, derived from the enum.
+// Single source of truth for the human-readable emergency reason, derived from the enum.
 static const char* reasonForKind(EmergencyKind k) {
     switch (k) {
         case EmergencyKind::ESP_OVERHEAT:   return "ESP32 Overheat!";
@@ -20,7 +20,7 @@ static const char* reasonForKind(EmergencyKind k) {
     }
 }
 
-// Bug #6: only touch the heap-backed String when the kind actually changes, to avoid
+// Only update the heap-backed emergencyReason when the kind actually changes, to avoid
 // per-tick alloc/free churn (~10 Hz) on the safety hot path.
 static void setEmergency(EmergencyKind k) {
     if (SafetyManager::emergencyKind == k) return;
@@ -41,8 +41,8 @@ SystemState SafetyManager::evaluateState(float espTemp, float ssrTemp, uint32_t 
     float espHysteresis = _config->max_esp32_temp - 5.0f;
     float ssrHysteresis = _config->ssr_max_temp - 5.0f;
 
-    // Bug #5: hysteresis branches now use the enum, so simultaneous-overheat / reason-flip
-    // edge cases no longer cause asymmetric thresholds.
+    // Hysteresis branches use the emergencyKind enum so that simultaneous-overheat / reason-flip
+    // edge cases do not cause asymmetric thresholds.
     bool inEspFault = (currentState == SystemState::STATE_EMERGENCY_FAULT && emergencyKind == EmergencyKind::ESP_OVERHEAT);
     bool inSsrFault = (currentState == SystemState::STATE_EMERGENCY_FAULT && emergencyKind == EmergencyKind::EXT_OVERHEAT);
 
@@ -59,8 +59,8 @@ SystemState SafetyManager::evaluateState(float espTemp, float ssrTemp, uint32_t 
     }
 
     // 1. Priority 1: SAFE TIMEOUT (Sensor loss)
-    // Bug #1: cast to uint32_t before * 1000 so safety_timeout > ~32 s does not overflow
-    // a signed int and produce a wrap-around (effectively-zero) timeout.
+    // Cast to uint32_t before multiplying by 1000 so that safety_timeout > ~32 s does not overflow
+    // a signed int and cause wrap-around (effectively-zero) timeout.
     uint32_t now = millis();
     uint32_t timeout = (uint32_t)_config->safety_timeout * 1000UL;
     if (now - lastGoodPoll >= timeout) {
@@ -96,8 +96,8 @@ void SafetyManager::applyState(SystemState newState) {
         currentState = newState;
     }
 
-    // Bug #7: only re-apply outputs on actual state change. EMERGENCY/SAFE_TIMEOUT still
-    // get an immediate enforcement at the moment of transition; the steady-state SSR drive
+    // Only re-apply outputs on actual state change. EMERGENCY/SAFE_TIMEOUT still
+    // get immediate enforcement at the moment of transition; steady-state SSR drive
     // is owned by ControlStrategy, which will see currentDuty == 0 and stop firing.
     if (!stateChanged) return;
 
@@ -112,15 +112,15 @@ void SafetyManager::applyState(SystemState newState) {
             break;
 
         case SystemState::STATE_BOOST: {
-            // Bug #3: clamp BOOST to user-configured max_duty_percent so a low hardware-safety
-            // cap is honoured even when the user forces a boost.
+            // Clamp BOOST duty to user-configured max_duty_percent so that a low hardware-safety
+            // limit is respected even during manual boost.
             float maxDuty = _config->max_duty_percent / 100.0f;
             if (maxDuty < 0.0f) maxDuty = 0.0f;
             if (maxDuty > 1.0f) maxDuty = 1.0f;
             ActuatorManager::setDuty(maxDuty);
-            // Bug #2: removed `digitalWrite(ssr_pin, HIGH)` — ControlStrategy reads currentDuty
+            // Removed direct digitalWrite(ssr_pin, HIGH): ControlStrategy reads currentDuty
             // and bit-bangs the SSR. Forcing HIGH here would race that loop and bypass the
-            // max_duty_percent clamp above for the brief window before ControlStrategy ticks.
+            // max_duty_percent clamp for a brief window before ControlStrategy ticks.
             ActuatorManager::closeRelay();
             break;
         }

@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: "Routeur Solaire"
-  text: "Optimisez votre autoconsommation"
-  tagline: "Solution haute performance pour ESP32 et compteurs JSY"
+  text: "Optimisez votre Autoconsommation"
+  tagline: "Firmware libre pour ESP32 — optimisez votre autoconsommation photovoltaïque avec un matériel à moins de 30€."
   actions:
     - theme: brand
       text: Commencer →
@@ -14,12 +14,12 @@ hero:
       link: https://github.com/aginies/routeur_solaire
 
 features:
-  - title: "Routage Proportionnel (Eq1)"
+  - title: "Routage Proportionnel"
     icon: 🔌
     details: "Ajustement dynamique (0-100%) vers votre chauffe-eau via SSR avec mode Boost Manuel et gestion des Vacances."
-  - title: "Pilotage Intelligent (Eq2)"
+  - title: "Pilotage Intelligent"
     icon: ⚡
-    details: "Gestion d'un second appareil On/Off (Shelly/Relais) avec priorité configurable et seuils de puissance."
+    details: "Pilotez un deuxième appareil (Shelly/relais) avec priorité configurable et seuils de puissance."
   - title: "Anticipation Météo"
     icon: ☁️
     details: "Calcul de la 'Confiance Solaire' via Open-Meteo pour optimiser le déclenchement selon les prévisions."
@@ -31,5 +31,5 @@ features:
     details: "Visualisation ultra-réactive (uPlot.js), statistiques d'économies et configuration web complète."
   - title: "Sécurité & Fiabilité"
     icon: 🛡️
-    details: "Surveillance thermique active, refroidissement PWM, watchdog matériel et coupures d'urgence."
+    details: "Surveillez la température en temps réel, contrôlez le ventilateur en PWM, gérez les watchdogs matériels et les coupures d'urgence."
 ---

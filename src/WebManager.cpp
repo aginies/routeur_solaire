@@ -40,7 +40,7 @@ void WebManager::init(const Config& config) {
     _config = &_cfg_copy;
     _http.setConnectTimeout(1000);
     _http.setTimeout(2000);
-    if (!_httpMutex) _httpMutex = xSemaphoreCreateMutex(); // Bug #6
+    if (!_httpMutex) _httpMutex = xSemaphoreCreateMutex();
     setupRoutes();
     _server.begin();
     Logger::info("Web Server started");
@@ -67,7 +67,7 @@ void WebManager::applyRequestParams(AsyncWebServerRequest *request, Config &cfg)
     auto has = [&](const char* name) { return request->hasParam(name, true); };
     auto get = [&](const char* name) { return request->getParam(name, true)->value(); };
 
-    // Bug #5: helpers to clamp/validate user-supplied values before persisting them.
+    // Helpers to clamp/validate user-supplied values before persisting them.
     auto clampInt = [](int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); };
     auto clampFloat = [](float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); };
     auto setRolePin = [&](int& dest, int v, PinRole role) {
@@ -107,7 +107,7 @@ void WebManager::applyRequestParams(AsyncWebServerRequest *request, Config &cfg)
         if (s == "jsy1" || s == "jsy2" || s == "shelly") cfg.grid_measure_source = s;
         else if (s == "jsy") cfg.grid_measure_source = "jsy1";
     }
-    // Bug #15: these four fields are in SECONDS (code multiplies by 1000 before
+    // These four fields are in SECONDS (code multiplies by 1000 before
     // comparing against millis()/setTimeout()). The previous clamp ranges
     // assumed milliseconds and silently rewrote valid user values on every save
     // (e.g. shelly_timeout=2 -> 100, meaning a 100-second HTTP timeout!).
@@ -144,7 +144,7 @@ void WebManager::applyRequestParams(AsyncWebServerRequest *request, Config &cfg)
     // Strategy / PID
     if (has("DELTA")) cfg.delta = clampFloat(get("DELTA").toFloat(), 0.0f, 5000.0f);
     if (has("DELTANEG")) cfg.deltaneg = clampFloat(get("DELTANEG").toFloat(), -5000.0f, 5000.0f);
-    // Bug #15b: compensation is used as a percentage (default 50). Old upper
+    // Compensation is used as a percentage (default 50). Old upper
     // bound 10 silently clipped any sensible value down to 10.
     if (has("COMPENSATION")) cfg.compensation = clampFloat(get("COMPENSATION").toFloat(), 1.0f, 100.0f);
     if (has("DYNAMIC_THRESHOLD_W")) cfg.dynamic_threshold_w = clampFloat(get("DYNAMIC_THRESHOLD_W").toFloat(), 0.0f, 5000.0f);
@@ -367,7 +367,7 @@ void WebManager::setupRoutes() {
 
     _server.on("/import_stats", HTTP_POST, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
-        // Bug #4: report actual upload outcome via status code stored in _tempObject
+        // Report actual upload outcome via status code stored in _tempObject
         // (heap-allocated int* so AsyncWebServer can free() it).
         int status = request->_tempObject ? *(int*)request->_tempObject : -1;
         switch (status) {
@@ -391,7 +391,7 @@ void WebManager::setupRoutes() {
         }
     }, [authRequired](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
         if (!authRequired(request)) return;
-        // Bug #3: state is static (AsyncWebServer serializes upload chunks per server instance)
+        // State is static (AsyncWebServer serializes upload chunks per server instance)
         // but we now write to a tmp file and atomically rename only on success, so a
         // partial/aborted upload no longer corrupts the existing stats.json.
         static File uploadFile;
@@ -719,7 +719,7 @@ void WebManager::setupRoutes() {
 
     _server.on("/update", HTTP_POST, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
-        // Bug #2: report actual outcome (begin failed, write failed, end failed all surface as hasError)
+        // Report actual outcome (begin failed, write failed, end failed all surface as hasError)
         bool ok = !Update.hasError();
         AsyncWebServerResponse *response = request->beginResponse(200, "text/plain",
             ok ? "OK" : (String("FAIL: ") + Update.errorString()));
@@ -739,7 +739,7 @@ void WebManager::setupRoutes() {
                 return;
             }
         }
-        // Bug #17: validate write count and abort on partial write
+        // Validate write count and abort on partial write
         if (Update.isRunning() && len) {
             size_t written = Update.write(data, len);
             if (written != len) {
@@ -748,7 +748,7 @@ void WebManager::setupRoutes() {
                 return;
             }
         }
-        // Bug #2: validate Update.end() result; do NOT reboot on failure
+        // Validate Update.end() result; do NOT reboot on failure
         if (Update.isRunning() && final) {
             if (!Update.end(true)) {
                 Logger::error("OTA end failed: " + String(Update.errorString()));
@@ -804,7 +804,7 @@ void WebManager::setupRoutes() {
     });
 
     _server.on("/test_shelly", HTTP_POST, [](AsyncWebServerRequest *request) {
-        // Bug #6/#7: serialize concurrent uses of the shared _http object and reject
+        // Serialize concurrent uses of the shared _http object and reject
         // overlapping requests immediately instead of stalling the async event loop.
         if (!_httpMutex || xSemaphoreTake(_httpMutex, 0) != pdTRUE) {
             request->send(503, "application/json", "{\"ok\":false,\"error\":\"Test déjà en cours\"}");
@@ -879,7 +879,7 @@ void WebManager::setupRoutes() {
                     JsonDocument doc;
                     if (!deserializeJson(doc, _http.getStream())) {
                         float power = 0;
-                        // Bug #15: ArduinoJson v7 deprecates containsKey()
+                        // ArduinoJson v7 deprecates containsKey()
                         if (doc["meters"].is<JsonArray>()) power = doc["meters"][index]["power"] | 0.0f;
                         else if (doc["emeters"].is<JsonArray>()) power = doc["emeters"][index]["power"] | 0.0f;
                         bool relay = doc["relays"][0]["ison"] | false;
@@ -923,7 +923,7 @@ void WebManager::streamStatusJson(AsyncWebServerRequest *request) {
     doc["force_mode"] = (SafetyManager::currentState == SystemState::STATE_BOOST);
     doc["emergency_mode"] = (SafetyManager::currentState == SystemState::STATE_EMERGENCY_FAULT);
     doc["emergency_reason"] = SafetyManager::emergencyReason;
-    // Bug #14: ternary mixing float and JsonVariant is ill-formed; assign explicitly.
+    // Ternary mixing float and JsonVariant is ill-formed; assign explicitly.
     if (TemperatureManager::currentSsrTemp > -100.0) {
         doc["ssr_temp"] = (float)TemperatureManager::currentSsrTemp;
     } else {

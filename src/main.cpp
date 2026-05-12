@@ -14,7 +14,7 @@
 
 Config config;
 
-// Bug #1: handle a fatal LittleFS mount failure instead of leaving setup() returning silently
+// Handle a fatal LittleFS mount failure instead of leaving setup() returning silently
 // into a zombie loop. We try a forced reformat once; if that also fails, we wait long enough
 // for any USB-CDC monitor to attach, then reboot. This avoids the "device looks alive but does
 // nothing" failure mode.
@@ -28,7 +28,7 @@ static void fatalFsFailure() {
     ESP.restart();
 }
 
-// Bug #2: small helper to log free-heap delta around each subsystem init so a silent allocation
+// Small helper to log free-heap delta around each subsystem init so a silent allocation
 // failure (e.g. FreeRTOS task creation OOM, large buffer alloc) shows up in the boot log.
 static size_t logHeapBefore(const char* what) {
     size_t before = ESP.getFreeHeap();
@@ -46,7 +46,7 @@ static void logHeapAfter(const char* what, size_t before) {
 
 void setup() {
     Serial.begin(115200);
-    // Bug #6: ESP32-S3 native USB-CDC takes ~1 s to enumerate; without this the very first
+    // ESP32-S3 native USB-CDC takes ~1 s to enumerate; without this delay the very first
     // boot prints are dropped before the host opens the port.
     delay(200);
 
@@ -55,7 +55,7 @@ void setup() {
     esp_task_wdt_add(NULL);      // Add current (main) task
     vTaskPrioritySet(NULL, 1);   // Back to Priority 1 (Standard for loopTask)
 
-    // Bug #1: LittleFS.begin(true) already attempts auto-format on first failure. If even that
+    // LittleFS.begin(true) already attempts auto-format on first failure. If even that
     // fails the FS is hosed (bad partition, dead flash) — reboot rather than zombie.
     if (!LittleFS.begin(true)) {
         Serial.println("LittleFS Mount Failed (auto-format also failed)");
@@ -63,13 +63,13 @@ void setup() {
         return; // unreachable
     }
 
-    // Bug #5/#8: initialise Logger BEFORE any Logger::* calls so version-mismatch warnings,
+    // Initialise Logger BEFORE any Logger::* calls so version-mismatch warnings,
     // config-load notes, etc. land in /log.txt instead of being Serial-only. Logger::log()
     // does fall back to Serial when the mutex is null, so the prior ordering didn't crash —
     // but those messages were invisible to the web log viewer.
     Logger::init();
 
-    // Bug #10: create ConfigManager's save mutex before any task can call save().
+    // Create ConfigManager's save mutex before any task can call save().
     ConfigManager::init();
 
     config = ConfigManager::load();
@@ -83,7 +83,7 @@ void setup() {
             vFile.close();
             if (fsVersion != FIRMWARE_VERSION) {
                 Logger::warn("Version mismatch! FW:" + String(FIRMWARE_VERSION) + " FS:" + fsVersion);
-                // Bug #7: auto-update /VERSION so the warning silences itself after a successful
+                // Auto-update /VERSION so the warning silences itself after a successful
                 // boot on the new firmware. If the user still wants to know about FS-content
                 // drift, that's a separate concern (data-file schemas, etc.) — for the version
                 // marker file itself, drift is just noise after the first boot.
@@ -106,18 +106,20 @@ void setup() {
         if (w) { w.print(FIRMWARE_VERSION); w.close(); }
     }
 
-    // Bug #3: check the return value of setCpuFrequencyMhz() — the SDK refuses unsupported
+    // Check the return value of setCpuFrequencyMhz() — the SDK refuses unsupported
     // frequencies and leaves the CPU at the previous setting. We log a warning if so; the
     // value should already have been validated by ConfigManager::load(), so this is a
     // belt-and-suspenders check.
     if (!Utils::setCpuFrequency(config.cpu_freq)) {
-        Logger::warn("setCpuFrequencyMhz(" + String(config.cpu_freq) + ") rejected by SDK");
+        Logger::error("CPU frequency " + String(config.cpu_freq) + " MHz rejected by SDK - invalid config", true);
+        delay(2000);
+        ESP.restart();
     }
 
     Logger::info("System Started: " + config.name);
     Logger::info("Last Reset Reason: " + Utils::getResetReason());
 
-    // Bug #2: heap-delta tracing around each subsystem init.
+    // Heap-delta tracing around each subsystem init.
 #ifndef DISABLE_STATS
     { size_t b = logHeapBefore("StatsManager"); StatsManager::init(); logHeapAfter("StatsManager", b); }
 #endif
@@ -131,7 +133,7 @@ void setup() {
     { size_t b = logHeapBefore("SolarMonitor");    SolarMonitor::init(config);   logHeapAfter("SolarMonitor", b); }
 
     SolarMonitor::startTasks();
-    // Bug #2: confirm the monitor task actually got scheduled. xTaskCreate failure leaves
+    // Confirm the monitor task actually got scheduled. xTaskCreate failure leaves
     // the handle null; before this check we'd happily continue with no control loop.
     if (!SolarMonitor::tasksRunning()) {
         Logger::error("SolarMonitor::startTasks failed (task handle is null) — rebooting", true);
