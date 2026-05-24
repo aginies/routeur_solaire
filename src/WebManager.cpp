@@ -770,13 +770,6 @@ void WebManager::setupRoutes() {
 
     _server.on("/RESET_config", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
-        bool throttled = !requestReboot(RebootAction::ResetConfig);
-        ConfigManager::reset();
-        request->send(throttled ? 429 : 200, "text/plain", throttled ? "Redemarrage bloque (trop frequent)" : "Configuration effacee. Redemarrage en cours...");
-    });
-
-    _server.on("/RESET_config", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
-        if (!authRequired(request)) return;
         ConfigManager::reset();
         request->send(200, "text/plain", "Configuration effacée. Redémarrage en cours...");
         _rebootRequested = true;

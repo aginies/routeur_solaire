@@ -37,6 +37,13 @@ void Logger::warn(const String& m) {}
 void Logger::error(const String& m, bool c) {}
 
 // 5. Include implementation
+#include "../../include/PinCapabilities.h"
+
+// Mock PinCapabilities (transitively included via TemperatureManager.cpp)
+bool isPinValidForRole(int pin, PinRole role) { return true; }
+const char* pinRoleName(PinRole role) { return "unknown"; }
+String pinValidationReason(int pin, PinRole role) { return String(""); }
+
 #include "../../src/TemperatureManager.cpp"
 
 void setUp(void) {

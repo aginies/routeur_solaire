@@ -510,8 +510,8 @@ void IRAM_ATTR ControlStrategy::handlePhaseZxInterrupt() {
     if (xHigherPriorityTaskWoken) portYIELD_FROM_ISR();
 }
 
-// Bug #12: esp_timer one-shot callback. Runs in the high-priority esp_timer
-// task (NOT in ISR context). The 150us pulse is short enough to keep here.
+// esp_timer one-shot callback — runs in the high-priority timer context.
+// The 150us pulse is short enough to stay here (not ISR context).
 void ControlStrategy::phaseFireSsr(void* /*arg*/) {
     if (ActuatorManager::ssrPin < 0) return;
     digitalWrite(ActuatorManager::ssrPin, HIGH);

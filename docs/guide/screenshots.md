@@ -1,3 +1,8 @@
+---
+title: Captures d'écran — Routeur Solaire
+description: "Captures d'écran de l'interface web du routeur PV : dashboard principal, statistiques, configuration et outils développeur."
+---
+
 # Captures d'écran
 
 ## Interface Principale
@@ -39,6 +44,8 @@ Outils de diagnostic et monitoring en temps réel :
 - État des capteurs et actionneurs (SSR, relais, ventilateur).
 - Puissance réseau mesurée vs estimée.
 - Journal d'événements (logs) accessible via téléchargement.
+
+Pour plus de détails sur les endpoints API (`/status`, `/test_shelly`, etc.), consultez la page [API & Diagnostics](./diagnostics.md).
 
 ---
 

@@ -31,7 +31,7 @@ uint32_t TemperatureManager::_lastRead = 0;
 float DallasTemperature::mockTemp = 25.0f;
 #endif
 
-// Bug #12: named constants instead of magic numbers
+// Named constants for intervals and fault thresholds, replacing earlier magic numbers.
 static const uint32_t TEMP_READ_INTERVAL_MS = 5000;
 static const uint32_t TEMP_INIT_DELAY_MS    = 800;   // 12-bit DS18B20 conversion time
 static const int FAULT_INC_ON_BAD = 2;
@@ -41,7 +41,7 @@ static const int FAULT_TRIP_LEVEL = 10;   // forces -999 (SafetyManager EMERGENC
 static const int FAULT_MAX = 20;
 
 void TemperatureManager::init(const Config& config) {
-    // Bug #6: stop the task before deleting sensors/onewire it may be touching.
+    // Stop the task before deleting sensors/onewire, which it may be touching.
     stopTask();
 
     _config = &config;
@@ -50,14 +50,14 @@ void TemperatureManager::init(const Config& config) {
 
     if (!config.e_ssr_temp) return;
 
-    // Bug #3: validate GPIO before instantiating OneWire
+    // Validate GPIO before instantiating OneWire to avoid invalid pin errors.
     if (!isPinValidForRole(config.ds18b20_pin, PinRole::DS18B20)) {
         Logger::error("DS18B20: invalid pin " + String(config.ds18b20_pin) + " (" + pinValidationReason(config.ds18b20_pin, PinRole::DS18B20) + ")");
         return;
     }
 
     _oneWire = new (std::nothrow) OneWire(config.ds18b20_pin);
-    // Bug #7: OOM check
+    // Check for OOM from the allocation.
     if (!_oneWire) {
         Logger::error("DS18B20: OOM allocating OneWire");
         return;
@@ -74,7 +74,7 @@ void TemperatureManager::init(const Config& config) {
     _sensors->setWaitForConversion(false);
     _sensors->requestTemperatures();
 
-    // Bug #1: pet WDT during the 800 ms init delay if subscribed
+    // Pet WDT during the 800 ms init delay if subscribed to it.
 #ifndef NATIVE_TEST
     uint32_t waited = 0;
     while (waited < TEMP_INIT_DELAY_MS) {
@@ -86,13 +86,13 @@ void TemperatureManager::init(const Config& config) {
     delay(TEMP_INIT_DELAY_MS);
 #endif
 
-    // Bug #11: snprintf
+    // Format initialization message with snprintf for safety.
     char buf[96];
     snprintf(buf, sizeof(buf), "DS18B20 initialized on pin %d, found %d sensors",
              config.ds18b20_pin, count);
     Logger::info(String(buf));
 
-    // Bug #2: explicit error if no sensors detected
+    // Log an error if no sensors were detected on the bus.
     if (count == 0) {
         Logger::error("DS18B20: NO sensors detected on bus -- check wiring/4.7k pull-up; SafetyManager will see -999C");
     }
@@ -145,7 +145,7 @@ void TemperatureManager::readTemperatures() {
                 currentSsrTemp = -999.0f; // Force SafetyManager EMERGENCY_FAULT
             }
 
-            // Bug #11: snprintf
+            // Format warning message with snprintf for safety.
             char buf[96];
             snprintf(buf, sizeof(buf), "DS18B20 invalid reading: %.1fC (Confidence: %d)",
                      t, ssrFaultCount);
@@ -163,16 +163,16 @@ void TemperatureManager::tempTask(void* pvParameters) {
 #ifndef NATIVE_TEST
     esp_task_wdt_add(NULL);
 #endif
-    // Bug #8: signed-diff timing so first iteration fires immediately and
+    // Use signed-diff timing so first iteration fires immediately and
     // millis() rollover is handled correctly.
     uint32_t lastRead = millis() - TEMP_READ_INTERVAL_MS;
-    int lastFanSpeed = -1; // Bug #13: only re-issue setFanSpeed when changed
+    int lastFanSpeed = -1;  // Only re-issue setFanSpeed when the target changes
 
     while (true) {
 #ifndef NATIVE_TEST
         esp_task_wdt_reset();
 #endif
-        // Bug #4 / #9: null-guard _config (init may not have completed)
+        // Null-guard _config in case init has not completed yet.
         if (_config == nullptr) {
 #ifndef NATIVE_TEST
             vTaskDelay(pdMS_TO_TICKS(1000));
@@ -181,7 +181,7 @@ void TemperatureManager::tempTask(void* pvParameters) {
         }
 
         uint32_t now = millis();
-        // Bug #8: signed-diff so rollover near 2^32 doesn't stall reads
+        // Signed-diff so rollover near 2^32 doesn't stall reads.
         if ((int32_t)(now - lastRead) >= (int32_t)TEMP_READ_INTERVAL_MS) {
             readTemperatures();
             lastRead = now;
@@ -194,7 +194,7 @@ void TemperatureManager::tempTask(void* pvParameters) {
                 else if (currentSsrTemp >= lowThreshold)     target = 50;
                 else                                          target = 0;
 
-                if (target != lastFanSpeed) { // Bug #13
+                if (target != lastFanSpeed) { // Re-issue setFanSpeed only when changed.
                     ActuatorManager::setFanSpeed(target);
                     lastFanSpeed = target;
                 }
@@ -206,6 +206,6 @@ void TemperatureManager::tempTask(void* pvParameters) {
     }
 }
 
-// Bug #10: temprature_sens_read() is deprecated/unreliable on ESP32-S3 and
+// temprature_sens_read() is deprecated and unreliable on ESP32-S3;
 // lastEspTemp is never written by anyone. We deliberately leave the field for
 // API compatibility but document that it stays at 0.

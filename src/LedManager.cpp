@@ -34,7 +34,6 @@ void LedManager::setColor(uint8_t r, uint8_t g, uint8_t b) {
     _pixel.show();
 }
 
-void LedManager::blink() — currently unused, no callers in the codebase; dead code removed for maintenance.
 
 void LedManager::ledTask(void* pvParameters) {
     esp_task_wdt_add(NULL);

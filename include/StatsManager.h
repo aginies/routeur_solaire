@@ -34,6 +34,10 @@ public:
     static void update(float gridPower, float equipmentPower, uint32_t intervalMs, bool isNight, bool isMeasured = false);
     static void startTask();
     static void stopTask();
+#ifdef NATIVE_TEST
+    // Unit-test helper: save the _activeTimeMsAccumulator so tests can reset it.
+    static void _test_reset_accumulator();
+#endif
     static void save();
 #ifndef NATIVE_TEST
     static void streamStatsJson(AsyncWebServerRequest *request);
@@ -49,6 +53,9 @@ public:
     static void statsTask(void* pvParameters);
     static volatile bool _saveRequested;
     static TaskHandle_t _taskHandle;
+
+    // Millisecond accumulator for active_time (persisted to NVS so partial seconds survive reboots).
+    static uint32_t _activeTimeMsAccumulator;
 
     #ifdef NATIVE_TEST
 public:

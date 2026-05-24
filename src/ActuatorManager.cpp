@@ -6,7 +6,7 @@
 #include "PinCapabilities.h"
 #include <cmath>
 
-// Bug #7: avoid hardcoding LEDC channel literal
+// Use named constant instead of hardcoding LEDC channel number.
 #define FAN_LEDC_CHANNEL 4
 
 volatile float ActuatorManager::currentDuty = 0.0;
@@ -23,9 +23,9 @@ bool ActuatorManager::_initialized = false;
 
 void ActuatorManager::init(const Config& config) {
     if (_initialized) {
-        // Bug #5: re-init: if pins changed via config, the old PWM/digital pins
-        // are NOT reset and the new ones not configured. Reboot is required for
-        // pin changes to take effect; warn loudly so the user knows.
+        // If pin/fan config changed via re-init, the old PWM/digital pins
+        // are NOT reset and the new ones not configured. Reboot is required
+        // for pin changes to take effect; warn loudly so the user knows.
         if (_config && (_config->ssr_pin != config.ssr_pin
                      || _config->relay_pin != config.relay_pin
                      || _config->fan_pin != config.fan_pin
@@ -70,8 +70,8 @@ void ActuatorManager::init(const Config& config) {
 }
 
 void ActuatorManager::setDuty(float duty) {
-    // Bug #1: guard against being called before init() (e.g. from MQTT command
-    // arriving during early boot). Without this we deref a null _config.
+    // Guard against being called before init() (e.g., from MQTT command
+    // arriving during early boot). Without this we dereference a null _config.
     if (!_config) {
         currentDuty = duty;
         ControlStrategy::setDutyMilli((uint32_t)lroundf(duty * 1000.0f));
@@ -81,7 +81,7 @@ void ActuatorManager::setDuty(float duty) {
     currentDuty = duty;
     ControlStrategy::setDutyMilli((uint32_t)lroundf(duty * 1000.0f));
 
-    // Bug #3: clamp grid voltage to a sane range. A failed sensor (returning 0
+    // Clamp grid voltage to a sane range. A failed sensor (returning 0
     // or a wild value) would otherwise make equipmentPower meaningless. Fall
     // back to nominal 230V when out of range.
     float v = GridSensorService::currentGridVoltage;
@@ -113,7 +113,7 @@ bool ActuatorManager::setFanSpeed(int percent, bool isTest) {
 
     int duty = (percent * 1023) / 100;
     if (isTest) {
-        // Bug #4: use Logger instead of raw Serial
+        // Use Logger instead of raw Serial output
         char buf[80];
         snprintf(buf, sizeof(buf), "Fan: MANUAL TEST speed: %d%% (Duty: %d/1023)", percent, duty);
         Logger::info(String(buf));
@@ -128,8 +128,8 @@ bool ActuatorManager::setFanSpeed(int percent, bool isTest) {
 void ActuatorManager::startBoost(int minutes) {
     if (!_config) return;
     int duration = (minutes == -1) ? _config->boost_minutes : minutes;
-    // Bug #2: clamp duration to a sane range to prevent int overflow on
-    // duration*60 and to reject obvious garbage from MQTT/HTTP. Max 24h.
+    // Clamp duration to a sane range: prevents integer overflow on
+    // duration*60 and rejects obvious garbage from MQTT/HTTP. Max 24h.
     if (duration < 1) duration = 1;
     if (duration > 1440) duration = 1440;
     boostEndTime = (millis() / 1000) + ((uint32_t)duration * 60UL);
@@ -137,7 +137,7 @@ void ActuatorManager::startBoost(int minutes) {
 }
 
 void ActuatorManager::cancelBoost() {
-    // Bug #8: only log if a boost was actually active
+    // Only log cancellation when a boost was actually active
     if (boostEndTime != 0) {
         boostEndTime = 0;
         Logger::info("Solar Boost Cancelled");
@@ -165,7 +165,7 @@ bool ActuatorManager::inForceWindow() {
 int ActuatorManager::timeToMinutes(const String& hhmm) {
     int colonIdx = hhmm.indexOf(':');
     if (colonIdx == -1) return 0;
-    // Bug #6: clamp parsed values to valid HH:MM range
+    // Clamp parsed values to valid HH:MM range before converting
     int hh = hhmm.substring(0, colonIdx).toInt();
     int mm = hhmm.substring(colonIdx + 1).toInt();
     if (hh < 0) hh = 0; if (hh > 23) hh = 23;

@@ -1,3 +1,8 @@
+---
+title: Matériel — Routeur Solaire
+description: "Guide matériel du routeur PV : ESP32-S3, capteurs JSY-MK-194 et Shelly EM, schéma de câblage, BOM et configuration PSRAM."
+---
+
 # Matériel
 
 Le projet est conçu pour fonctionner sur du matériel moderne et abordable, centré autour de l'ESP32.
@@ -51,7 +56,25 @@ Voici les branchements recommandés pour les cartes de développement courantes.
 
 Le PSRAM est utilisé pour stocker les statistiques journalières via ArduinoJson. Avec 8 Mo de PSRAM, le système peut conserver jusqu'à **365 jours** de données détaillées sans épuiser la SRAM interne.
 
----
+## USB-CDC Natif (ESP32-S3)
+
+L'ESP32-S3 dispose d'un port USB natif sur les broches IO19/IO20, permettant une connexion série directe via `/dev/ttyACMx` (Linux) sans puce USB-UART externe.
+
+### Configuration par défaut
+
+Par défaut, le firmware compile avec `ARDUINO_USB_CDC_ON_BOOT` désactivé (`0`). Le port Serial utilise alors le pont UART0-to-USB-serial (broches IO43/IO44), accessible via `/dev/ttyUSB0`. C'est la configuration recommandée pour les cartes de développement standard.
+
+### Mode USB-CDC natif
+
+Pour activer le mode USB-CDC natif :
+1. Dans `platformio.ini`, modifiez l'environnement cible pour définir `-D ARDUINO_USB_CDC_ON_BOOT=1`.
+2. Flashage avec la commande `-u` de `flash.sh` (ex: `./flash.sh -u`).
+
+### Comportement au démarrage
+
+Le port USB natif prend environ **1 seconde** à s'énumérer après l'alimentation du module. Sans ce délai, les impressions logiques des premiers millisecondes sont perdues. Le firmware intègre un `delay(200)` en début de setup pour attendre la première partie de l'enumeration.
+
+> **Note :** En mode USB-CDC natif, les broches IO19/IO20 (USB D-/D+) ne sont plus disponibles comme GPIOs standard. Si vous avez besoin de ces pins pour des périphériques externes, restez en mode UART-serial classique.
 
 ## Guide de Construction PCB
 
@@ -156,7 +179,7 @@ Le routeur calcule la puissance solaire attendue en utilisant un modèle géomé
 | **Inclinaison** (`solar_panel_tilt`) | Angle du panneau par rapport à l'horizontale (→ verticale) | 0° (plat) – 90° (vertical) |
 | **Facteur de perte** (`solar_loss_factor`) | Pertes estimées (poussière, température, vieillissement) | 0.7 – 1.0 |
 
-Ces paramètres sont configurables via l'interface web ([configuration détaillée](configuration.md)) et utilisés par le gestionnaire météo pour prédire la puissance solaire et optimiser le déclenchement des équipements.
+Ces paramètres sont configurables via l'interface web ([configuration détaillée](./configuration.md)) et utilisés par le gestionnaire météo pour prédire la puissance solaire et optimiser le déclenchement des équipements.
 
 ### Liens utiles pour l'achat des composants
 

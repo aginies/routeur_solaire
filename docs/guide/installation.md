@@ -1,3 +1,8 @@
+---
+title: Installation — Routeur Solaire
+description: "Guide d'installation du firmware Routeur Solaire : compilation PlatformIO, script flash.sh, variantes matérielles et dépannage."
+---
+
 # Installation
 
 Cette page explique comment compiler et installer le firmware sur votre ESP32 en utilisant les outils fournis.
@@ -95,3 +100,15 @@ Au premier démarrage, si aucun Wi-Fi n'est configuré (ou si le réseau est int
 - **Pas d'accès Web** : Vérifiez que vous êtes bien sur le réseau `RouteurSolaire_XXXX` ou dans le même sous-réseau WiFi.
 - **Erreurs LittleFS** : Essayez `./flash.sh --erase` pour réinitialiser la mémoire non volatile.
 - **PSRAM non détectée** : Vérifiez que votre variante matérielle correspond au module (`N16R8` ou `N8R2`).
+
+## Avertissement de Version après Flashage
+
+Le firmware vérifie à chaque démarrage si le fichier `/VERSION` dans LittleFS correspond à la version compilée du firmware. Une différence provoque un avertissement dans les logs :
+
+```
+WARNING: /VERSION mismatch, expected X, found Y — updating marker
+```
+
+Cela se produit couramment après un flashage sans upload LittleFS (`./flash.sh --skip-fs`). Pour éviter ce message :
+- Flashez toujours le firmware ET LittleFS (commandes par défaut de `./flash.sh`).
+- Ou utilisez `./flash.sh -u` qui flashe automatiquement les deux.

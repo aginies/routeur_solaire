@@ -17,10 +17,10 @@ int HistoryBuffer::historyCount = 0;
 SemaphoreHandle_t HistoryBuffer::_dataMutex = nullptr;
 TaskHandle_t HistoryBuffer::_taskHandle = nullptr;
 
-// Bug #3: cap on getHistoryJson() to avoid OOM on large buffers.
+// Cap on getHistoryJson() output to avoid OOM on large buffers.
 static const int HISTORY_JSON_MAX_POINTS = 720;
 
-// Bug #6: bounded JSON buffer for getHistoryJson() — prevents heap exhaustion when
+// Bounded JSON document capacity for getHistoryJson() — prevents heap exhaustion when
 // serializing up to 720 points (~100 KB unbounded). ~4 KB covers the array + objects.
 static const size_t HISTORY_JSON_DOC_CAPACITY = 4096;
 
@@ -39,7 +39,7 @@ void HistoryBuffer::init(const Config& config) {
 #endif
 
     if (!powerHistory) {
-        // Bug #5: log the fallback so silent capacity loss isn't invisible.
+        // Log the fallback so silent capacity loss isn't invisible.
         Logger::warn("HistoryBuffer: primary alloc failed; falling back to 60 entries");
         maxHistory = 60;
         powerHistory = (PowerPoint*)malloc(sizeof(PowerPoint) * maxHistory);
@@ -60,7 +60,7 @@ void HistoryBuffer::save() {
     if (!powerHistory || !_dataMutex) return;
     if (xSemaphoreTake(_dataMutex, pdMS_TO_TICKS(1000)) != pdTRUE) return;
 
-    // Bug #1: atomic write — write to .tmp, then remove old + rename so a
+    // Atomic write — write to .tmp, then remove old + rename so a
     // power loss mid-write can't corrupt /history.bin.
     const char* tmpPath = "/history.bin.tmp";
     const char* finalPath = "/history.bin";
@@ -68,8 +68,8 @@ void HistoryBuffer::save() {
     File file = LittleFS.open(tmpPath, "w");
     bool ok = false;
     if (file) {
-        // Bug #9: use int32_t for portable header layout.
-        // Bug #12: magic number protects against silent corruption when the wire format
+        // Use int32_t for portable header layout.
+        // Magic number protects against silent corruption when the wire format
         // drifts between firmware versions. Old files without it will be detected on load.
         static const uint32_t HISTORY_MAGIC = 0x48495354; // "HIST" in ASCII
         int32_t hMagic = (int32_t)HISTORY_MAGIC;
@@ -98,7 +98,7 @@ void HistoryBuffer::save() {
             char buf[96];
             snprintf(buf, sizeof(buf), "HistoryBuffer: State saved (%u bytes, %d points)",
                      (unsigned)(sizeof(PowerPoint) * historyCount), historyCount);
-            Logger::info(String(buf)); // Bug #7
+            Logger::info(String(buf));
         } else {
             Logger::warn("HistoryBuffer: rename failed");
             LittleFS.remove(tmpPath);
@@ -118,7 +118,7 @@ void HistoryBuffer::load() {
     File file = LittleFS.open("/history.bin", "r");
     bool headerOk = false;
     if (file) {
-        // Bug #12: read and verify magic number before trusting any other fields.
+        // Read and verify magic number before trusting any other fields.
         static const uint32_t HISTORY_MAGIC = 0x48495354; // "HIST" in ASCII
         int32_t savedMagic, savedMax, savedIdx, savedCount;
         if (file.read((uint8_t*)&savedMagic, sizeof(int32_t)) == sizeof(int32_t) &&
@@ -136,11 +136,11 @@ void HistoryBuffer::load() {
                 // Records were saved in chronological order; read them back into the start of the buffer
                 file.read((uint8_t*)powerHistory, sizeof(PowerPoint) * savedCount);
                 historyCount = savedCount;
-                // Bug #10: writeIdx wraps to 0 once buffer is full (savedCount==maxHistory)
+                // writeIdx wraps to 0 once buffer is full (savedCount==maxHistory).
                 historyWriteIdx = savedCount % maxHistory;
                 char buf[64];
                 snprintf(buf, sizeof(buf), "HistoryBuffer: Restored %d points", historyCount);
-                Logger::info(String(buf)); // Bug #7
+                Logger::info(String(buf));
             } else {
                 Logger::warn("HistoryBuffer: Saved state incompatible, ignoring");
             }
@@ -191,7 +191,7 @@ void HistoryBuffer::historyTask(void* pvParameters) {
             if (historyCount < maxHistory) historyCount++;
             xSemaphoreGive(_dataMutex);
         }
-        // Bug #4: reset WDT immediately before the long delay so the WDT
+        // Reset WDT immediately before the long delay so the WDT
         // window starts at "now" rather than at the start of the loop iteration.
         esp_task_wdt_reset();
         vTaskDelay(pdMS_TO_TICKS(5000));
@@ -199,14 +199,14 @@ void HistoryBuffer::historyTask(void* pvParameters) {
 }
 
 String HistoryBuffer::getHistoryJson() {
-    // Bug #6: bounded JSON allocation — prevents heap exhaustion on large buffers.
+    // Bounded JSON allocation — prevents heap exhaustion on large buffers.
     DynamicJsonDocument doc(HISTORY_JSON_DOC_CAPACITY);
     if (doc.capacity() == 0) return "[]";
 
     JsonArray arr = doc.to<JsonArray>();
 
     if (powerHistory && _dataMutex && xSemaphoreTake(_dataMutex, pdMS_TO_TICKS(500)) == pdTRUE) {
-        // Bug #3: cap output to HISTORY_JSON_MAX_POINTS most-recent points so a
+        // Cap output to HISTORY_JSON_MAX_POINTS most-recent points so a
         // 1440-point PSRAM buffer can't OOM the heap building one giant String.
         int total = historyCount;
         int start = 0;
@@ -247,7 +247,7 @@ void HistoryBuffer::streamHistoryJson(AsyncWebServerRequest *request) {
                      p.t, p.g, p.e, p.e1r, p.e2, p.s, p.f ? 1 : 0);
             response->print(buf);
 
-            // Bug #2: only reset WDT if the calling task is actually subscribed.
+            // Only reset WDT if the calling task is actually subscribed.
             // AsyncWebServer handler tasks are NOT registered with the WDT;
             // calling esp_task_wdt_reset() would return ESP_ERR_NOT_FOUND.
             if (i % 50 == 0) {

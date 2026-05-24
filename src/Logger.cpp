@@ -1,6 +1,8 @@
 #include "Logger.h"
 #include <time.h>
 #ifndef NATIVE_TEST
+#include <LittleFS.h>
+#include <freertos/semphr.h>
 #include <esp_task_wdt.h>
 #include <ESPAsyncWebServer.h>
 #endif
@@ -15,7 +17,7 @@ std::vector<String> Logger::_dataBuffer;
 SemaphoreHandle_t Logger::_mutex = nullptr;
 uint32_t Logger::_lastFlush = 0;
 
-// Bug #3: hard cap on in-memory buffer to prevent unbounded growth
+// Hard cap on in-memory buffer to prevent unbounded growth
 // when flush keeps failing. Older entries are dropped (with a Serial notice).
 static const size_t LOGGER_BUFFER_CAP = 500;
 
@@ -27,7 +29,7 @@ void Logger::init(const char* filename, size_t maxBytes) {
     }
     _lastFlush = millis();
 
-    // Bug #5: verify LittleFS is usable before touching files.
+    // Verify LittleFS is usable before touching files.
     // totalBytes()==0 indicates not mounted (or zero-size partition).
     if (LittleFS.totalBytes() == 0) {
         Serial.println("[ERROR] Logger: LittleFS not mounted, file logging disabled");
@@ -50,12 +52,12 @@ const char* Logger::levelToString(LogLevel level) {
         case LOG_INFO:  return "INFO";
         case LOG_WARN:  return "WARN";
         case LOG_ERROR: return "ERROR";
-        default:        return "?"; // Bug #9: surface unknown levels instead of masking as INFO
+        default:        return "?"; // Unknown level — surface it instead of masking as INFO
     }
 }
 
-// Bug #3 helper: enforce buffer cap (must be called with mutex held)
-// Returns number of entries dropped; caller should print warning after releasing mutex
+// Enforce buffer cap (must be called with mutex held).
+// Returns number of entries dropped; caller should print warning after releasing mutex.
 static inline size_t capBuffer(std::vector<String>& buf, const char* name) {
     if (buf.size() > LOGGER_BUFFER_CAP) {
         size_t drop = buf.size() - LOGGER_BUFFER_CAP;
@@ -78,7 +80,7 @@ void Logger::log(const String& message, LogLevel level, bool critical) {
     char timestamp[25];
     strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", &timeinfo);
 
-    // Bug #8: build entry via snprintf to avoid heap-fragmenting String concatenation.
+    // Build entry via snprintf to avoid heap-fragmenting String concatenation.
     // Length-bound the message portion to keep the stack buffer reasonable; truncated
     // entries are still useful and rare (most log messages are short).
     char line[320];
@@ -137,7 +139,7 @@ void Logger::logData(const String& message) {
 void Logger::loop() {
     // millis() subtraction is rollover-safe by design (uint32_t modular arithmetic).
     if (millis() - _lastFlush >= 900000) { // 15 minutes
-        _lastFlush = millis(); // Bug #10: capture timestamp BEFORE flush so cadence stays even
+        _lastFlush = millis(); // Capture timestamp BEFORE flush so cadence stays even
         flushAll();
     }
 }
@@ -175,15 +177,15 @@ void Logger::flushFile(const char* filename, std::vector<String>& buffer) {
             file.println(entry);
         }
         file.close();
-        buffer.clear(); // Bug #3: only drop entries on success
+        buffer.clear(); // Only drop entries on success
     } else {
         Serial.printf("[ERROR] Logger: Failed to open %s for writing (%u entries kept in buffer)\n",
                       filename, (unsigned)buffer.size());
-        // Bug #3: keep buffer; cap will trim it on next push if it grows unbounded.
+        // Keep buffer; cap will trim it on next push if it grows unbounded.
         capBuffer(buffer, filename);
     }
 
-    // Bug #1: only reset WDT if the calling task is actually subscribed.
+    // Only reset WDT if the calling task is actually subscribed.
     // flushAll() can be invoked from AsyncWebServer handlers (not WDT-registered),
     // and esp_task_wdt_reset() asserts in that case.
     if (esp_task_wdt_status(NULL) == ESP_OK) {
@@ -222,7 +224,7 @@ void Logger::rotate(const char* filename) {
 
     if (!LittleFS.rename(base, rotated1)) {
         Serial.println("[ERROR] Logger: Failed to rename base to .1");
-        // Bug #6: capture remove() failure too, otherwise next flush appends to oversize file forever.
+        // Capture remove() failure too; otherwise next flush appends to oversize file forever.
         if (!LittleFS.remove(base)) {
             Serial.println("[ERROR] Logger: Fallback remove of base log ALSO failed; log will exceed cap until disk pressure clears");
         }
@@ -232,7 +234,7 @@ void Logger::rotate(const char* filename) {
 }
 
 #ifndef NATIVE_TEST
-// Bug #2: snapshot the in-memory buffer under the mutex, then release it
+// Snapshot the in-memory buffer under the mutex, then release it
 // BEFORE doing any file I/O or response streaming. Holding the recursive
 // mutex during AsyncResponseStream writes can block writer tasks for
 // hundreds of ms (or longer if the HTTP client is slow).
@@ -250,7 +252,7 @@ void Logger::streamLogs(AsyncWebServerRequest *request) {
     if (file) {
         size_t size = file.size();
         if (size > 8192) {
-            // Bug #7: align to next newline so the first visible line isn't truncated mid-text.
+            // Align to next newline so the first visible line isn't truncated mid-text.
             file.seek(size - 8192);
             // Read up to 256 bytes searching for '\n'; if none, fall back to the raw seek.
             int c;
@@ -280,7 +282,7 @@ void Logger::streamDataLogs(AsyncWebServerRequest *request) {
         request->send(503, "text/plain", "Logger busy");
         return;
     }
-    std::vector<String> snapshot = _dataBuffer; // Bug #2: copy under lock
+    std::vector<String> snapshot = _dataBuffer; // copy under lock
     xSemaphoreGiveRecursive(_mutex);
 
     AsyncResponseStream *response = request->beginResponseStream("text/plain");
@@ -290,7 +292,7 @@ void Logger::streamDataLogs(AsyncWebServerRequest *request) {
         size_t size = file.size();
         if (size > 8192) {
             file.seek(size - 8192);
-            // Bug #7: align to newline
+            // Align to newline
             int c;
             int scanned = 0;
             while (scanned < 256 && (c = file.read()) != -1) {

@@ -1,3 +1,8 @@
+---
+title: Configuration Détaillée — Routeur Solaire
+description: "Configuration avancée du routeur PV : modes SSR (Burst, Cycle Stealing, Bresenham, Phase), calibration d'angle de phase, planning horaire et anticipation météo."
+---
+
 # Configuration Détaillée
 
 L'interface web permet de configurer tous les aspects du routeur. Voici le détail des options basées sur l'aide intégrée au système.
@@ -46,16 +51,8 @@ Le système supporte deux sources principales pour mesurer l'import/export rése
 - **Shelly EM / Shelly 1PM** : Mesure via le réseau. Le **Mode MQTT** est recommandé pour une meilleure réactivité (~100ms).
 - **JSY-MK-194 (UART)** : Compteur double sens connecté directement en UART, extrêmement fiable et rapide.
 
-### Métriques de routage solaire
-Les statistiques du routeur sont également disponibles via MQTT :
-| Topic | Description |
-|-------|-------------|
-| `redirect_power` | Puissance redirigée vers les équipements (W) |
-| `total_import_today` | Import total aujourd'hui (Wh) |
-| `total_redirect_today` | Énergie redirigée aujourd'hui (Wh) |
-| `total_export_today` | Export vers le réseau aujourd'hui (Wh) |
-
-> **Note :** La consigne réseau (`export_setpoint`) peut être réglée à une valeur positive (ex: +50 W) pour économiser de l'énergie en évitant d'activer les équipements quand le surplus est faible, ou à 0 pour maximiser l'autoconsommation.
+### Test de Santé Shelly
+L'endpoint API `POST /test_shelly?target=em|eq1|eq2` permet un contrôle à la demande de l'état du dispositif Shelly configuré. Retourne le JSON avec : puissance (`power`), tension (`voltage`) et génération (Gen1 ou Gen2). Utile pour diagnostiquer les problèmes de connectivité.
 
 ### Dual JSY — deux compteurs simultanés
 Le routeur supporte **deux compteurs JSY-MK-194** connectés sur différents ports UART (UART1 et UART2). Chaque compteur peut être assigné à une mesure différente : l'un pour la puissance réseau (`jsy_grid_channel`) et l'autre pour la consommation de l'équipement 1 (`jsy_equip1_channel`). Cette configuration double-mètre permet un suivi plus précis des flux d'énergie.
@@ -65,6 +62,24 @@ Le routeur supporte **deux compteurs JSY-MK-194** connectés sur différents por
 ## Régulation & Modes SSR
 
 La boucle de régulation ajuste la puissance pour atteindre une **Consigne réseau** (généralement 0W pour le "Zéro Export").
+
+### Calibration d'angle de phase (Phase-angle)
+
+Le mode Contrôle de Phase nécessite un calibrage précis des délais. Le routeur dispose d'une interface dédiée (`/web_phase_cal`) et d'un endpoint API `POST /api/phase_cal` :
+
+| Action | Description |
+|--------|-------------|
+| `start` | Lance une balayage automatique (min/max delay, step size, dwell time). Reboote le routeur pour appliquer. |
+| `pause` / `resume` / `jump N` | Contrôle en cours d'exécution. |
+| `exit` | Arrête la calibration et reboot. |
+| `status` | Retourne l'état : `active`, `paused`, `delay_us`, `gridPower`, `equipPower`, `progress`. |
+
+Les paramètres de calibrage sont configurables :
+- `phase_cal_min_us` / `phase_cal_max_us` — Plage de delay (µs).
+- `phase_cal_step_us` — Pas de balayage.
+- `phase_cal_hold_ms` — Temps d'attente par point de mesure.
+
+> **Note :** Le calibrage peut être automatisé en cochant `phase_calibrate=true`. Après calibration, le routeur redémarre et la propriété est réinitialisée à `false`.
 
 ### Modes de contrôle du SSR
 Le choix du mode dépend de votre SSR et de votre besoin de précision :
@@ -110,3 +125,15 @@ Intégration avec **Open-Meteo** pour :
 - **Ventilateur** : Gestion PWM d'un ventilateur de refroidissement pour le SSR.
 - **Mises à jour OTA** : Possibilité de téléverser un nouveau fichier `.bin` directement via le navigateur.
 - **Logs & Données** : Téléchargement des fichiers `log.txt` (journal des événements) et `solar_data.txt` (statistiques du routeur) pour analyse hors-ligne.
+
+### Limitation de Fréquence (Rate Limiting)
+Les opérations de sauvegarde (`save_config`, `save_eq2_schedule`) et les redémarrages sont limités à **une requête toutes les 60 secondes**. Les requêtes trop rapides reçoivent une réponse HTTP 429 :
+
+```json
+{"error":"Trop frequent"}
+```
+
+Ce mécanisme protège le stockage flash (LittleFS) contre l'usure prématurée et les configurations corrompues par des clics répétés.
+
+### Authentification Web
+Le routeur peut exiger une authentification pour accéder aux pages de configuration et aux endpoints API via les champs `web_user` / `web_password`. Par défaut, aucun mot de passe n'est requis. Consultez la page [Sécurité & Maintenance](./safety.md) pour plus de détails sur l'authentification web et le mode vacances.

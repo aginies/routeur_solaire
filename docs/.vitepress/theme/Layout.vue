@@ -1,6 +1,6 @@
 <script setup>
 import DefaultTheme from 'vitepress/theme'
-import { onMounted, watch } from 'vue'
+import { onMounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vitepress'
 import './custom.css'
 
@@ -144,12 +144,105 @@ const injectLicenseBadge = () => {
   document.body.appendChild(btn)
 }
 
+// Retry injection until VPHomeFeatures is rendered (handles client-side nav timing).
+const scheduleInjectLicenseBadge = () => {
+  let attempts = 0
+  const maxAttempts = 30  /* ~2.5s total */
+  const check = () => {
+    if (document.getElementById('license-badge-container')) return
+    if (attempts++ >= maxAttempts) return  // give up — badge not needed on non-home pages
+    injectLicenseBadge()
+    if (document.getElementById('license-badge-container')) return
+    setTimeout(check, 50)
+  }
+  check()
+}
+
+// ── Scroll-reveal: fade-in elements as they enter the viewport ──
+const setupScrollReveal = () => {
+  // Elements to observe — exclude hero, nav, sidebar, footer
+  const selectors = [
+    '.vp-doc h2', '.vp-doc h3', '.vp-doc h4',
+    '.vp-doc p',
+    '.vp-doc table',
+    '.vp-doc li',
+    '.vp-doc blockquote',
+    '.vp-doc div[class*="language-"]',
+    '.vp-doc .custom-block',
+  ]
+
+  // Skip if already initialized
+  if (document.getElementById('scroll-reveal-observer')) return
+
+  const observer = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('reveal-visible')
+        observer.unobserve(entry.target)
+      }
+    }
+  }, {
+    threshold: 0.1,
+    rootMargin: '0px 0px -40px 0px',
+  })
+
+  const elements = document.querySelectorAll(selectors.join(', '))
+  for (const el of elements) {
+    // Skip elements already inside .reveal (home features), they have their own animation
+    if (el.closest('.reveal')) continue
+    observer.observe(el)
+  }
+
+  // Mark as initialized
+  const marker = document.createElement('div')
+  marker.id = 'scroll-reveal-observer'
+  document.body.appendChild(marker)
+}
+
+// Observe DOM mutations for late-rendered content.
+const observer = new MutationObserver(() => {
+  scheduleInjectLicenseBadge()
+  setupScrollReveal()
+})
+
+// ── Reading progress bar ──
+const setupProgressBar = () => {
+  const bar = document.getElementById('reading-progress')
+  if (!bar) return
+
+  const updateProgress = () => {
+    const scrollTop = window.scrollY
+    const docHeight = document.documentElement.scrollHeight - window.innerHeight
+    const progress = docHeight > 0 ? (scrollTop / docHeight) * 100 : 0
+    bar.style.width = progress + '%'
+  }
+
+  window.addEventListener('scroll', updateProgress, { passive: true })
+  updateProgress()
+}
+
 // Re-inject on page entry (handles VitePress client-side navigation back to homepage)
-onMounted(() => { injectHero(); injectLicenseBadge() })
-watch(route, () => { injectHero(); injectLicenseBadge() }, { deep: true })
+onMounted(() => {
+  injectHero()
+  scheduleInjectLicenseBadge()
+  setupScrollReveal()
+  setupProgressBar()
+  setTimeout(() => observer.observe(document.body, { childList: true, subtree: true }), 100)
+})
+watch(route, () => {
+  nextTick(() => {
+    injectHero()
+    scheduleInjectLicenseBadge()
+    setupScrollReveal()
+    setupProgressBar()
+  })
+}, { deep: true })
 </script>
 
 <template>
+  <!-- Reading progress bar (top of page) -->
+  <div id="reading-progress" style="position: fixed; top: 0; left: 0; width: 0%; height: 2px; background: var(--rp-accent-1, #f0c040); z-index: 9999; transition: width 0.1s linear; box-shadow: 0 0 6px rgba(240, 192, 64, 0.4);"></div>
+
   <Layout>
     <!-- Sun + particles injected INSIDE VPHero via info-before slot (content added at runtime by JS) -->
     <template #home-hero-info-before></template>

@@ -15,17 +15,17 @@ HTTPClient Shelly1PMManager::_http;
 volatile Shelly1PMManager::Action Shelly1PMManager::_pendingAction = Shelly1PMManager::Action::NONE;
 portMUX_TYPE Shelly1PMManager::_actionMux = portMUX_INITIALIZER_UNLOCKED;
 
-// Bug #2: serialize all access to the shared _http/_client singletons.
+// Serialize all access to the shared _http/_client singletons.
 static SemaphoreHandle_t _httpMutex = nullptr;
 
-// Bug #1 / WDT helper
+// Reset WDT when subscribed (safe no-op if WDT is not active).
 static inline void wdt_pet_if_subscribed() {
     if (esp_task_wdt_status(NULL) == ESP_OK) {
         esp_task_wdt_reset();
     }
 }
 
-// Bug #11: maximum age of a power reading before we declare it stale (5 min)
+// Maximum age of a power reading before we declare it stale.
 static const uint32_t SHELLY_DATA_MAX_AGE_MS = 5UL * 60UL * 1000UL;
 
 void Shelly1PMManager::init(const Config& config) {
