@@ -1,3 +1,8 @@
+---
+title: Configuration Détaillée — Routeur Solaire
+description: "Configuration avancée du routeur PV : modes SSR (Burst, Cycle Stealing, Bresenham, Phase), calibration d'angle de phase, planning horaire et anticipation météo."
+---
+
 # Configuration Détaillée
 
 L'interface web permet de configurer tous les aspects du routeur. Voici le détail des options basées sur l'aide intégrée au système.
@@ -131,4 +136,4 @@ Les opérations de sauvegarde (`save_config`, `save_eq2_schedule`) et les redém
 Ce mécanisme protège le stockage flash (LittleFS) contre l'usure prématurée et les configurations corrompues par des clics répétés.
 
 ### Authentification Web
-Le routeur peut exiger une authentification pour accéder aux pages de configuration et aux endpoints API via les champs `web_user` / `web_password`. Par défaut, aucun mot de passe n'est requis. Consultez la page [Sécurité & Maintenance](safety.md) pour plus de détails sur l'authentification web et le mode vacances.
+Le routeur peut exiger une authentification pour accéder aux pages de configuration et aux endpoints API via les champs `web_user` / `web_password`. Par défaut, aucun mot de passe n'est requis. Consultez la page [Sécurité & Maintenance](./safety.md) pour plus de détails sur l'authentification web et le mode vacances.

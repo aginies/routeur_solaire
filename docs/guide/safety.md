@@ -1,3 +1,8 @@
+---
+title: Sécurité & Maintenance — Routeur Solaire
+description: "Sécurité du routeur PV : machine à états, protection thermique, hystérésis, mode vacances, authentification web et mises à jour OTA."
+---
+
 # Sécurité & Maintenance
 
 Le routeur intègre plusieurs couches de protection pour garantir un fonctionnement fiable et sécurisé, tant en conditions normales qu'en cas de défaut. Cette page décrit le comportement de ces mécanismes.
@@ -65,21 +70,6 @@ Quand un `STATE_EMERGENCY_FAULT` ou `STATE_SAFE_TIMEOUT` est détecté, le syst�
 3. **`ActuatorManager::openRelay()`** — Le relais de sécurité s'ouvre, coupant physiquement l'alimentation du SSR.
 
 Cette séquence garantit que même si le firmware plante par la suite (rare), la charge est déjà déconnectée matériellement.
-
----
-
-## Protection contre les Actions Fréquentes (Rate Limiting)
-
-Les opérations `save_config` et `reboot` sont limitées à **une toutes les 60 secondes**. Les requêtes trop rapides reçoivent une réponse HTTP 429 :
-
-```json
-{"error":"Trop frequent"}
-```
-
-Cela protège contre :
-- L'usure prématurée du stockage flash (LittleFS a une durée de vie limitée en cycles d'écriture).
-- Les configurations corrompues par des clics rapides.
-- Le stress sur les tâches FreeRTOS pendant la phase de sauvegarde.
 
 ---
 

@@ -8,7 +8,7 @@ hero:
   actions:
     - theme: brand
       text: Commencer →
-      link: /guide/introduction
+      link: /guide/quick-start
     - theme: alt
       text: Voir sur GitHub
       link: https://github.com/aginies/routeur_solaire

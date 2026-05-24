@@ -53,12 +53,37 @@ html { scroll-behavior: smooth; }
   box-shadow: 0 8px 30px var(--rp-solar-glow);
 }
 
+/* ── Feature Icon Pulse on Hover ───────────── */
+
+.VPFeature .VPIcon {
+  transition: transform 0.3s ease, filter 0.3s ease;
+}
+
+.VPFeature:hover .VPIcon {
+  transform: scale(1.15);
+  filter: drop-shadow(0 0 8px rgba(240, 192, 64, 0.5));
+}
+
 /* ── Code Blocks ────────────────────────────── */
 
 .vp-doc div[class*='language-'] {
   background-color: var(--rp-code-bg) !important;
   border-radius: 12px;
   overflow: hidden;
+  transition: box-shadow 0.3s ease;
+}
+
+.vp-doc div[class*='language-']:hover {
+  box-shadow: 0 0 20px rgba(240, 192, 64, 0.08);
+}
+
+/* Subtle hover highlight on code lines */
+.vp-doc div[class*='language-'] .line {
+  transition: background-color 0.15s ease;
+}
+
+.vp-doc div[class*='language-']:hover .line:hover {
+  background-color: rgba(240, 192, 64, 0.05);
 }
 
 /* ── Navigation Bar ─────────────────────────── */
@@ -163,4 +188,65 @@ html { scroll-behavior: smooth; }
 .VPFooter {
   border-top: 1px solid rgba(240, 192, 64, 0.1) !important;
   padding-bottom: 32px !important;
+}
+
+/* ── Scroll-reveal: fade-in elements on scroll ─────────── */
+
+/* Elements are visible by default; animation plays when .reveal-visible is added */
+
+.vp-doc h2.reveal-visible,
+.vp-doc h3.reveal-visible,
+.vp-doc h4.reveal-visible,
+.vp-doc p.reveal-visible,
+.vp-doc table.reveal-visible,
+.vp-doc li.reveal-visible,
+.vp-doc blockquote.reveal-visible,
+.vp-doc div[class*='language-'].reveal-visible,
+.vp-doc .custom-block.reveal-visible {
+  animation: revealIn 0.5s ease both;
+}
+
+@keyframes revealIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Staggered reveal for list items */
+.vp-doc ul li.reveal-visible,
+.vp-doc ol li.reveal-visible {
+  animation-delay: calc(var(--item-index, 0) * 0.05s);
+}
+
+/* Staggered reveal for table rows */
+.vp-doc table tbody tr.reveal-visible {
+  animation-delay: calc(var(--row-index, 0) * 0.04s);
+}
+
+/* Headings reveal with accent underline */
+.vp-doc h2.reveal-visible,
+.vp-doc h3.reveal-visible,
+.vp-doc h4.reveal-visible {
+  position: relative;
+}
+
+.vp-doc h2.reveal-visible::after,
+.vp-doc h3.reveal-visible::after,
+.vp-doc h4.reveal-visible::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  width: 40px;
+  height: 2px;
+  background: var(--rp-accent-1, #f0c040);
+  border-radius: 1px;
+  opacity: 0;
+  transition: opacity 0.4s ease 0.3s, width 0.4s ease 0.3s;
+}
+
+.vp-doc h2.reveal-visible:hover::after,
+.vp-doc h3.reveal-visible:hover::after,
+.vp-doc h4.reveal-visible:hover::after {
+  width: 100%;
+  opacity: 1;
 }

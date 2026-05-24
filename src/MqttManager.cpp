@@ -305,10 +305,15 @@ skip_eq_percent:
     _mqttClient.publish(tEspTemp.c_str(), 0, retain, val);
 skip_esp_temp:
 
-    // Fan topics are short and fixed — no validation needed.
+    // Fan topics are built from mqtt_name — validate before publishing.
+    if (!isTopicValid(tFanActive)) goto skip_fan_active;
     _mqttClient.publish(tFanActive.c_str(), 0, retain, fanActive ? "ON" : "OFF");
+    skip_fan_active:
+
     snprintf(val, sizeof(val), "%d", fanPercent);
+    if (!isTopicValid(tFanPercent)) goto skip_fan_percent;
     _mqttClient.publish(tFanPercent.c_str(), 0, retain, val);
+    skip_fan_percent:
 
     if (ssrTemp > -100.0 && isTopicValid(tSsrTemp)) {
         snprintf(val, sizeof(val), "%.1f", ssrTemp);

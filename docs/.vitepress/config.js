@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitepress'
+import SeoPlugin from './theme/seoPlugin.js'
 
 export default defineConfig({
   title: "Routeur Solaire",
@@ -32,23 +33,30 @@ export default defineConfig({
     /* JSON-LD structured data */
     ['script', { type: 'application/ld+json' }, `{"@context":"https://schema.org","@type":["WebSite","SoftwareApplication"],"name":"Routeur Solaire","description":"Firmware libre pour ESP32 — routeur photovoltaïque haute performance.","url":"https://aginies.github.io/routeur_solaire/","applicationCategory":"IoTApplication","operatingSystem":"ESP32","license":"https://opensource.org/licenses/GPL-3.0"}`],
   ],
+  markdown: {
+    config(md) {
+      md.use(SeoPlugin)
+    }
+  },
   themeConfig: {
     nav: [
       { text: 'Accueil', link: '/' },
-      { text: 'Guide', link: '/guide/introduction' },
+      { text: 'Guide', link: '/guide/quick-start' },
       { icon: 'github', link: 'https://github.com/aginies/routeur_solaire' }
     ],
     sidebar: [
       {
         text: 'Guide d\'utilisation',
         items: [
-          { text: 'Introduction', link: '/guide/introduction' },
+          { text: 'Démarrage rapide', link: '/guide/quick-start' },
+          { text: 'Installation', link: '/guide/installation' },
           { text: 'Matériel', link: '/guide/hardware' },
           { text: 'Configuration', link: '/guide/configuration' },
           { text: 'Sécurité & Maintenance', link: '/guide/safety' },
           { text: "Captures d'écran", link: '/guide/screenshots' },
           { text: 'API & Diagnostics', link: '/guide/diagnostics' },
-          { text: 'Installation', link: '/guide/installation' }
+          { text: 'Dépannage', link: '/guide/troubleshooting' },
+          { text: 'Journal des modifications', link: '/guide/changelog' },
         ]
       }
     ],
@@ -76,6 +84,13 @@ export default defineConfig({
     editLink: {
       pattern: 'https://github.com/aginies/routeur_solaire/edit/main/docs/:path',
       text: 'Modifier cette page sur GitHub'
+    },
+    lastUpdated: {
+      text: 'Dernière mise à jour',
+      formatOptions: {
+        dateStyle: 'long',
+        timeStyle: 'short'
+      }
     }
   }
 })

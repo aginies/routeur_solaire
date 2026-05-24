@@ -1,3 +1,8 @@
+---
+title: Installation — Routeur Solaire
+description: "Guide d'installation du firmware Routeur Solaire : compilation PlatformIO, script flash.sh, variantes matérielles et dépannage."
+---
+
 # Installation
 
 Cette page explique comment compiler et installer le firmware sur votre ESP32 en utilisant les outils fournis.

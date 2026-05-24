@@ -1,3 +1,8 @@
+---
+title: API & Diagnostics — Routeur Solaire
+description: "Référence API REST du routeur PV : endpoint /status, calibration phase-angle, test Shelly, import/export de statistiques et diagnostic."
+---
+
 # API & Diagnostics
 
 Le routeur expose une API REST et plusieurs endpoints de diagnostic pour le débogage en production. Cette page documente les interfaces accessibles via HTTP (généralement `http://<ip_du_routeur>/`).

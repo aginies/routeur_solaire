@@ -1,3 +1,8 @@
+---
+title: Matériel — Routeur Solaire
+description: "Guide matériel du routeur PV : ESP32-S3, capteurs JSY-MK-194 et Shelly EM, schéma de câblage, BOM et configuration PSRAM."
+---
+
 # Matériel
 
 Le projet est conçu pour fonctionner sur du matériel moderne et abordable, centré autour de l'ESP32.
@@ -174,7 +179,7 @@ Le routeur calcule la puissance solaire attendue en utilisant un modèle géomé
 | **Inclinaison** (`solar_panel_tilt`) | Angle du panneau par rapport à l'horizontale (→ verticale) | 0° (plat) – 90° (vertical) |
 | **Facteur de perte** (`solar_loss_factor`) | Pertes estimées (poussière, température, vieillissement) | 0.7 – 1.0 |
 
-Ces paramètres sont configurables via l'interface web ([configuration détaillée](configuration.md)) et utilisés par le gestionnaire météo pour prédire la puissance solaire et optimiser le déclenchement des équipements.
+Ces paramètres sont configurables via l'interface web ([configuration détaillée](./configuration.md)) et utilisés par le gestionnaire météo pour prédire la puissance solaire et optimiser le déclenchement des équipements.
 
 ### Liens utiles pour l'achat des composants
 
