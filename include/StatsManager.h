@@ -54,6 +54,9 @@ public:
     static volatile bool _saveRequested;
     static TaskHandle_t _taskHandle;
 
+    // Millisecond accumulator for active_time (persisted to NVS so partial seconds survive reboots).
+    static uint32_t _activeTimeMsAccumulator;
+
     #ifdef NATIVE_TEST
 public:
 #endif

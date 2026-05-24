@@ -30,10 +30,10 @@ TaskHandle_t StatsManager::_taskHandle = nullptr;
 #ifndef NATIVE_TEST
 bool StatsManager::_importInProgress = false;
 #endif
-static uint32_t _activeTimeMsAccumulator = 0;
 #ifndef NATIVE_TEST
 SemaphoreHandle_t StatsManager::_statsMutex = nullptr;
 #endif
+uint32_t StatsManager::_activeTimeMsAccumulator = 0;
 
 #ifndef NATIVE_TEST
 // Cache today's key to avoid allocating a String on every update().
@@ -62,6 +62,7 @@ static void persistNvsTotals(const String& dayKey) {
         prefs.putFloat("import", StatsManager::totalImportToday);
         prefs.putFloat("redirect", StatsManager::totalRedirectToday);
         prefs.putFloat("export", StatsManager::totalExportToday);
+        prefs.putULong("active_ms", StatsManager::_activeTimeMsAccumulator);
         prefs.putString("last_day", dayKey);
         prefs.end();
     }
@@ -114,6 +115,7 @@ void StatsManager::init() {
         totalImportToday   = prefs.getFloat("import", 0);
         totalRedirectToday = prefs.getFloat("redirect", 0);
         totalExportToday   = prefs.getFloat("export", 0);
+        _activeTimeMsAccumulator = prefs.getULong("active_ms", 0);
     }
 
     String lastDay = prefs.getString("last_day", "");
@@ -261,7 +263,7 @@ void StatsManager::update(float gridPower, float equipmentPower, uint32_t interv
         if (isMeasured) {
             solarRedirPower = equipmentPower;
         } else {
-            solarRedirPower = (gridPower > 0) ? ((equipmentPower > gridPower) ? (equipmentPower - gridPower) : 0) : equipmentPower;
+            solarRedirPower = (gridPower > 0) ? ((equipmentPower > gridPower) ? (equipmentPower - gridPower) : 0) : fmaxf(0.0f, equipmentPower + gridPower);
         }
     }
 
@@ -501,15 +503,15 @@ void StatsManager::streamStatsJson(AsyncWebServerRequest *request) {
             if (esp_task_wdt_status(NULL) == ESP_OK) esp_task_wdt_reset();
         }
 
-        // Align precision with save() (.1f everywhere).
+       // Match save() rounding: round(x * 10) / 10.0
         snprintf(buf, sizeof(buf), "\"%s\":{\"import\":%.1f,\"redirect\":%.1f,\"export\":%.1f,\"active_time\":%u,",
-                 key.c_str(), ds.import, ds.redirect, ds.export_wh, ds.active_time);
+                  key.c_str(), round(ds.import * 10) / 10.0, round(ds.redirect * 10) / 10.0, round(ds.export_wh * 10) / 10.0, ds.active_time);
         response->print(buf);
 
         auto printArray = [&](const char* name, const float* arr) {
             response->printf("\"%s\":[", name);
             for (int i = 0; i < 24; i++) {
-                response->printf("%.1f%s", arr[i], (i < 23 ? "," : ""));
+                response->printf("%.1f%s", round(arr[i] * 10) / 10.0, (i < 23 ? "," : ""));
             }
             response->print("]");
         };
