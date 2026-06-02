@@ -168,6 +168,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
             boostActive,
             forcedWindow,
             nightActive,
+            ntpSynced,
             (uint32_t)t_now
         );
         SafetyManager::applyState(newState);
