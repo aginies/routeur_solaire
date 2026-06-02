@@ -343,6 +343,8 @@ void SolarMonitor::monitorTask(void* pvParameters) {
                     }
                 } else if (GridSensorService::isEquip1SourceJsy1() || GridSensorService::isEquip1SourceJsy2()) {
                     ActuatorManager::equipmentPower = GridSensorService::currentEquip1PowerFromJsy;
+                } else if (Shelly1PMManager::hasValidEq1Data()) {
+                    ActuatorManager::equipmentPower = Shelly1PMManager::getPowerEq1();
                 }
             }
             esp_task_wdt_reset();

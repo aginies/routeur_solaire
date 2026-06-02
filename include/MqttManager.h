@@ -2,6 +2,7 @@
 #define MQTTMANAGER_H
 
 #include <espMqttClient.h>
+#include <atomic>
 #include "Config.h"
 
 class MqttManager {
@@ -14,11 +15,11 @@ public:
     static bool isConnected();
     static float latestMqttGridPower;
     static float latestMqttGridVoltage;
-    static bool hasLatestMqttGridPower;
+    static std::atomic<bool> hasLatestMqttGridPower;
     static float latestMqttEq1Power;
-    static bool hasLatestMqttEq1Power;
+    static std::atomic<bool> hasLatestMqttEq1Power;
     static float latestMqttEq2Power;
-    static bool hasLatestMqttEq2Power;
+    static std::atomic<bool> hasLatestMqttEq2Power;
 
 private:
     static void connectToMqtt();
