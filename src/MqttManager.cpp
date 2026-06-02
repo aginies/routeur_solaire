@@ -23,11 +23,11 @@ String MqttManager::_nodeId = "";
 String MqttManager::_lwtTopic = "";
 float MqttManager::latestMqttGridPower = 0.0;
 float MqttManager::latestMqttGridVoltage = 230.0;
-bool MqttManager::hasLatestMqttGridPower = false;
+std::atomic<bool> MqttManager::hasLatestMqttGridPower{false};
 float MqttManager::latestMqttEq1Power = 0.0f;
-bool MqttManager::hasLatestMqttEq1Power = false;
+std::atomic<bool> MqttManager::hasLatestMqttEq1Power{false};
 float MqttManager::latestMqttEq2Power = 0.0f;
-bool MqttManager::hasLatestMqttEq2Power = false;
+std::atomic<bool> MqttManager::hasLatestMqttEq2Power{false};
 uint32_t MqttManager::_lastReconnectAttempt = 0;
 
 void MqttManager::init(const Config& config) {

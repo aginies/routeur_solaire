@@ -48,14 +48,14 @@ public:
     static float totalRedirectToday;
     static float totalExportToday;
 
-    private:
+    // Millisecond accumulator for active_time (persisted to NVS so partial seconds survive reboots).
+    static uint32_t _activeTimeMsAccumulator;
+
+private:
     static String getTodayKey();
     static void statsTask(void* pvParameters);
     static volatile bool _saveRequested;
     static TaskHandle_t _taskHandle;
-
-    // Millisecond accumulator for active_time (persisted to NVS so partial seconds survive reboots).
-    static uint32_t _activeTimeMsAccumulator;
 
     #ifdef NATIVE_TEST
 public:

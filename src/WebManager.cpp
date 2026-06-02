@@ -335,12 +335,9 @@ void WebManager::setupRoutes() {
             time(&now);
             uint32_t until = (uint32_t)now + (days * 86400UL);
             
-            // Update live config memory so it takes effect immediately
-            Config* liveCfg = const_cast<Config*>(_config);
-            liveCfg->vacation_until = until;
-            
-            // Save to persistent storage
-            ConfigManager::save(*liveCfg);
+            Config newCfg = *_config;
+            newCfg.vacation_until = until;
+            ConfigManager::save(newCfg);
             
             Logger::info("Vacation mode started for " + String(days) + " days");
             request->send(200, "text/plain", "Vacances configurées");
@@ -352,9 +349,9 @@ void WebManager::setupRoutes() {
     _server.on("/cancel_vacation", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
         
-        Config* liveCfg = const_cast<Config*>(_config);
-        liveCfg->vacation_until = 0;
-        ConfigManager::save(*liveCfg);
+        Config newCfg = *_config;
+        newCfg.vacation_until = 0;
+        ConfigManager::save(newCfg);
         
         Logger::info("Vacation mode cancelled manually");
         request->send(200, "text/plain", "Vacances annulées");
