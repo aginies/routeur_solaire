@@ -3,7 +3,9 @@
 
 #include <Arduino.h>
 #include <WiFiClientSecure.h>
+#include <WiFiClient.h>
 #include <HTTPClient.h>
+#include <ArduinoJson.h>
 #include "Config.h"
 
 class WeatherManager {
@@ -40,10 +42,12 @@ public:
 private:
     static void weatherTask(void* pvParameters);
     static void updateWeather();
+    static void processWeatherJson(JsonDocument& doc);
     static float getCloudLayerIndex();
 
     static WiFiClientSecure _client;
     static HTTPClient _http;
+    static WiFiClient _httpClient;
     static TaskHandle_t _taskHandle;
 
     static const Config* _config;

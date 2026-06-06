@@ -24,6 +24,7 @@ uint32_t WeatherManager::_lastUpdate = 0;
 volatile bool WeatherManager::_updateRequested = false;
 WiFiClientSecure WeatherManager::_client;
 HTTPClient WeatherManager::_http;
+WiFiClient WeatherManager::_httpClient;
 TaskHandle_t WeatherManager::_taskHandle = nullptr;
 
 // Serialize String access (sunrise/sunset/weatherIcon) between the weather task
@@ -317,10 +318,12 @@ void WeatherManager::updateWeather() {
                  "shortwave_radiation_instant,terrestrial_radiation_instant,rain,snowfall,is_day"
                  "&daily=sunrise,sunset&timezone=auto&forecast_days=1";
 
+    bool parsed = false;
+
+    // Try HTTPS first
     if (_http.begin(_client, url)) {
         int httpCode = _http.GET();
         if (httpCode == HTTP_CODE_OK) {
-            // Memory optimization: filter the large JSON to save heap space (critical for WROOM)
             JsonDocument filter;
             filter["current"]["cloud_cover"] = true;
             filter["current"]["cloud_cover_low"] = true;
@@ -339,58 +342,8 @@ void WeatherManager::updateWeather() {
             JsonDocument doc;
             DeserializationError error = deserializeJson(doc, _http.getStream(), DeserializationOption::Filter(filter));
             if (!error) {
-                JsonVariant cur = doc["current"];
-
-                // Typed checks; only update on valid numeric values, otherwise keep the previous reading.
-                if (cur["cloud_cover"].is<int>())      _cloudCover     = cur["cloud_cover"].as<int>();
-                if (cur["cloud_cover_low"].is<int>())  _cloudCoverLow  = cur["cloud_cover_low"].as<int>();
-                if (cur["cloud_cover_mid"].is<int>())  _cloudCoverMid  = cur["cloud_cover_mid"].as<int>();
-                if (cur["cloud_cover_high"].is<int>()) _cloudCoverHigh = cur["cloud_cover_high"].as<int>();
-                _shortwaveRadiationInstant   = cur["shortwave_radiation_instant"]   | _shortwaveRadiationInstant;
-                _terrestrialRadiationInstant = cur["terrestrial_radiation_instant"] | _terrestrialRadiationInstant;
-                if (cur["temperature_2m"].is<float>() || cur["temperature_2m"].is<int>())
-                    _temperature = cur["temperature_2m"].as<float>();
-                if (cur["rain"].is<float>() || cur["rain"].is<int>())
-                    _rain = cur["rain"].as<float>();
-                if (cur["snowfall"].is<float>() || cur["snowfall"].is<int>())
-                    _snow = cur["snowfall"].as<float>();
-
-                bool isDay = cur["is_day"] | true;
-
-                int code = cur["weather_code"] | 0;
-                String iconBuf;
-                if (code == 0) iconBuf = isDay ? "day" : "night";
-                else if (code == 1) iconBuf = isDay ? "cloudy-day-1" : "cloudy-night-1";
-                else if (code == 2) iconBuf = isDay ? "cloudy-day-2" : "cloudy-night-2";
-                else if (code == 3) iconBuf = isDay ? "cloudy-day-3" : "cloudy-night-3";
-                else if (code <= 48) iconBuf = "cloudy";
-                else if (code <= 55) iconBuf = "rainy-4";
-                else if (code <= 57) iconBuf = "rainy-7";
-                else if (code <= 65) iconBuf = "rainy-6";
-                else if (code <= 67) iconBuf = "rainy-7";
-                else if (code <= 75) iconBuf = "snowy-6";
-                else if (code <= 77) iconBuf = "snowy-4";
-                else if (code <= 82) iconBuf = "rainy-5";
-                else if (code <= 86) iconBuf = "snowy-5";
-                else if (code <= 99) iconBuf = "thunder";
-
-                // Assign String fields under the mutex to avoid torn reads by getters.
-                String newSunrise = doc["daily"]["sunrise"][0] | "";
-                String newSunset  = doc["daily"]["sunset"][0]  | "";
-                if (_weatherStringMutex && xSemaphoreTake(_weatherStringMutex, pdMS_TO_TICKS(500)) == pdTRUE) {
-                    _sunrise     = newSunrise;
-                    _sunset      = newSunset;
-                    if (iconBuf.length() > 0) _weatherIcon = iconBuf;
-                    xSemaphoreGive(_weatherStringMutex);
-                }
-
-                _lastUpdate = millis();
-
-                char logBuf[160];
-                snprintf(logBuf, sizeof(logBuf),
-                         "Weather updated: %.1fC, %d%% clouds, icon: %s",
-                         _temperature, _cloudCover, _weatherIcon.c_str());
-                Logger::info(String(logBuf));
+                parsed = true;
+                processWeatherJson(doc);
             } else {
                 char buf[80];
                 snprintf(buf, sizeof(buf), "Weather JSON error: %s", error.c_str());
@@ -398,9 +351,110 @@ void WeatherManager::updateWeather() {
             }
         } else {
             char buf[60];
-            snprintf(buf, sizeof(buf), "Weather HTTP error: %d", httpCode);
+            snprintf(buf, sizeof(buf), "Weather HTTPS error: %d", httpCode);
             Logger::warn(String(buf));
         }
         _http.end();
     }
+
+    // HTTP fallback if HTTPS failed
+    if (!parsed) {
+        String httpUrl = "http://api.open-meteo.com/v1/forecast?latitude=" + _config->weather_lat +
+                         "&longitude=" + _config->weather_lon +
+                         "&current=temperature_2m,weather_code,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,"
+                         "shortwave_radiation_instant,terrestrial_radiation_instant,rain,snowfall,is_day"
+                         "&daily=sunrise,sunset&timezone=auto&forecast_days=1";
+
+        if (_http.begin(_httpClient, httpUrl)) {
+            int httpCode = _http.GET();
+            if (httpCode == HTTP_CODE_OK) {
+                JsonDocument filter;
+                filter["current"]["cloud_cover"] = true;
+                filter["current"]["cloud_cover_low"] = true;
+                filter["current"]["cloud_cover_mid"] = true;
+                filter["current"]["cloud_cover_high"] = true;
+                filter["current"]["shortwave_radiation_instant"] = true;
+                filter["current"]["terrestrial_radiation_instant"] = true;
+                filter["current"]["temperature_2m"] = true;
+                filter["current"]["rain"] = true;
+                filter["current"]["snowfall"] = true;
+                filter["current"]["is_day"] = true;
+                filter["current"]["weather_code"] = true;
+                filter["daily"]["sunrise"][0] = true;
+                filter["daily"]["sunset"][0] = true;
+
+                JsonDocument doc;
+                DeserializationError error = deserializeJson(doc, _http.getStream(), DeserializationOption::Filter(filter));
+                if (!error) {
+                    parsed = true;
+                    Logger::info("Weather HTTP fallback succeeded");
+                    processWeatherJson(doc);
+                } else {
+                    char buf[80];
+                    snprintf(buf, sizeof(buf), "Weather fallback JSON error: %s", error.c_str());
+                    Logger::warn(String(buf));
+                }
+            } else {
+                char buf[60];
+                snprintf(buf, sizeof(buf), "Weather HTTP fallback error: %d", httpCode);
+                Logger::warn(String(buf));
+            }
+            _http.end();
+        }
+    }
+}
+
+void WeatherManager::processWeatherJson(JsonDocument& doc) {
+    JsonVariant cur = doc["current"];
+
+    // Typed checks; only update on valid numeric values, otherwise keep the previous reading.
+    if (cur["cloud_cover"].is<int>())      _cloudCover     = cur["cloud_cover"].as<int>();
+    if (cur["cloud_cover_low"].is<int>())  _cloudCoverLow  = cur["cloud_cover_low"].as<int>();
+    if (cur["cloud_cover_mid"].is<int>())  _cloudCoverMid  = cur["cloud_cover_mid"].as<int>();
+    if (cur["cloud_cover_high"].is<int>()) _cloudCoverHigh = cur["cloud_cover_high"].as<int>();
+    _shortwaveRadiationInstant   = cur["shortwave_radiation_instant"]   | _shortwaveRadiationInstant;
+    _terrestrialRadiationInstant = cur["terrestrial_radiation_instant"] | _terrestrialRadiationInstant;
+    if (cur["temperature_2m"].is<float>() || cur["temperature_2m"].is<int>())
+        _temperature = cur["temperature_2m"].as<float>();
+    if (cur["rain"].is<float>() || cur["rain"].is<int>())
+        _rain = cur["rain"].as<float>();
+    if (cur["snowfall"].is<float>() || cur["snowfall"].is<int>())
+        _snow = cur["snowfall"].as<float>();
+
+    bool isDay = cur["is_day"] | true;
+
+    int code = cur["weather_code"] | 0;
+    String iconBuf;
+    if (code == 0) iconBuf = isDay ? "day" : "night";
+    else if (code == 1) iconBuf = isDay ? "cloudy-day-1" : "cloudy-night-1";
+    else if (code == 2) iconBuf = isDay ? "cloudy-day-2" : "cloudy-night-2";
+    else if (code == 3) iconBuf = isDay ? "cloudy-day-3" : "cloudy-night-3";
+    else if (code <= 48) iconBuf = "cloudy";
+    else if (code <= 55) iconBuf = "rainy-4";
+    else if (code <= 57) iconBuf = "rainy-7";
+    else if (code <= 65) iconBuf = "rainy-6";
+    else if (code <= 67) iconBuf = "rainy-7";
+    else if (code <= 75) iconBuf = "snowy-6";
+    else if (code <= 77) iconBuf = "snowy-4";
+    else if (code <= 82) iconBuf = "rainy-5";
+    else if (code <= 86) iconBuf = "snowy-5";
+    else if (code <= 99) iconBuf = "thunder";
+
+    // Assign String fields under the mutex to avoid torn reads by getters.
+    String newSunrise = doc["daily"]["sunrise"][0] | "";
+    String newSunset  = doc["daily"]["sunset"][0]  | "";
+    if (_weatherStringMutex && xSemaphoreTake(_weatherStringMutex, pdMS_TO_TICKS(500)) == pdTRUE) {
+        _sunrise     = newSunrise;
+        _sunset      = newSunset;
+        if (iconBuf.length() > 0) _weatherIcon = iconBuf;
+        xSemaphoreGive(_weatherStringMutex);
+    }
+
+    _lastUpdate = millis();
+
+    char logBuf[160];
+    snprintf(logBuf, sizeof(logBuf),
+             "Weather updated: %.1fC, %d%% clouds, icon: %s",
+             _temperature, _cloudCover, _weatherIcon.c_str());
+    Logger::info(String(logBuf));
 }
