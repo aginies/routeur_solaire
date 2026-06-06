@@ -207,5 +207,5 @@ void TemperatureManager::tempTask(void* pvParameters) {
 }
 
 // temprature_sens_read() is deprecated and unreliable on ESP32-S3;
-// lastEspTemp is never written by anyone. We deliberately leave the field for
-// API compatibility but document that it stays at 0.
+// lastEspTemp is updated by SolarMonitor.cpp via temperatureRead() and
+// exposed via MQTT and web API for ESP32 die temperature monitoring.

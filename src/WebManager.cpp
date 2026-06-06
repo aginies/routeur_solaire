@@ -32,7 +32,7 @@ SemaphoreHandle_t WebManager::_httpMutex = nullptr;
 const Config* WebManager::_config = nullptr;
 uint32_t WebManager::_lastRebootTime[7] = {0};  // cooldown per action enum index (zeroed in init())
 static Config _cfg_copy;  // persistent copy, survives beyond init() caller scope
-volatile bool WebManager::_rebootRequested = false;
+bool WebManager::_rebootRequested = false;
 
 void WebManager::init(const Config& config) {
     memset(_lastRebootTime, 0, sizeof(_lastRebootTime));
@@ -138,7 +138,7 @@ void WebManager::applyRequestParams(AsyncWebServerRequest *request, Config &cfg)
     if (has("E_EQUIP2_MQTT")) cfg.e_equip2_mqtt = (get("E_EQUIP2_MQTT") == "True");
     if (has("EQUIP2_MQTT_TOPIC")) cfg.equip2_mqtt_topic = get("EQUIP2_MQTT_TOPIC").substring(0, 128);
     if (has("EQUIP2_POWER")) cfg.equip2_max_power = clampFloat(get("EQUIP2_POWER").toFloat(), 0.0f, 20000.0f);
-    if (has("EQUIP2_PRIO")) cfg.equip2_priority = clampInt(get("EQUIP2_PRIO").toInt(), 0, 10);
+    if (has("EQUIP2_PRIO")) cfg.equip2_priority = clampInt(get("EQUIP2_PRIO").toInt(), 1, 2);
     if (has("EQUIP2_MIN_TIME")) cfg.equip2_min_on_time = clampInt(get("EQUIP2_MIN_TIME").toInt(), 0, 86400);
 
     // Strategy / PID
@@ -178,6 +178,15 @@ void WebManager::applyRequestParams(AsyncWebServerRequest *request, Config &cfg)
     if (has("JSY2_RX")) setRolePin(cfg.jsy2_rx, get("JSY2_RX").toInt(), PinRole::JSY2_RX);
     if (has("JSY_GRID_CHANNEL")) cfg.jsy_grid_channel = clampInt(get("JSY_GRID_CHANNEL").toInt(), 1, 2);
     if (has("JSY_EQUIP1_CHANNEL")) cfg.jsy_equip1_channel = clampInt(get("JSY_EQUIP1_CHANNEL").toInt(), 1, 2);
+
+    // LCD I2C
+    if (has("LCD_SDA_PIN")) setRolePin(cfg.lcd_sda_pin, get("LCD_SDA_PIN").toInt(), PinRole::LCD_SDA);
+    if (has("LCD_SCL_PIN")) setRolePin(cfg.lcd_scl_pin, get("LCD_SCL_PIN").toInt(), PinRole::LCD_SCL);
+    if (has("LCD_I2C_ADDR")) {
+        byte addr = get("LCD_I2C_ADDR").toInt();
+        if (isI2cAddressValid(addr)) cfg.lcd_i2c_addr = addr;
+        else Logger::warn("Rejected invalid I2C address " + String(addr, HEX));
+    }
 
     // Force / Night
     if (has("BOOST_MINUTES")) cfg.boost_minutes = get("BOOST_MINUTES").toInt();
@@ -690,6 +699,9 @@ void WebManager::setupRoutes() {
         doc["internal_led_pin"] = _config->internal_led_pin;
         doc["ssr_pin"] = _config->ssr_pin;
         doc["relay_pin"] = _config->relay_pin;
+        doc["lcd_sda_pin"] = _config->lcd_sda_pin;
+        doc["lcd_scl_pin"] = _config->lcd_scl_pin;
+        doc["lcd_i2c_addr"] = _config->lcd_i2c_addr;
         doc["e_weather"] = _config->e_weather;
         doc["weather_lat"] = _config->weather_lat;
         doc["weather_lon"] = _config->weather_lon;

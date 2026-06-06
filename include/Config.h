@@ -78,7 +78,7 @@ struct Config {
     int ssr_pin = 17;
     int relay_pin = 6;
     int ds18b20_pin = 16;
-    int fan_pin = 5;
+    int fan_pin = 18;
     int zx_pin = 15;
 
     // Shelly / Power Monitoring

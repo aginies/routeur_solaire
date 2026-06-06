@@ -2,6 +2,7 @@
 #include "Logger.h"
 #include "ActuatorManager.h"
 #include "TemperatureManager.h"
+#include "PinCapabilities.h"
 
 SystemState SafetyManager::currentState = SystemState::STATE_NORMAL;
 String SafetyManager::emergencyReason = "";
@@ -107,7 +108,9 @@ void SafetyManager::applyState(SystemState newState) {
             ActuatorManager::setDuty(0.0);
             // Immediate hardware silence — ControlStrategy will keep it LOW on subsequent ticks
             // because currentDuty is now 0.
-            digitalWrite(_config->ssr_pin, LOW);
+            if (isPinValidForRole(_config->ssr_pin, PinRole::SSR)) {
+                digitalWrite(_config->ssr_pin, LOW);
+            }
             ActuatorManager::openRelay();
             break;
 
@@ -127,7 +130,9 @@ void SafetyManager::applyState(SystemState newState) {
 
         case SystemState::STATE_NIGHT:
             ActuatorManager::setDuty(0.0);
-            digitalWrite(_config->ssr_pin, LOW);
+            if (isPinValidForRole(_config->ssr_pin, PinRole::SSR)) {
+                digitalWrite(_config->ssr_pin, LOW);
+            }
             ActuatorManager::openRelay();
             break;
 

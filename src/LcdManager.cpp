@@ -18,12 +18,18 @@ void LcdManager::init(const String& ssid, const String& ip, byte i2cAddr, int sd
 
     byte addr;
     bool found = false;
-    for (addr = 0; addr < 128; addr++) {
+    uint32_t scanStart = millis();
+    for (addr = 0x20; addr <= 0x27; addr++) {
         Wire.beginTransmission(addr);
         if (Wire.endTransmission() == 0) {
             if (addr == i2cAddr) {
                 found = true;
+                break;
             }
+        }
+        if (millis() - scanStart > 2000) {
+            Logger::error("LCD I2C scan timeout");
+            return;
         }
     }
 
