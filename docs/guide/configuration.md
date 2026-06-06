@@ -137,3 +137,12 @@ Ce mécanisme protège le stockage flash (LittleFS) contre l'usure prématurée 
 
 ### Authentification Web
 Le routeur peut exiger une authentification pour accéder aux pages de configuration et aux endpoints API via les champs `web_user` / `web_password`. Par défaut, aucun mot de passe n'est requis. Consultez la page [Sécurité & Maintenance](./safety.md) pour plus de détails sur l'authentification web et le mode vacances.
+
+### Écran LCD 1602A (I2C)
+
+Un écran LCD 1602A avec backpack I2C (PCF8574) peut être connecté sur les broches IO8 (SDA) et IO9 (SCL).
+
+- **Ligne 1** : Défilement du SSID Wi-Fi + adresse IP
+- **Ligne 2** : `P:XXXXW R:YYYYW` (puissance réseau / puissance redirigée)
+
+L'écran est activé par défaut (`e_lcd = true`). Si votre backpack utilise l'adresse `0x3F` au lieu de `0x27`, modifiez `lcd_i2c_addr` dans `config.json`. Au démarrage, le firmware scanne le bus I2C — si aucun périphérique n'est détecté, l'écran reste inactif sans planter le système.

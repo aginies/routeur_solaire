@@ -13,6 +13,7 @@
 #include "NetworkManager.h"
 #include "WebManager.h"
 #include "LedManager.h"
+#include "LcdManager.h"
 #include "Logger.h"
 #include "Utils.h"
 #include <esp_task_wdt.h>
@@ -317,6 +318,11 @@ void SolarMonitor::monitorTask(void* pvParameters) {
         // Yield CPU 1 so loopTask (priority 1) can pet its own WDT
         vTaskDelay(1);
         esp_task_wdt_reset();
+
+        // 6b. LCD Update
+        if (LcdManager::isEnabled()) {
+            LcdManager::update();
+        }
 
         // 7. Measured Power Update (Shelly 1PM)
         // Rate-limit Shelly1PM polling to ~once per 2 s.

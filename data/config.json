@@ -83,6 +83,11 @@
     "e_fan": false,
     "fan_temp_offset": 10,
 
+    "e_lcd": true,
+    "lcd_sda_pin": 8,
+    "lcd_scl_pin": 9,
+    "lcd_i2c_addr": 39,
+
     "jsy1_tx": 5,
     "jsy1_rx": 4,
     "jsy2_tx": 17,

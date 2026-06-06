@@ -14,10 +14,13 @@ enum class PinRole {
     JSY1_RX,
     JSY2_TX,
     JSY2_RX,
+    LCD_SDA,
+    LCD_SCL,
 };
 
 bool isPinValidForRole(int pin, PinRole role);
 String pinValidationReason(int pin, PinRole role);
 const char* pinRoleName(PinRole role);
+bool isI2cAddressValid(byte addr);
 
 #endif

@@ -281,7 +281,7 @@
                     <div class="value" id="totalExport">— kWh</div>
                 </div>
                 <div class="stat-box">
-                    <div class="label">Total Redirigé</div>
+                    <div class="label">Surplus Redirigé</div>
                     <div class="value" id="totalRedirect">— kWh</div>
                 </div>
                 <div class="stat-box">
@@ -496,13 +496,32 @@
                 }
             } else if (currentView === 'month') {
                 const prefix = selYear + '-' + selMonth;
-                const days = Object.keys(statsData).filter(d => d.startsWith(prefix)).sort();
-                hasData      = days.length > 0;
-                labels       = days.map(d => d.split('-')[2]);
-                importArr   = days.map(d => statsData[d].import / 1000);
-                redirectArr = days.map(d => statsData[d].redirect / 1000);
-                exportArr   = days.map(d => (statsData[d].export || 0) / 1000);
-                days.forEach(d => { totalActiveSecs += (statsData[d].active_time || 0); });
+                const targetMonth = parseInt(selMonth) - 1;
+                const targetYear = parseInt(selYear);
+                const daysInMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
+                const dataMap = {};
+                Object.keys(statsData).forEach(d => {
+                    if (d.startsWith(prefix)) dataMap[d.split('-')[2]] = statsData[d];
+                });
+                hasData = false;
+                labels = [];
+                importArr = [];
+                redirectArr = [];
+                exportArr = [];
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const ds = prefix + '-' + String(day).padStart(2, '0');
+                    labels.push(String(day));
+                    if (dataMap[ds]) {
+                        hasData = true;
+                        importArr.push(dataMap[ds].import / 1000);
+                        redirectArr.push(dataMap[ds].redirect / 1000);
+                        exportArr.push((dataMap[ds].export || 0) / 1000);
+                        totalActiveSecs += (dataMap[ds].active_time || 0);
+                    } else {
+                        importArr.push(0);
+                        redirectArr.push(0);
+                        exportArr.push(0);
+                    }
             } else if (currentView === 'year') {
                 const months = {};
                 Object.keys(statsData).filter(d => d.startsWith(selYear)).forEach(d => {
@@ -564,7 +583,7 @@
             segExp.style.width = pExp.toFixed(1) + '%';
 
             segImp.textContent = pImp > 12 ? 'Réseau ' + pImp.toFixed(0) + '%' : '';
-            segRed.textContent = pRed > 12 ? 'Redirigé ' + pRed.toFixed(0) + '%' : '';
+            segRed.textContent = pRed > 12 ? 'Dérourné ' + pRed.toFixed(0) + '%' : '';
             segExp.textContent = pExp > 12 ? 'Injecté ' + pExp.toFixed(0) + '%' : '';
 
             const isLight = document.body.classList.contains('light-mode');
@@ -593,7 +612,7 @@
                 series: [
                     {},
                     { label: 'Réseau (Import)', stroke: '#e74c3c', fill: 'rgba(231,76,60,0.7)', width: 0, paths: barsPlugin },
-                    { label: 'Solaire redirigé', stroke: '#2ecc71', fill: 'rgba(46,204,113,0.7)', width: 0, paths: barsPlugin },
+                    { label: 'Solaire dérourné', stroke: '#2ecc71', fill: 'rgba(46,204,113,0.7)', width: 0, paths: barsPlugin },
                     { label: 'Injecté (Export)', stroke: '#f1c40f', fill: 'rgba(241,196,15,0.7)', width: 0, paths: barsPlugin },
                 ],
             };

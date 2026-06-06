@@ -17,6 +17,7 @@ You can find all the necessary components for this PCB on AliExpress or other ma
 | **J2/J7: Headers** | 2.54mm Pin Headers / JST-XH | [Rechercher](https://www.aliexpress.com/wholesale?SearchText=JST+XH+2.54+header) |
 | **SW1/SW2: Buttons** | 6x6x5mm Tactile SMD 4-pin | [Produit](https://www.aliexpress.com/item/32858302188.html) |
 | **Passives** | 10µF Caps, 100nF Caps, 10k/4.7k Res | [Kit Assortment](https://www.aliexpress.com/wholesale?SearchText=0402+capacitor+resistor+assortment) |
+| **LCD Backpack** | LCD1602A + PCF8574 I2C module | [Rechercher](https://www.aliexpress.com/wholesale?SearchText=LCD1602A+PCF8574+I2C) |
 
 ---
 
@@ -43,6 +44,7 @@ You can find all the necessary components for this PCB on AliExpress or other ma
 | SW1 | Boot button | Tactile SMD 4-pin | 1 | GPIO0 to GND |
 | SW2 | Reset button | Tactile SMD 4-pin | 1 | EN to GND |
 | D1 | TVS diode | PRTR5V0U2X or USBLC6 | 1 | USB port protection |
+| J8 | LCD Display | 1602A + PCF8574 I2C backpack | 1 | VCC 3.3V, SDA/IO8, SCL/IO9 |
 
 ## ESP32-S3 Pin Map
 
@@ -61,6 +63,8 @@ You can find all the necessary components for this PCB on AliExpress or other ma
 | IO0 | Boot mode | 10kΩ -> 3V3, SW1 to GND | Must be HIGH at normal boot |
 | EN | Reset | 10kΩ -> 3V3, SW2 to GND | Active-low reset |
 | IO46 | Strapping | 10kΩ -> GND | Must be LOW at boot |
+| IO8 | I2C SDA | J8 LCD | SDA line for LCD1602A backpack |
+| IO9 | I2C SCL | J8 LCD | SCL line for LCD1602A backpack |
 | IO19/20 | Native USB | J1 USB-C | Fully available for Serial/DFU |
 
 
@@ -89,8 +93,9 @@ This map groups the central ESP32-S3 module's pins by their physical/logical fun
     FAN    <——───────(PWM Out)——│ IO7        IO46 │ ────->  [ R3 Pull-Down ]
                                 │                 │
     ( Sensing / UI )            │ [UI & SENSE]    │
-    TEMP DAT ◀───────(1-Wire)─> │ IO16            │ <────  [ R4 Pull-Up ]
-    (WS2812) ◀───────(Status)── │ IO48            │
+     TEMP DAT ◀──────(1-Wire)─> │ IO16            │ <────  [ R4 Pull-Up ]
+     (WS2812) ◀──────(Status)── │ IO48            │
+     (LCD I2C) ◀──────(SDA/SCL)─│ IO8 / IO9       │
                                 └─────────────────┘
 
 ---
@@ -219,6 +224,28 @@ It sits "in parallel" with your USB lines and must be connected as follows:
 ```
 
 **How it works**: Under normal conditions, the diode does nothing. But if a 1000V static spark enters through the USB port, the diode instantly "clamps" the voltage and dumps the excess energy to Ground (GND), saving your ESP32-S3 from being fried.
+
+---
+## LCD Display (Optional)
+
+An optional 1602A LCD module with a PCF8574 I2C backpack can be connected to display the WiFi SSID, IP address, and real-time power data.
+
+### Wiring (J8)
+
+```text
+  [ J8 CONNECTOR ]        [ LCD1602A BACKPACK ]
+        |                            |
+      (3.3V) ────────────> [ VCC ]
+      (GND ) ────────────> [ GND ]
+      (IO8  SDA) ────────> [ SDA ]
+      (IO9  SCL) ────────> [ SCL ]
+```
+
+### Configuration
+
+- **I2C Address**: Most backpacks use `0x27` (39). Some use `0x3F` (63). Scan the bus at boot to detect.
+- **Config fields**: `e_lcd` (enabled by default), `lcd_sda_pin` (8), `lcd_scl_pin` (9), `lcd_i2c_addr` (0x27).
+- **Display**: Line 1 scrolls "SSID IP"; Line 2 shows "P:XXXXW R:YYYYW".
 
 ---
 ## Power Stability (Capacitors C1-C8)

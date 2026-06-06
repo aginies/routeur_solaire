@@ -11,7 +11,7 @@ static bool isInList(int pin, const int* arr, size_t n) {
 }
 
 static bool isOutputRole(PinRole role) {
-    return role == PinRole::SSR || role == PinRole::RELAY || role == PinRole::FAN_PWM || role == PinRole::INTERNAL_LED;
+    return role == PinRole::SSR || role == PinRole::RELAY || role == PinRole::FAN_PWM || role == PinRole::INTERNAL_LED || role == PinRole::LCD_SDA || role == PinRole::LCD_SCL;
 }
 
 static bool isInputRole(PinRole role) {
@@ -23,6 +23,13 @@ static bool isTxRole(PinRole role) {
 }
 
 } // namespace
+
+bool isI2cAddressValid(byte addr) {
+    if (addr < 0x08) return false;
+    if (addr > 0x77) return false;
+    if (addr & 0x01) return false;
+    return true;
+}
 
 const char* pinRoleName(PinRole role) {
     switch (role) {
@@ -36,6 +43,8 @@ const char* pinRoleName(PinRole role) {
         case PinRole::JSY1_RX: return "jsy1_rx";
         case PinRole::JSY2_TX: return "jsy2_tx";
         case PinRole::JSY2_RX: return "jsy2_rx";
+        case PinRole::LCD_SDA: return "lcd_sda_pin";
+        case PinRole::LCD_SCL: return "lcd_scl_pin";
     }
     return "pin";
 }

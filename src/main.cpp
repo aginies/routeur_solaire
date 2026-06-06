@@ -9,6 +9,7 @@
 #include "WebManager.h"
 #include "MqttManager.h"
 #include "LedManager.h"
+#include "LcdManager.h"
 #include "StatsManager.h"
 #include "WeatherManager.h"
 
@@ -126,6 +127,9 @@ void setup() {
     { size_t b = logHeapBefore("LedManager");      LedManager::init(config);     logHeapAfter("LedManager", b); }
     { size_t b = logHeapBefore("NetworkManager");  NetworkManager::init(config); logHeapAfter("NetworkManager", b); }
     Logger::info("WiFi IP: " + NetworkManager::getIP());
+    if (config.e_lcd) {
+        { size_t b = logHeapBefore("LcdManager");  LcdManager::init(config.wifi_ssid, NetworkManager::getIP(), config.lcd_i2c_addr, config.lcd_sda_pin, config.lcd_scl_pin);  logHeapAfter("LcdManager", b); }
+    }
     Logger::info("MQTT broker: " + config.mqtt_ip + ":" + String(config.mqtt_port));
     { size_t b = logHeapBefore("MqttManager");     MqttManager::init(config);    logHeapAfter("MqttManager", b); }
     { size_t b = logHeapBefore("WebManager");      WebManager::init(config);     logHeapAfter("WebManager", b); }

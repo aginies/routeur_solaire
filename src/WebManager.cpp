@@ -448,8 +448,12 @@ void WebManager::setupRoutes() {
                 Logger::info("Stats upload complete (" + String(uploadedBytes) + " bytes)");
 #ifndef DISABLE_STATS
                 StatsManager::_importInProgress = true;
+                StatsManager::resetNvsOnImport();
 #endif
                 setStatus(0);
+#ifndef DISABLE_STATS
+                StatsManager::_importInProgress = false;
+#endif
             } else {
                 Logger::error("Stats upload: rename failed");
                 LittleFS.remove("/stats_upload.json");
@@ -1039,6 +1043,15 @@ void WebManager::streamStatusJson(AsyncWebServerRequest *request) {
     addPinValidation("jsy1_rx", _config->jsy1_rx, PinRole::JSY1_RX);
     addPinValidation("jsy2_tx", _config->jsy2_tx, PinRole::JSY2_TX);
     addPinValidation("jsy2_rx", _config->jsy2_rx, PinRole::JSY2_RX);
+    addPinValidation("lcd_sda_pin", _config->lcd_sda_pin, PinRole::LCD_SDA);
+    addPinValidation("lcd_scl_pin", _config->lcd_scl_pin, PinRole::LCD_SCL);
+    JsonObject i2cValidation = doc["i2c_validation"].to<JsonObject>();
+    JsonObject lcdI2c = i2cValidation["lcd_i2c"].to<JsonObject>();
+    lcdI2c["address"] = _config->lcd_i2c_addr;
+    lcdI2c["valid"] = isI2cAddressValid(_config->lcd_i2c_addr);
+    if (!isI2cAddressValid(_config->lcd_i2c_addr)) {
+        lcdI2c["reason"] = "I2C address out of valid range (expected 0x08-0x77, even only)";
+    }
     doc["pin_validation_ok"] = allPinsValid;
     
     time_t t_now_epoch;
