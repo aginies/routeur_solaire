@@ -139,18 +139,18 @@ void Shelly1PMManager::update() {
 
     // MQTT handover for Eq1
     if (_config->e_equip1 && _config->e_equip1_mqtt && MqttManager::hasLatestMqttEq1Power) {
-        _dev1.currentPower = MqttManager::latestMqttEq1Power;
+        _dev1.currentPower = MqttManager::latestMqttEq1Power.load();
         _dev1.lastUpdate = now;
         _dev1.online = true;
-        MqttManager::hasLatestMqttEq1Power = false;
+        MqttManager::hasLatestMqttEq1Power.store(false);
     }
 
     // MQTT handover for Eq2
     if (_config->e_equip2 && _config->e_equip2_mqtt && MqttManager::hasLatestMqttEq2Power) {
-        _dev2.currentPower = MqttManager::latestMqttEq2Power;
+        _dev2.currentPower = MqttManager::latestMqttEq2Power.load();
         _dev2.lastUpdate = now;
         _dev2.online = true;
-        MqttManager::hasLatestMqttEq2Power = false;
+        MqttManager::hasLatestMqttEq2Power.store(false);
     }
 }
 

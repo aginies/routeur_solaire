@@ -212,7 +212,7 @@ void WebManager::applyRequestParams(AsyncWebServerRequest *request, Config &cfg)
     if (has("WEATHER_LON")) cfg.weather_lon = get("WEATHER_LON").substring(0, 16);
     if (has("WEATHER_THRESH")) cfg.weather_cloud_threshold = clampInt(get("WEATHER_THRESH").toInt(), 0, 100);
     if (has("SOLAR_PANEL_POWER")) cfg.solar_panel_power = clampInt(get("SOLAR_PANEL_POWER").toInt(), 0, 50000);
-    if (has("SOLAR_PANEL_AZIMUTH")) cfg.solar_panel_azimuth = clampInt(get("SOLAR_PANEL_AZIMUTH").toInt(), 0, 360);
+    if (has("SOLAR_PANEL_AZIMUTH")) cfg.solar_panel_azimuth = clampInt(get("SOLAR_PANEL_AZIMUTH").toInt(), 0, 359);
     if (has("SOLAR_PANEL_TILT")) cfg.solar_panel_tilt = clampInt(get("SOLAR_PANEL_TILT").toInt(), 0, 90);
     if (has("SOLAR_LOSS_FACTOR")) cfg.solar_loss_factor = clampInt(get("SOLAR_LOSS_FACTOR").toInt(), 0, 90);
 
@@ -788,6 +788,11 @@ void WebManager::setupRoutes() {
     _server.on("/RESET_config", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
         ConfigManager::reset();
+        Logger::flushAll();
+#ifndef DISABLE_STATS
+        StatsManager::save();
+        HistoryBuffer::save();
+#endif
         request->send(200, "text/plain", "Configuration effacée. Redémarrage en cours...");
         _rebootRequested = true;
     });

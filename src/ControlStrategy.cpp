@@ -321,11 +321,11 @@ void IRAM_ATTR ControlStrategy::handleZxInterrupt() {
                 } else {
                     _fireFullCycle = false;
                 }
+                ActuatorManager::equipmentActive = _fireFullCycle;
                 portEXIT_CRITICAL_ISR(&_controlMux);
                 _lastTrameDecisionUs = nowUs;
             }
             ssrSetFromIsr(ActuatorManager::ssrPin, _fireFullCycle);
-            ActuatorManager::equipmentActive = _fireFullCycle;
         } else {
             // "Cycle Stealing" Mode: Half Cycle switching for maximum resolution.
             // Note: can create DC offset hum on some grids/transformers.
@@ -336,8 +336,9 @@ void IRAM_ATTR ControlStrategy::handleZxInterrupt() {
                 _accumulator -= 1000;
                 on = true;
             }
-            ssrSetFromIsr(ActuatorManager::ssrPin, on);
             ActuatorManager::equipmentActive = on;
+            ssrSetFromIsr(ActuatorManager::ssrPin, on);
+            portEXIT_CRITICAL_ISR(&_controlMux);
         }
     }
 

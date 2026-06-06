@@ -236,7 +236,7 @@ void SolarMonitor::monitorTask(void* pvParameters) {
                     //   If error is large (> dynamic_threshold_w), react instantly.
                     //   If fine-tuning near 0W, wait 2 messages for stabilization.
                     bool isJsy = GridSensorService::isJsyActive();
-                    bool largeError = (abs(effectiveGrid) > _config->dynamic_threshold_w);
+                    bool largeError = (fabsf(effectiveGrid) > _config->dynamic_threshold_w);
                     int requiredMessages = (isJsy || largeError) ? 1 : 2;
 
                     freshDataCounter++;

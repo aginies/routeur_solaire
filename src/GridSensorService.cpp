@@ -160,13 +160,13 @@ bool GridSensorService::fetchGridData() {
     // Shelly MQTT Method
     else if (_config->e_shelly_mqtt) {
         if (MqttManager::hasLatestMqttGridPower) {
-            gridPower = MqttManager::latestMqttGridPower;
+            gridPower = MqttManager::latestMqttGridPower.load();
             // Clamp upper bound on voltage too
-            float v = MqttManager::latestMqttGridVoltage;
+            float v = MqttManager::latestMqttGridVoltage.load();
             if (v > 100.0f && v < 300.0f) {
                 currentGridVoltage = v;
             }
-            MqttManager::hasLatestMqttGridPower = false;
+            MqttManager::hasLatestMqttGridPower.store(false);
             fresh = true;
         }
     }

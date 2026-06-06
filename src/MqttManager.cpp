@@ -21,12 +21,12 @@ espMqttClient MqttManager::_mqttClient;
 const Config* MqttManager::_config = nullptr;
 String MqttManager::_nodeId = "";
 String MqttManager::_lwtTopic = "";
-float MqttManager::latestMqttGridPower = 0.0;
-float MqttManager::latestMqttGridVoltage = 230.0;
+std::atomic<float> MqttManager::latestMqttGridPower{0.0f};
+std::atomic<float> MqttManager::latestMqttGridVoltage{230.0f};
 std::atomic<bool> MqttManager::hasLatestMqttGridPower{false};
-float MqttManager::latestMqttEq1Power = 0.0f;
+std::atomic<float> MqttManager::latestMqttEq1Power{0.0f};
 std::atomic<bool> MqttManager::hasLatestMqttEq1Power{false};
-float MqttManager::latestMqttEq2Power = 0.0f;
+std::atomic<float> MqttManager::latestMqttEq2Power{0.0f};
 std::atomic<bool> MqttManager::hasLatestMqttEq2Power{false};
 uint32_t MqttManager::_lastReconnectAttempt = 0;
 
@@ -168,8 +168,8 @@ void MqttManager::onMqttMessage(const espMqttClientTypes::MessageProperties& pro
 
     if (_config->e_shelly_mqtt && _config->shelly_mqtt_topic.length() > 0) {
         if (strcmp(topic, _config->shelly_mqtt_topic.c_str()) == 0) {
-            latestMqttGridPower = atof(buffer);
-            hasLatestMqttGridPower = true;
+            latestMqttGridPower.store(atof(buffer));
+            hasLatestMqttGridPower.store(true);
             return;
         }
 
@@ -183,21 +183,21 @@ void MqttManager::onMqttMessage(const espMqttClientTypes::MessageProperties& pro
             float v = atof(buffer);
             // Widen accepted range to cover 100V regions and brown-out edges.
             if (v >= 90.0 && v <= 280.0) {
-                latestMqttGridVoltage = v;
+                latestMqttGridVoltage.store(v);
             }
             return;
         }
     }
 
     if (_config->e_equip1_mqtt && _config->equip1_mqtt_topic.length() > 0 && strcmp(topic, _config->equip1_mqtt_topic.c_str()) == 0) {
-        latestMqttEq1Power = parseShellySwitchPower(payload, len);
-        hasLatestMqttEq1Power = true;
+        latestMqttEq1Power.store(parseShellySwitchPower(payload, len));
+        hasLatestMqttEq1Power.store(true);
         return;
     }
 
     if (_config->e_equip2_mqtt && _config->equip2_mqtt_topic.length() > 0 && strcmp(topic, _config->equip2_mqtt_topic.c_str()) == 0) {
-        latestMqttEq2Power = parseShellySwitchPower(payload, len);
-        hasLatestMqttEq2Power = true;
+        latestMqttEq2Power.store(parseShellySwitchPower(payload, len));
+        hasLatestMqttEq2Power.store(true);
         return;
     }
 }

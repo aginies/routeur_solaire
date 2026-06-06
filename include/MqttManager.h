@@ -13,12 +13,12 @@ public:
                               bool forceMode, float equipmentPercent,
                               float esp32Temp, bool fanActive, float ssrTemp, int fanPercent);
     static bool isConnected();
-    static float latestMqttGridPower;
-    static float latestMqttGridVoltage;
+    static std::atomic<float> latestMqttGridPower;
+    static std::atomic<float> latestMqttGridVoltage;
     static std::atomic<bool> hasLatestMqttGridPower;
-    static float latestMqttEq1Power;
+    static std::atomic<float> latestMqttEq1Power;
     static std::atomic<bool> hasLatestMqttEq1Power;
-    static float latestMqttEq2Power;
+    static std::atomic<float> latestMqttEq2Power;
     static std::atomic<bool> hasLatestMqttEq2Power;
 
 private:
