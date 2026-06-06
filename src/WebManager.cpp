@@ -32,7 +32,7 @@ SemaphoreHandle_t WebManager::_httpMutex = nullptr;
 const Config* WebManager::_config = nullptr;
 uint32_t WebManager::_lastRebootTime[7] = {0};  // cooldown per action enum index (zeroed in init())
 static Config _cfg_copy;  // persistent copy, survives beyond init() caller scope
-bool WebManager::_rebootRequested = false;
+volatile bool WebManager::_rebootRequested = false;
 
 void WebManager::init(const Config& config) {
     memset(_lastRebootTime, 0, sizeof(_lastRebootTime));
@@ -443,7 +443,6 @@ void WebManager::setupRoutes() {
         if (final) {
             uploadFile.close();
             // Atomic replace of stats.json
-            LittleFS.remove("/stats.json");
             if (LittleFS.rename("/stats_upload.json", "/stats.json")) {
                 Logger::info("Stats upload complete (" + String(uploadedBytes) + " bytes)");
 #ifndef DISABLE_STATS
