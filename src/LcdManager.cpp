@@ -12,7 +12,12 @@ uint32_t LcdManager::_lastScroll = 0;
 
 static LiquidCrystal_PCF8574* _lcd = nullptr;
 
-void LcdManager::init(const String& ssid, const String& ip, byte i2cAddr, int sdaPin, int sclPin) {
+void LcdManager::init(const String& ssid, const String& ip, byte i2cAddr, int sdaPin, int sclPin, uint8_t cols, uint8_t rows) {
+    if (_lcd) {
+        delete _lcd;
+        _lcd = nullptr;
+    }
+
     Wire.begin(sdaPin, sclPin);
     Wire.setClock(100000);
 
@@ -40,7 +45,7 @@ void LcdManager::init(const String& ssid, const String& ip, byte i2cAddr, int sd
     }
 
     _lcd = new LiquidCrystal_PCF8574(i2cAddr);
-    _lcd->begin(16, 2, Wire);
+    _lcd->begin(cols, rows, Wire);
     _lcd->setBacklight(255);
     _lcd->home();
     _lcd->clear();

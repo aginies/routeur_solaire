@@ -187,6 +187,8 @@ void WebManager::applyRequestParams(AsyncWebServerRequest *request, Config &cfg)
         if (isI2cAddressValid(addr)) cfg.lcd_i2c_addr = addr;
         else Logger::warn("Rejected invalid I2C address " + String(addr, HEX));
     }
+    if (has("LCD_COLS")) cfg.lcd_cols = clampInt(get("LCD_COLS").toInt(), 8, 40);
+    if (has("LCD_ROWS")) cfg.lcd_rows = clampInt(get("LCD_ROWS").toInt(), 1, 4);
 
     // Force / Night
     if (has("BOOST_MINUTES")) cfg.boost_minutes = get("BOOST_MINUTES").toInt();
@@ -702,6 +704,8 @@ void WebManager::setupRoutes() {
         doc["lcd_sda_pin"] = _config->lcd_sda_pin;
         doc["lcd_scl_pin"] = _config->lcd_scl_pin;
         doc["lcd_i2c_addr"] = _config->lcd_i2c_addr;
+        doc["lcd_cols"] = _config->lcd_cols;
+        doc["lcd_rows"] = _config->lcd_rows;
         doc["e_weather"] = _config->e_weather;
         doc["weather_lat"] = _config->weather_lat;
         doc["weather_lon"] = _config->weather_lon;
@@ -1062,7 +1066,7 @@ void WebManager::streamStatusJson(AsyncWebServerRequest *request) {
     lcdI2c["address"] = _config->lcd_i2c_addr;
     lcdI2c["valid"] = isI2cAddressValid(_config->lcd_i2c_addr);
     if (!isI2cAddressValid(_config->lcd_i2c_addr)) {
-        lcdI2c["reason"] = "I2C address out of valid range (expected 0x08-0x77, even only)";
+        lcdI2c["reason"] = "I2C address out of valid range (expected 0x08-0x77)";
     }
     doc["pin_validation_ok"] = allPinsValid;
     
