@@ -244,10 +244,10 @@ void Logger::rotate(const char* filename) {
 }
 
 #ifndef NATIVE_TEST
-// Snapshot the in-memory buffer under the mutex, then release it
-// BEFORE doing any file I/O or response streaming. Holding the recursive
-// mutex during AsyncResponseStream writes can block writer tasks for
-// hundreds of ms (or longer if the HTTP client is slow).
+// Snapshot buffer and file content under the mutex to prevent race with rotate().
+// File I/O happens under lock so rotate() cannot rename the file between
+// the snapshot and the streaming. Mutex is released before AsyncResponseStream
+// writes to avoid blocking writer tasks during slow HTTP transfers.
 void Logger::streamLogs(AsyncWebServerRequest *request) {
     if (!_mutex || xSemaphoreTakeRecursive(_mutex, pdMS_TO_TICKS(500)) != pdTRUE) {
         request->send(503, "text/plain", "Logger busy");
