@@ -42,6 +42,7 @@ public:
 #ifndef NATIVE_TEST
     static void streamStatsJson(AsyncWebServerRequest *request);
     static bool _importInProgress;
+    static void resetNvsOnImport();
 #endif
 
     static float totalImportToday;

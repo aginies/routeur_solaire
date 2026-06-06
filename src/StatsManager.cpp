@@ -68,6 +68,20 @@ static void persistNvsTotals(const String& dayKey) {
     }
 }
 
+static void resetNvsTotals() {
+    if (prefs.begin("solar_stats", false)) {
+        prefs.putFloat("import", 0);
+        prefs.putFloat("redirect", 0);
+        prefs.putFloat("export", 0);
+        prefs.putString("last_day", cachedTodayKey());
+        prefs.end();
+    }
+}
+
+void StatsManager::resetNvsOnImport() {
+    resetNvsTotals();
+}
+
 // PSRAM Allocator for ArduinoJson: deserializing 365 days of stats
 // can take >400KB of AST memory, exhausting internal SRAM.
 #ifndef NATIVE_TEST

@@ -448,8 +448,12 @@ void WebManager::setupRoutes() {
                 Logger::info("Stats upload complete (" + String(uploadedBytes) + " bytes)");
 #ifndef DISABLE_STATS
                 StatsManager::_importInProgress = true;
+                StatsManager::resetNvsOnImport();
 #endif
                 setStatus(0);
+#ifndef DISABLE_STATS
+                StatsManager::_importInProgress = false;
+#endif
             } else {
                 Logger::error("Stats upload: rename failed");
                 LittleFS.remove("/stats_upload.json");
