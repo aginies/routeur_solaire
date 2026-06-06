@@ -107,7 +107,9 @@ elif [ "$ENV" == "wroom" ]; then
         cp data/config_wroom.json data/config.json
     fi
 elif [ "$ENV" == "native" ]; then
-    echo "Environment 'native' selected. Running tests only."
+    echo "--- RUNNING UNIT TESTS (NATIVE) ---"
+    pio test -e native
+    echo "--- TESTS PASSED ---"
     exit 0
 else
     echo "Error: Invalid environment '$ENV'. Use 's3', 'wroom', or 'native'."
