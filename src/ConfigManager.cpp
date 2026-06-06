@@ -132,6 +132,16 @@ Config ConfigManager::load() {
     if (has(doc, "ds18b20_pin")) config.ds18b20_pin = validatePinRole(doc["ds18b20_pin"].as<int>(), config.ds18b20_pin, PinRole::DS18B20);
     if (has(doc, "fan_pin"))     config.fan_pin     = validatePinRole(doc["fan_pin"].as<int>(),     config.fan_pin,     PinRole::FAN_PWM);
     if (has(doc, "zx_pin"))      config.zx_pin      = validatePinRole(doc["zx_pin"].as<int>(),      config.zx_pin,      PinRole::ZX_INPUT);
+    if (has(doc, "lcd_sda_pin")) config.lcd_sda_pin = validatePinRole(doc["lcd_sda_pin"].as<int>(), config.lcd_sda_pin, PinRole::LCD_SDA);
+    if (has(doc, "lcd_scl_pin")) config.lcd_scl_pin = validatePinRole(doc["lcd_scl_pin"].as<int>(), config.lcd_scl_pin, PinRole::LCD_SCL);
+    if (has(doc, "lcd_i2c_addr")) {
+        byte raw = doc["lcd_i2c_addr"].as<byte>();
+        if (isI2cAddressValid(raw)) {
+            config.lcd_i2c_addr = raw;
+        } else {
+            Logger::warn(String("ConfigManager: invalid lcd_i2c_addr (") + String(raw, HEX) + "), using default 0x27");
+        }
+    }
 
     // Shelly
     if (has(doc, "shelly_em_ip")) config.shelly_em_ip = doc["shelly_em_ip"].as<String>();
