@@ -161,6 +161,12 @@ struct Config {
     bool e_fan = true;
     int fan_temp_offset = 10;
 
+    // LCD Display
+    bool e_lcd = true;
+    int lcd_sda_pin = 8;
+    int lcd_scl_pin = 9;
+    byte lcd_i2c_addr = 0x27;
+
     // Watchdog
     int shelly_timeout = 2;
     int safety_timeout = 10;
