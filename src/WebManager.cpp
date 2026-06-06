@@ -556,9 +556,10 @@ void WebManager::setupRoutes() {
         Config newCfg = *_config;
         applyRequestParams(request, newCfg);
         
-        if (ConfigManager::save(newCfg) && requestReboot(RebootAction::SaveConfigEq2)) {
+        bool saved = ConfigManager::save(newCfg);
+        if (saved && requestReboot(RebootAction::SaveConfigEq2)) {
             request->send(200, "text/plain", "OK");
-        } else if (!ConfigManager::save(newCfg)) {
+        } else if (!saved) {
             request->send(500);
         } else {
             // save succeeded but reboot throttled
