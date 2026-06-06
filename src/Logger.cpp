@@ -104,15 +104,14 @@ void Logger::log(const String& message, LogLevel level, bool critical) {
         shouldFlush = (_logBuffer.size() >= 50);
     }
 
+    if (critical || shouldFlush) {
+        flushAll();
+    }
     xSemaphoreGiveRecursive(_mutex);
 
     if (dropped > 0) {
         Serial.printf("[WARN] Logger: log buffer cap reached, dropped %u oldest entries\n",
                       (unsigned)dropped);
-    }
-
-    if (critical || shouldFlush) {
-        flushAll();
     }
 }
 
@@ -127,12 +126,12 @@ void Logger::logData(const String& message) {
     _dataBuffer.push_back(message);
     size_t dropped = capBuffer(_dataBuffer, "data");
     bool shouldFlush = (_dataBuffer.size() >= 50);
+    if (shouldFlush) flushAll();
     xSemaphoreGiveRecursive(_mutex);
     if (dropped > 0) {
         Serial.printf("[WARN] Logger: data buffer cap reached, dropped %u oldest entries\n",
                       (unsigned)dropped);
     }
-    if (shouldFlush) flushAll();
 }
 #endif
 
@@ -167,9 +166,12 @@ void Logger::flushFile(const char* filename, std::vector<String>& buffer) {
 
     rotate(filename);
 
-    File file = LittleFS.open(filename, "a");
+    // Atomic write: write to tmp file then rename (same pattern as ConfigManager/StatsManager)
+    String tmpFile = String(filename) + ".tmp";
+    File file = LittleFS.open(tmpFile, "w");
     if (!file) {
-        file = LittleFS.open(filename, "w");
+        LittleFS.remove(tmpFile);
+        file = LittleFS.open(tmpFile, "a");
     }
 
     if (file) {
@@ -177,11 +179,19 @@ void Logger::flushFile(const char* filename, std::vector<String>& buffer) {
             file.println(entry);
         }
         file.close();
-        buffer.clear(); // Only drop entries on success
+
+        // Atomically replace the log file
+        if (!LittleFS.rename(tmpFile, filename)) {
+            LittleFS.remove(tmpFile);
+            Serial.printf("[ERROR] Logger: rename failed for %s (%u entries kept in buffer)\n",
+                          filename, (unsigned)buffer.size());
+            return;
+        }
+        buffer.clear();
     } else {
+        LittleFS.remove(tmpFile);
         Serial.printf("[ERROR] Logger: Failed to open %s for writing (%u entries kept in buffer)\n",
                       filename, (unsigned)buffer.size());
-        // Keep buffer; cap will trim it on next push if it grows unbounded.
         capBuffer(buffer, filename);
     }
 
@@ -244,17 +254,14 @@ void Logger::streamLogs(AsyncWebServerRequest *request) {
         return;
     }
     std::vector<String> snapshot = _logBuffer; // copy under lock
-    xSemaphoreGiveRecursive(_mutex);
 
-    AsyncResponseStream *response = request->beginResponseStream("text/plain");
-
+    // Snapshot file content under mutex to avoid race with rotate()
+    String fileContent;
     File file = LittleFS.open(_logFile, "r");
     if (file) {
         size_t size = file.size();
         if (size > 8192) {
-            // Align to next newline so the first visible line isn't truncated mid-text.
             file.seek(size - 8192);
-            // Read up to 256 bytes searching for '\n'; if none, fall back to the raw seek.
             int c;
             int scanned = 0;
             while (scanned < 256 && (c = file.read()) != -1) {
@@ -265,10 +272,14 @@ void Logger::streamLogs(AsyncWebServerRequest *request) {
         while (file.available()) {
             uint8_t buf[512];
             size_t len = file.read(buf, sizeof(buf));
-            response->write(buf, len);
+            fileContent += (const char*)buf;
         }
         file.close();
     }
+    xSemaphoreGiveRecursive(_mutex);
+
+    AsyncResponseStream *response = request->beginResponseStream("text/plain");
+    response->print(fileContent);
     for (const auto& entry : snapshot) {
         response->print(entry);
         response->print("\n");
@@ -283,16 +294,14 @@ void Logger::streamDataLogs(AsyncWebServerRequest *request) {
         return;
     }
     std::vector<String> snapshot = _dataBuffer; // copy under lock
-    xSemaphoreGiveRecursive(_mutex);
 
-    AsyncResponseStream *response = request->beginResponseStream("text/plain");
-
+    // Snapshot file content under mutex to avoid race with rotate()
+    String fileContent;
     File file = LittleFS.open(_dataFile, "r");
     if (file) {
         size_t size = file.size();
         if (size > 8192) {
             file.seek(size - 8192);
-            // Align to newline
             int c;
             int scanned = 0;
             while (scanned < 256 && (c = file.read()) != -1) {
@@ -303,10 +312,14 @@ void Logger::streamDataLogs(AsyncWebServerRequest *request) {
         while (file.available()) {
             uint8_t buf[512];
             size_t len = file.read(buf, sizeof(buf));
-            response->write(buf, len);
+            fileContent += (const char*)buf;
         }
         file.close();
     }
+    xSemaphoreGiveRecursive(_mutex);
+
+    AsyncResponseStream *response = request->beginResponseStream("text/plain");
+    response->print(fileContent);
     for (const auto& entry : snapshot) {
         response->print(entry);
         response->print("\n");
