@@ -38,6 +38,8 @@ Voici les branchements recommandés pour les cartes de développement courantes.
 | **UART1 (JSY #1)** | `TX=4, RX=5` | `TX=15, RX=18` | Premier compteur JSY-194G |
 | **UART2 (JSY #2)** | `TX=17, RX=16` | `TX=33, RX=32` | Second compteur JSY-194G |
 | **LED WS2812** | `48` | `2` | LED interne addressable (NeoPixel) |
+| **LCD I2C SDA** | `8` | `8` | Broche SDA pour écran LCD1602A + backpack PCF8574 |
+| **LCD I2C SCL** | `9` | `9` | Broche SCL pour écran LCD1602A + backpack PCF8574 |
 
 ## Notes importantes
 
@@ -75,6 +77,37 @@ Pour activer le mode USB-CDC natif :
 Le port USB natif prend environ **1 seconde** à s'énumérer après l'alimentation du module. Sans ce délai, les impressions logiques des premiers millisecondes sont perdues. Le firmware intègre un `delay(200)` en début de setup pour attendre la première partie de l'enumeration.
 
 > **Note :** En mode USB-CDC natif, les broches IO19/IO20 (USB D-/D+) ne sont plus disponibles comme GPIOs standard. Si vous avez besoin de ces pins pour des périphériques externes, restez en mode UART-serial classique.
+
+## Afficheur LCD 1602A (I2C)
+
+Le routeur supporte un afficheur LCD 1602A connecté via un backpack I2C basé sur le circuit PCF8574.
+
+### Branchement
+
+| Signal | Broche ESP32-S3 | Connexion |
+| :--- | :---: | --- |
+| **VCC** | `3.3V` | Alimentation 3.3 V |
+| **GND** | `GND` | Masse commune |
+| **SDA** | `IO8` | Ligne de données I2C |
+| **SCL** | `IO9` | Horloge I2C |
+
+### Configuration
+
+| Paramètre | Valeur par défaut | Description |
+|-----------|-------------------|-------------|
+| `e_lcd` | `true` | Active l'afficheur |
+| `lcd_sda_pin` | `8` | Broche SDA I2C |
+| `lcd_scl_pin` | `9` | Broche SCL I2C |
+| `lcd_i2c_addr` | `0x27` (39) | Adresse I2C du backpack PCF8574 |
+
+### Affichage
+
+- **Ligne 1** : Défilement du SSID Wi-Fi et de l'adresse IP (ex: `MonReseau 192.168.1.60`)
+- **Ligne 2** : `P:XXXXW R:YYYYW` — `P` = puissance réseau consommée, `R` = puissance redirigée
+
+L'initialisation scanne le bus I2C au démarrage. Si le périphérique n'est pas trouvé, un avertissement est journalisé et l'afficheur reste inactif sans planter le système.
+
+> **Adresse I2C :** La plupart des backpacks PCF8574 utilisent `0x27` (39). Certains utilisent `0x3F` (63). Si l'afficheur ne s'allume pas, essayez `lcd_i2c_addr: 63` dans `config.json`.
 
 ## Guide de Construction PCB
 

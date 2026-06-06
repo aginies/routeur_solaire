@@ -8,6 +8,7 @@ This C++ version is a **migration from the original MicroPython implementation f
 
 ## Key Features
 
+- **I2C LCD Display**: Optional 1602A LCD with I2C backpack scrolls WiFi SSID + IP on line 1, shows grid power (P) and redirected power (R) on line 2.
 - **High-Speed Diversion**: Implements a highly responsive power diversion algorithm (burst-fire/trame mode) to match excess solar production with a resistive load.
 - **Multi-Source Monitoring**: Supports data acquisition from Shelly EM (via HTTP or MQTT) and JSY-MK-194 (via UART). Equipment power measurement via Shelly Plus 1PM (HTTP or MQTT).
 - **Asynchronous Web Server**: Provides a rich web interface with a **sidebar-based configuration menu** for real-time monitoring, logging, and easy navigation between settings.
@@ -58,9 +59,13 @@ This C++ version is a **migration from the original MicroPython implementation f
         └───────────────────────────────────────────────────────────────┘
         
   ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌────────────┐
-  │ tempTask    │  │ ledTask     │  │ statsTask   │  │weatherTask │
-  │ Core 0/prim1│  │ Core 0/prim1│  │ Core 0/prim2│  │Core 0/prim1│
-  └─────────────┘  └─────────────┘  └─────────────┘  └────────────┘
+   │ tempTask    │  │ ledTask     │  │ statsTask   │  │weatherTask │
+   │ Core 0/prim1│  │ Core 0/prim1│  │ Core 0/prim2│  │Core 0/prim1│
+   └─────────────┘  └─────────────┘  └─────────────┘  └────────────┘
+   ┌─────────────┐
+   │ lcdTask     │
+   │ Core 1/prim3│
+   └─────────────┘
   
   ┌────────────────────────────────────────────────────────────────┐
   │  ESPAsyncWebServer (port 80) · MQTT (espMqttClient) · WiFi     │
@@ -339,6 +344,8 @@ Default values are shown. All fields are editable via the Web UI.
 | `ds18b20_pin` | int | `14` | DS18B20 temperature sensor pin (1-Wire) |
 | `fan_pin` | int | `5` | Fan PWM output pin (LEDC channel 4) |
 | `zx_pin` | int | `15` | Zero-crossing detection input (interrupt) |
+| `lcd_sda_pin` | int | `8` | I2C SDA pin for LCD1602A backpack |
+| `lcd_scl_pin` | int | `9` | I2C SCL pin for LCD1602A backpack |
 
 ### Power Monitoring
 | Field | Type | Default | Description |
@@ -420,6 +427,12 @@ Default values are shown. All fields are editable via the Web UI.
 | `ssr_max_temp` | float | `65.0` | SSR overheating threshold (°C) |
 | `e_fan` | bool | `true` | Enable automatic fan control |
 | `fan_temp_offset` | int | `10` | Fan start temp below ssr_max (°C) |
+
+### LCD Display (I2C)
+| Field | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `e_lcd` | bool | `true` | Enable 1602A LCD with I2C backpack |
+| `lcd_i2c_addr` | byte | `0x27` | I2C address of PCF8574 backpack (39 decimal) |
 
 ### JSY-MK-194 (Wired Measurement)
 | Field | Type | Default | Description |
@@ -512,6 +525,8 @@ The system exposes **six distinct web pages** for configuration and monitoring:
 | **UART1 RX/TX (JSY1)** | `4/5` | `18/15` | JSY-MK-194 RX/TX (4800 baud, 8N1) |
 | **UART2 RX/TX (JSY2)** | `16/17` | `32/33` | Second JSY-MK-194 RX/TX |
 | **NeoPixel** | `48` | `2` | Onboard WS2812 LED |
+| **LCD SDA** | `8` | `8` | I2C SDA — LCD1602A backpack (PCF8574) |
+| **LCD SCL** | `9` | `9` | I2C SCL — LCD1602A backpack (PCF8574) |
 
 > **Note: Config defaults vs. Wiring.** The Wiring Guide columns show the recommended physical pin assignments for each board target (used on this custom PCB). These differ from the `Config` struct defaults (e.g., `ssr_pin=12`), which are generic starting values for any build. When migrating from one board target to another, update both your wiring **and** the `Config` fields accordingly.
 
