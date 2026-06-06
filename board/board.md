@@ -93,10 +93,10 @@ This map groups the central ESP32-S3 module's pins by their physical/logical fun
     FAN    <——───────(PWM Out)——│ IO7        IO46 │ ────->  [ R3 Pull-Down ]
                                 │                 │
     ( Sensing / UI )            │ [UI & SENSE]    │
-     TEMP DAT ◀───────(1-Wire)─> │ IO16            │ <────  [ R4 Pull-Up ]
-     (WS2812) ◀───────(Status)── │ IO48            │
+     TEMP DAT ◀──────(1-Wire)─> │ IO16            │ <────  [ R4 Pull-Up ]
+     (WS2812) ◀──────(Status)── │ IO48            │
      (LCD I2C) ◀──────(SDA/SCL)─│ IO8 / IO9       │
-                                 └─────────────────┘
+                                └─────────────────┘
 
 ---
 ## Mandatory Strapping Logic (IO46)
