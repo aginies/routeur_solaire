@@ -142,6 +142,8 @@ Config ConfigManager::load() {
             Logger::warn(String("ConfigManager: invalid lcd_i2c_addr (") + String(raw, HEX) + "), using default 0x27");
         }
     }
+    if (has(doc, "lcd_cols")) config.lcd_cols = clampInt(doc["lcd_cols"].as<int>(), 8, 40, config.lcd_cols, "lcd_cols");
+    if (has(doc, "lcd_rows")) config.lcd_rows = clampInt(doc["lcd_rows"].as<int>(), 1, 4, config.lcd_rows, "lcd_rows");
 
     // Shelly
     if (has(doc, "shelly_em_ip")) config.shelly_em_ip = doc["shelly_em_ip"].as<String>();
@@ -332,6 +334,11 @@ bool ConfigManager::save(const Config& config) {
     doc["ds18b20_pin"] = config.ds18b20_pin;
     doc["fan_pin"] = config.fan_pin;
     doc["zx_pin"] = config.zx_pin;
+    doc["lcd_sda_pin"] = config.lcd_sda_pin;
+    doc["lcd_scl_pin"] = config.lcd_scl_pin;
+    doc["lcd_i2c_addr"] = config.lcd_i2c_addr;
+    doc["lcd_cols"] = config.lcd_cols;
+    doc["lcd_rows"] = config.lcd_rows;
     doc["shelly_em_ip"] = config.shelly_em_ip;
     doc["shelly_em_index"] = config.shelly_em_index;
     doc["e_shelly_mqtt"] = config.e_shelly_mqtt;

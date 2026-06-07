@@ -11,6 +11,7 @@ RUN_TESTS=false
 MONITOR=false
 ERASE=false
 USB_CDC=false
+BUILD_ONLY=false
 FLASH=""
 PSRAM=""
 
@@ -39,6 +40,7 @@ usage() {
     echo "              (requires ESP32-S3 or similar with native USB; ESP32-DevKit cannot use this)"
     echo "  --erase     Full chip erase (clears NVS/Stats) before upload"
     echo "  --skip-fs   Skip building and uploading filesystem"
+    echo "  -b, --build Build firmware only (no upload)"
     echo "  -h, --help  Show this help message"
 }
 
@@ -70,6 +72,7 @@ while [[ "$#" -gt 0 ]]; do
             fi
             ;;
         -t|--test) RUN_TESTS=true ;;
+        -b|--build) BUILD_ONLY=true ;;
         -m|--monitor) MONITOR=true ;;
         -u|--usb) USB_CDC=true ;;
         --erase) ERASE=true ;;
@@ -104,7 +107,9 @@ elif [ "$ENV" == "wroom" ]; then
         cp data/config_wroom.json data/config.json
     fi
 elif [ "$ENV" == "native" ]; then
-    echo "Environment 'native' selected. Running tests only."
+    echo "--- RUNNING UNIT TESTS (NATIVE) ---"
+    pio test -e native
+    echo "--- TESTS PASSED ---"
     exit 0
 else
     echo "Error: Invalid environment '$ENV'. Use 's3', 'wroom', or 'native'."
@@ -199,19 +204,28 @@ if [ "$ERASE" = true ]; then
     pio --no-ansi run -e "$PIO_ENV" -t erase
 fi
 
-echo "--- 2. Building and Uploading Firmware ($PIO_ENV) ---"
-echo "    Hardware: ESP32-S3 Variant: $VARIANT (Flash: ${FLASH:-default}MB, PSRAM: ${PSRAM:-none}MB)"
-pio --no-ansi run -e "$PIO_ENV" -t upload
+if [ "$BUILD_ONLY" = true ]; then
+    echo "--- 2. Building Firmware Only ($PIO_ENV) ---"
+    echo "    Hardware: ESP32-S3 Variant: $VARIANT (Flash: ${FLASH:-default}MB, PSRAM: ${PSRAM:-none}MB)"
+    pio --no-ansi run -e "$PIO_ENV"
+    echo "--- BUILD COMPLETE ---"
+    echo "Firmware binaries:"
+    ls -lh .pio/build/"$PIO_ENV"/*.bin 2>/dev/null || true
+else
+    echo "--- 2. Building and Uploading Firmware ($PIO_ENV) ---"
+    echo "    Hardware: ESP32-S3 Variant: $VARIANT (Flash: ${FLASH:-default}MB, PSRAM: ${PSRAM:-none}MB)"
+    pio --no-ansi run -e "$PIO_ENV" -t upload
 
-if [ "$SKIP_FS" = false ]; then
-    echo "--- 3a. Compressing HTML assets ---"
-    if [ -f "data/compress.sh" ]; then
-        bash data/compress.sh
-    else
-        echo "Warning: data/compress.sh not found, skipping HTML compression."
+    if [ "$SKIP_FS" = false ]; then
+        echo "--- 3a. Compressing HTML assets ---"
+        if [ -f "data/compress.sh" ]; then
+            bash data/compress.sh
+        else
+            echo "Warning: data/compress.sh not found, skipping HTML compression."
+        fi
+        echo "--- 3b. Building and Uploading Filesystem (LittleFS) ---"
+        pio --no-ansi run -e "$PIO_ENV" -t uploadfs
     fi
-    echo "--- 3b. Building and Uploading Filesystem (LittleFS) ---"
-    pio --no-ansi run -e "$PIO_ENV" -t uploadfs
 fi
 
 echo "--- DONE! ---"

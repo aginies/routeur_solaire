@@ -11,7 +11,7 @@ static bool isInList(int pin, const int* arr, size_t n) {
 }
 
 static bool isOutputRole(PinRole role) {
-    return role == PinRole::SSR || role == PinRole::RELAY || role == PinRole::FAN_PWM || role == PinRole::INTERNAL_LED || role == PinRole::LCD_SDA || role == PinRole::LCD_SCL;
+    return role == PinRole::SSR || role == PinRole::RELAY || role == PinRole::FAN_PWM || role == PinRole::INTERNAL_LED;
 }
 
 static bool isInputRole(PinRole role) {
@@ -25,10 +25,7 @@ static bool isTxRole(PinRole role) {
 } // namespace
 
 bool isI2cAddressValid(byte addr) {
-    if (addr < 0x08) return false;
-    if (addr > 0x77) return false;
-    if (addr & 0x01) return false;
-    return true;
+    return addr >= 0x08 && addr <= 0x77;
 }
 
 const char* pinRoleName(PinRole role) {
@@ -57,7 +54,7 @@ String pinValidationReason(int pin, PinRole role) {
         return "not a valid ESP32-S3 GPIO (expected 0-21 or 26-48)";
     }
 
-    static const int kGlobalBlocked[] = {0, 19, 20, 26, 27, 28, 29, 30, 31, 32, 45, 46};
+    static const int kGlobalBlocked[] = {0, 6, 19, 20, 26, 27, 28, 29, 30, 31, 32, 45, 46};
     if (isInList(pin, kGlobalBlocked, sizeof(kGlobalBlocked) / sizeof(kGlobalBlocked[0]))) {
         return "blocked on ESP32-S3 (boot/USB/flash-psram/special pin)";
     }

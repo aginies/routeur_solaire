@@ -5,7 +5,7 @@
 
 class LcdManager {
 public:
-    static void init(const String& ssid, const String& ip, byte i2cAddr, int sdaPin, int sclPin);
+    static void init(const String& ssid, const String& ip, byte i2cAddr, int sdaPin, int sclPin, uint8_t cols, uint8_t rows);
     static void update();
     static bool isEnabled();
 

@@ -138,7 +138,7 @@ void WebManager::applyRequestParams(AsyncWebServerRequest *request, Config &cfg)
     if (has("E_EQUIP2_MQTT")) cfg.e_equip2_mqtt = (get("E_EQUIP2_MQTT") == "True");
     if (has("EQUIP2_MQTT_TOPIC")) cfg.equip2_mqtt_topic = get("EQUIP2_MQTT_TOPIC").substring(0, 128);
     if (has("EQUIP2_POWER")) cfg.equip2_max_power = clampFloat(get("EQUIP2_POWER").toFloat(), 0.0f, 20000.0f);
-    if (has("EQUIP2_PRIO")) cfg.equip2_priority = clampInt(get("EQUIP2_PRIO").toInt(), 0, 10);
+    if (has("EQUIP2_PRIO")) cfg.equip2_priority = clampInt(get("EQUIP2_PRIO").toInt(), 1, 2);
     if (has("EQUIP2_MIN_TIME")) cfg.equip2_min_on_time = clampInt(get("EQUIP2_MIN_TIME").toInt(), 0, 86400);
 
     // Strategy / PID
@@ -179,6 +179,17 @@ void WebManager::applyRequestParams(AsyncWebServerRequest *request, Config &cfg)
     if (has("JSY_GRID_CHANNEL")) cfg.jsy_grid_channel = clampInt(get("JSY_GRID_CHANNEL").toInt(), 1, 2);
     if (has("JSY_EQUIP1_CHANNEL")) cfg.jsy_equip1_channel = clampInt(get("JSY_EQUIP1_CHANNEL").toInt(), 1, 2);
 
+    // LCD I2C
+    if (has("LCD_SDA_PIN")) setRolePin(cfg.lcd_sda_pin, get("LCD_SDA_PIN").toInt(), PinRole::LCD_SDA);
+    if (has("LCD_SCL_PIN")) setRolePin(cfg.lcd_scl_pin, get("LCD_SCL_PIN").toInt(), PinRole::LCD_SCL);
+    if (has("LCD_I2C_ADDR")) {
+        byte addr = get("LCD_I2C_ADDR").toInt();
+        if (isI2cAddressValid(addr)) cfg.lcd_i2c_addr = addr;
+        else Logger::warn("Rejected invalid I2C address " + String(addr, HEX));
+    }
+    if (has("LCD_COLS")) cfg.lcd_cols = clampInt(get("LCD_COLS").toInt(), 8, 40);
+    if (has("LCD_ROWS")) cfg.lcd_rows = clampInt(get("LCD_ROWS").toInt(), 1, 4);
+
     // Force / Night
     if (has("BOOST_MINUTES")) cfg.boost_minutes = get("BOOST_MINUTES").toInt();
     if (has("FORCE_EQUIPMENT")) cfg.force_equipment = (get("FORCE_EQUIPMENT") == "True");
@@ -201,7 +212,7 @@ void WebManager::applyRequestParams(AsyncWebServerRequest *request, Config &cfg)
     if (has("WEATHER_LON")) cfg.weather_lon = get("WEATHER_LON").substring(0, 16);
     if (has("WEATHER_THRESH")) cfg.weather_cloud_threshold = clampInt(get("WEATHER_THRESH").toInt(), 0, 100);
     if (has("SOLAR_PANEL_POWER")) cfg.solar_panel_power = clampInt(get("SOLAR_PANEL_POWER").toInt(), 0, 50000);
-    if (has("SOLAR_PANEL_AZIMUTH")) cfg.solar_panel_azimuth = clampInt(get("SOLAR_PANEL_AZIMUTH").toInt(), 0, 360);
+    if (has("SOLAR_PANEL_AZIMUTH")) cfg.solar_panel_azimuth = clampInt(get("SOLAR_PANEL_AZIMUTH").toInt(), 0, 359);
     if (has("SOLAR_PANEL_TILT")) cfg.solar_panel_tilt = clampInt(get("SOLAR_PANEL_TILT").toInt(), 0, 90);
     if (has("SOLAR_LOSS_FACTOR")) cfg.solar_loss_factor = clampInt(get("SOLAR_LOSS_FACTOR").toInt(), 0, 90);
 
@@ -443,7 +454,6 @@ void WebManager::setupRoutes() {
         if (final) {
             uploadFile.close();
             // Atomic replace of stats.json
-            LittleFS.remove("/stats.json");
             if (LittleFS.rename("/stats_upload.json", "/stats.json")) {
                 Logger::info("Stats upload complete (" + String(uploadedBytes) + " bytes)");
 #ifndef DISABLE_STATS
@@ -556,9 +566,10 @@ void WebManager::setupRoutes() {
         Config newCfg = *_config;
         applyRequestParams(request, newCfg);
         
-        if (ConfigManager::save(newCfg) && requestReboot(RebootAction::SaveConfigEq2)) {
+        bool saved = ConfigManager::save(newCfg);
+        if (saved && requestReboot(RebootAction::SaveConfigEq2)) {
             request->send(200, "text/plain", "OK");
-        } else if (!ConfigManager::save(newCfg)) {
+        } else if (!saved) {
             request->send(500);
         } else {
             // save succeeded but reboot throttled
@@ -690,6 +701,11 @@ void WebManager::setupRoutes() {
         doc["internal_led_pin"] = _config->internal_led_pin;
         doc["ssr_pin"] = _config->ssr_pin;
         doc["relay_pin"] = _config->relay_pin;
+        doc["lcd_sda_pin"] = _config->lcd_sda_pin;
+        doc["lcd_scl_pin"] = _config->lcd_scl_pin;
+        doc["lcd_i2c_addr"] = _config->lcd_i2c_addr;
+        doc["lcd_cols"] = _config->lcd_cols;
+        doc["lcd_rows"] = _config->lcd_rows;
         doc["e_weather"] = _config->e_weather;
         doc["weather_lat"] = _config->weather_lat;
         doc["weather_lon"] = _config->weather_lon;
@@ -772,6 +788,11 @@ void WebManager::setupRoutes() {
     _server.on("/RESET_config", HTTP_GET, [authRequired](AsyncWebServerRequest *request) {
         if (!authRequired(request)) return;
         ConfigManager::reset();
+        Logger::flushAll();
+#ifndef DISABLE_STATS
+        StatsManager::save();
+        HistoryBuffer::save();
+#endif
         request->send(200, "text/plain", "Configuration effacée. Redémarrage en cours...");
         _rebootRequested = true;
     });
@@ -1050,7 +1071,7 @@ void WebManager::streamStatusJson(AsyncWebServerRequest *request) {
     lcdI2c["address"] = _config->lcd_i2c_addr;
     lcdI2c["valid"] = isI2cAddressValid(_config->lcd_i2c_addr);
     if (!isI2cAddressValid(_config->lcd_i2c_addr)) {
-        lcdI2c["reason"] = "I2C address out of valid range (expected 0x08-0x77, even only)";
+        lcdI2c["reason"] = "I2C address out of valid range (expected 0x08-0x77)";
     }
     doc["pin_validation_ok"] = allPinsValid;
     
