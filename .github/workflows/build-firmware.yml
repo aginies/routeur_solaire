@@ -76,25 +76,46 @@ jobs:
         run: |
           LATEST_TAG=$(git tag --sort=-v:refname | sed -n 2p)
           if [ -z "$LATEST_TAG" ]; then
-            LATEST_TAG=$(git rev-list --max-parents=0 HEAD)
-            echo "=== Initial release ===" > /tmp/release_notes.md
+            echo "# Firmware ${{ steps.version.outputs.version }}" > /tmp/release_notes.md
           else
-            echo "=== Changes since $LATEST_TAG ===" > /tmp/release_notes.md
+            echo "# Firmware ${{ steps.version.outputs.version }}" > /tmp/release_notes.md
+            echo "" >> /tmp/release_notes.md
+            echo "Changes since $LATEST_TAG" >> /tmp/release_notes.md
           fi
           echo "" >> /tmp/release_notes.md
           while IFS= read -r commit; do
             if [[ "$commit" =~ ^feat: ]]; then
-              echo "- :sparkles: ${commit#feat: }" >> /tmp/release_notes.md
+              echo "feat" >> /tmp/release_types.txt
+              echo "- ${commit#feat: }" >> /tmp/release_features.txt
             elif [[ "$commit" =~ ^fix: ]]; then
-              echo "- :bug: ${commit#fix: }" >> /tmp/release_notes.md
+              echo "fix" >> /tmp/release_types.txt
+              echo "- ${commit#fix: }" >> /tmp/release_fixes.txt
             elif [[ "$commit" =~ ^docs: ]]; then
-              echo "- :books: ${commit#docs: }" >> /tmp/release_notes.md
+              echo "docs" >> /tmp/release_types.txt
+              echo "- ${commit#docs: }" >> /tmp/release_docs.txt
             elif [[ "$commit" =~ ^refactor: ]]; then
-              echo "- :recycle: ${commit#refactor: }" >> /tmp/release_notes.md
+              echo "refactor" >> /tmp/release_types.txt
+              echo "- ${commit#refactor: }" >> /tmp/release_refactor.txt
             else
-              echo "- :label: $commit" >> /tmp/release_notes.md
+              echo "other" >> /tmp/release_types.txt
+              echo "- $commit" >> /tmp/release_other.txt
             fi
           done < <(git log "${LATEST_TAG:-HEAD}..HEAD" --pretty=format:"%s" --no-merges)
+          if [ -f /tmp/release_types.txt ]; then
+            FEAT_COUNT=$(grep -c "^feat$" /tmp/release_types.txt 2>/dev/null || echo 0)
+            FIX_COUNT=$(grep -c "^fix$" /tmp/release_types.txt 2>/dev/null || echo 0)
+            TOTAL=$(wc -l < /tmp/release_types.txt)
+            echo "**Summary:** $TOTAL changes — $FEAT_COUNT feature(s), $FIX_COUNT fix(es)" >> /tmp/release_notes.md
+          else
+            echo "**Summary:** Initial release" >> /tmp/release_notes.md
+          fi
+          echo "" >> /tmp/release_notes.md
+          echo '---' >> /tmp/release_notes.md
+          echo "" >> /tmp/release_notes.md
+          echo "**Firmware files:**" >> /tmp/release_notes.md
+          echo "- \`firmware-${{ steps.version.outputs.version }}-esp32s3.bin\` — ESP32-S3 (4D Systems Gen4 board)" >> /tmp/release_notes.md
+          echo "- \`firmware-${{ steps.version.outputs.version }}-esp32dev.bin\` — ESP32 (generic ESP32 DevKit)" >> /tmp/release_notes.md
+          rm -f /tmp/release_types.txt /tmp/release_features.txt /tmp/release_fixes.txt /tmp/release_docs.txt /tmp/release_refactor.txt /tmp/release_other.txt
           echo "body<<EOF" >> $GITHUB_OUTPUT
           cat /tmp/release_notes.md >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
@@ -104,6 +125,15 @@ jobs:
         with:
           pattern: firmware-*
           path: artifacts
+
+      - name: Rename firmware files
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          for dir in artifacts/firmware-*; do
+            env=$(basename "$dir" | sed "s/firmware-${VERSION}//")
+            mv "$dir/firmware.bin" "$dir/firmware-${VERSION}-${env}.bin"
+          done
+          ls -la artifacts/firmware-*
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
