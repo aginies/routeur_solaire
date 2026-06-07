@@ -19,7 +19,7 @@ Cette page regroupe les problèmes courants et leurs solutions.
 
 | Symptôme | Cause probable | Action |
 |----------|----------------|--------|
-| Pas d'accès Web | ESP32 en mode AP | Connectez-vous au réseau `RouteurSolaire_XXXX` |
+| Pas d'accès Web | ESP32 en mode AP | Connectez-vous au réseau `W_Solaire` |
 | IP changeante | DHCP non configuré | Configurez une IP fixe dans les paramètres Wi-Fi |
 | Déconnexions fréquentes | Signal faible | Positionnez l'antenne ou rapprochez l'ESP32 |
 

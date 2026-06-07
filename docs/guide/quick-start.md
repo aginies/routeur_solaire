@@ -30,9 +30,9 @@ cd routeur_solaire
 
 ## Étape 2 — Connexion au point d'accès
 
-Au premier démarrage, l'ESP32 crée un point d'accès Wi-Fi nommé **`RouteurSolaire_XXXX`** (où XXXX sont les 4 derniers chiffres de l'adresse MAC).
+Au premier démarrage, l'ESP32 crée un point d'accès Wi-Fi nommé **`W_Solaire`** (mot de passe par défaut : `12345678`).
 
-Connectez-vous à ce réseau et ouvrez `http://192.168.4.1` dans votre navigateur.
+Connectez-vous à ce réseau et ouvrez `http://192.168.66.1` dans votre navigateur.
 
 ## Étape 3 — Configuration initiale
 

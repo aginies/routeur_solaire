@@ -28,14 +28,14 @@ Voici les branchements recommandés pour les cartes de développement courantes.
 
 | Signal | Broche ESP32-S3 | Broche ESP32 Standard | Connexion |
 | :--- | :---: | :---: | --- |
-| **Contrôle SSR** | `17` | `22` | Entrée commande du SSR (actif-HAUT) |
-| **Relais Sécurité** | `6` | `17` | Bobine du relais — fermeture au signal BAS |
+| **Contrôle SSR** | `17` | `22` | Entrée commande du SSR (active-LOW) |
+| **Relais Sécurité** | `6` | `17` | Bobine du relais — ouverture au signal BAS |
 | **Données 1-Wire** | `16` | `23` | Broche DQ du DS18B20 (pull-up 4,7 kΩ requis) |
 | **Ventilateur PWM** | `7` | `5` | Entrée PWM du ventilateur (~10 kHz) |
 | **Zero-Crossing** | `15` | `19` | Sortie ZX du capteur (pull-up 3,3 V) |
 | **Masse (GND)** | `GND` | `GND` | Commun à tous les capteurs et modules |
 | **Alimentation** | `3.3V / 5V` | `3.3V / 5V` | Selon les besoins des modules connectés |
-| **UART1 (JSY #1)** | `TX=4, RX=5` | `TX=15, RX=18` | Premier compteur JSY-194G |
+| **UART1 (JSY #1)** | `TX=5, RX=4` | `TX=15, RX=18` | Premier compteur JSY-194G |
 | **UART2 (JSY #2)** | `TX=17, RX=16` | `TX=33, RX=32` | Second compteur JSY-194G |
 | **LED WS2812** | `48` | `2` | LED interne addressable (NeoPixel) |
 | **LCD I2C SDA** | `8` | `8` | Broche SDA pour écran LCD1602A + backpack PCF8574 |
@@ -43,7 +43,7 @@ Voici les branchements recommandés pour les cartes de développement courantes.
 
 ## Notes importantes
 
-> **Relais de sécurité :** La polarité est importante. Le SSR est piloté en actif-HAUT : le relais de sécurité inverse ce signal pour un comportement *fail-safe*. Un signal **BAS (LOW)** sur IO6 ferme le relais → circuit alimenté (fonctionnement normal). Un signal **HAUT (HIGH)** l'ouvre → coupure du SSR. En cas de coupure ou redémarrage de l'ESP32, la charge est automatiquement déconnectée.
+> **Relais de sécurité :** La polarité est importante. Le SSR est piloté en actif-LOW (LOW = SSR ON) : le relais de sécurité inverse ce signal pour un comportement *fail-safe*. Un signal **BAS (LOW)** sur IO6 ouvre le relais → circuit FERMÉ (SSR alimenté, fonctionnement normal). Un signal **HAUT (HIGH)** ferme le relais → circuit OUVERT (SSR coupé). En cas de coupure ou redémarrage de l'ESP32, la charge est automatiquement déconnectée.
 
 > **DS18B20 :** Le capteur de température 1-Wire nécessite une résistance de pull-up de 4,7 kΩ entre la ligne de données et le 3,3 V. Câblé en mode "parasite", il ne nécessite qu'une seule connexion de données (pas d'alimentation séparée).
 
@@ -208,9 +208,9 @@ Le routeur calcule la puissance solaire attendue en utilisant un modèle géomé
 | Paramètre | Description | Plage typique |
 |-----------|-------------|---------------|
 | **Puissance nominale** (`solar_panel_power`) | Puissance crête des panneaux (Wc) | 50 – 10000 W |
-| **Azimut** (`solar_panel_azimuth`) | Orientation face au sud (S=0°, E=90°, O=-90°) | -180° à +180° |
+| **Azimut** (`solar_panel_azimuth`) | Orientation (0=Nord, 90=Est, 180=Sud, 270=Ouest) | -180° à +180° |
 | **Inclinaison** (`solar_panel_tilt`) | Angle du panneau par rapport à l'horizontale (→ verticale) | 0° (plat) – 90° (vertical) |
-| **Facteur de perte** (`solar_loss_factor`) | Pertes estimées (poussière, température, vieillissement) | 0.7 – 1.0 |
+| **Facteur de perte** (`solar_loss_factor`) | Pertes estimées en pourcentage (poussière, température, vieillissement) | 0 – 100 |
 
 Ces paramètres sont configurables via l'interface web ([configuration détaillée](./configuration.md)) et utilisés par le gestionnaire météo pour prédire la puissance solaire et optimiser le déclenchement des équipements.
 

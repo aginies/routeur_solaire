@@ -9,6 +9,24 @@ Ce document retrace les évolutions majeures du firmware. Pour l'historique comp
 
 ## Récentes
 
+### v1.1.0
+
+**Features :**
+- GitHub Actions workflow pour builds automatiques sur tag (`v*`) avec releases GitHub
+- Support écran LCD 1602A I2C (défilement SSID+IP, puissance réseau/redirigée)
+- Flag `--build` dans `flash.sh` pour compilation seule
+
+**Fixes :**
+- Bugs critiques : link error, GPIO6 bloqué, conflit pin ventilateur, timeout scan I2C, clamp equip2_priority, guard ssr_pin, validation addr I2C, champs LCD dans API
+- Thread safety : abs→fabsf, flush avant reset_config, clamp azimuth, floats atomiques, section critique ISR
+- LcdManager : fuite mémoire, taille d'affichage configurable, persistance config LCD
+- Logger : écritures atomiques, mutex maintenu via flush, flux sous verrou
+- WebManager : volatile _rebootRequested, remplacement atomique stats.json
+- Shelly : ajout champ SHELLY_TIMEOUT, correction double-save save_config_eq2
+- Stats : correction vue annuelle, fallback HTTPClient dans WeatherManager
+- Native : `-e native` exécute les tests au lieu de quitter silencieusement
+- docs : ajout seoPlugin.js manquant, correction commentaire streamLogs
+
 ### v0.9.x — Dernières améliorations
 
 - Refonte de l'interface web et du thème VitePress

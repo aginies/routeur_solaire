@@ -57,7 +57,7 @@ You can find all the necessary components for this PCB on AliExpress or other ma
 | IO4 | UART1 RX | J2 JSY TX | GPIO in (ESP) from JSY TX |
 | IO6 | Output | J5 Pin 3 | Active-HIGH trigger for Safety Relay |
 | IO16 | Data | J7 Pin 2 | DS18B20 1-Wire Temp Sensor |
-| IO7 | PWM | J6 Pin 4 | 5V PWM Fan speed control |
+| IO18 | PWM | J6 Pin 4 | 5V PWM Fan speed control |
 | IO15 | Input | J2 JSY Zx | Zero-crossing sync from JSY |
 | IO48 | Status LED | Internal | WS2812 Onboard LED |
 | IO0 | Boot mode | 10kΩ -> 3V3, SW1 to GND | Must be HIGH at normal boot |

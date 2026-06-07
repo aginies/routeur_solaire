@@ -208,11 +208,11 @@ The system uses a priority-ordered state machine. States at higher priority alwa
 
 | Priority | State | Trigger | Action |
 | :--- | :--- | :--- | :--- |
-| **0 (Highest)** | `EMERGENCY_FAULT` | ESP32 temp ≥ `max_esp32_temp` + 5°C hysteresis, SSR temp ≥ `ssr_max_temp` + 5°C hysteresis, SSR sensor disconnected (-999°C), or persistent timeout (Shelly offline > safety_timeout) | SSR OFF, relay energized (opens SSR circuit), emergency LED mode |
-| **1** | `SAFE_TIMEOUT` | Shelly/JSY sensor data stale > `safety_timeout` seconds (default 10s) | SSR OFF, relay energized |
-| **2** | `BOOST` | Manual boost activated via Web UI or manual force window active | SSR 100% ON, relay closed |
-| **3** | `NIGHT` | Clock in night window (or weather-based sunrise/sunset) | SSR OFF, relay energized, polling interval extended to `night_poll_interval` |
-| **4 (Lowest)** | `NORMAL` | Everything normal. PID controller drives the system. | SSR controlled by PID duty cycle, relay closed |
+| **0 (Highest)** | `EMERGENCY_FAULT` | ESP32 temp ≥ `max_esp32_temp` + 5°C hysteresis, SSR temp ≥ `ssr_max_temp` + 5°C hysteresis, SSR sensor disconnected (-999°C) | SSR OFF, relay de-energized (circuit OPEN, SSR cut), emergency LED mode |
+| **1** | `SAFE_TIMEOUT` | Shelly/JSY sensor data stale > `safety_timeout` seconds (default 10s) | SSR OFF, relay de-energized (circuit OPEN, SSR cut) |
+| **2** | `BOOST` | Manual boost activated via Web UI or manual force window active | SSR 100% ON, relay energized (circuit CLOSED, SSR powered) |
+| **3** | `NIGHT` | Clock in night window (or weather-based sunrise/sunset) | SSR OFF, relay de-energized (circuit OPEN, SSR cut), polling extended to `night_poll_interval` |
+| **4 (Lowest)** | `NORMAL` | Everything normal. PID controller drives the system. | SSR controlled by PID duty cycle, relay energized (circuit CLOSED, SSR powered) |
 
 **Recovery:** States 0 and 1 require a 5°C hysteresis drop below the threshold before returning to NORMAL, preventing rapid state oscillation when temperature/temp is borderline.
 
@@ -339,10 +339,10 @@ Default values are shown. All fields are editable via the Web UI.
 ### Hardware Pins
 | Field | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `ssr_pin` | int | `12` | SSR control output pin (`digitalWrite`) |
-| `relay_pin` | int | `13` | Relay output pin (LOW = closes SSR circuit) |
-| `ds18b20_pin` | int | `14` | DS18B20 temperature sensor pin (1-Wire) |
-| `fan_pin` | int | `5` | Fan PWM output pin (LEDC channel 4) |
+| `ssr_pin` | int | `17` | SSR control output pin (active-LOW) |
+| `relay_pin` | int | `6` | Relay output pin (LOW = opens SSR circuit) |
+| `ds18b20_pin` | int | `16` | DS18B20 temperature sensor pin (1-Wire) |
+| `fan_pin` | int | `18` | Fan PWM output pin (LEDC channel 4) |
 | `zx_pin` | int | `15` | Zero-crossing detection input (interrupt) |
 | `lcd_sda_pin` | int | `8` | I2C SDA pin for LCD1602A backpack |
 | `lcd_scl_pin` | int | `9` | I2C SCL pin for LCD1602A backpack |
@@ -515,14 +515,14 @@ The system exposes **six distinct web pages** for configuration and monitoring:
 
 | Signal | ESP32-S3 Pin | ESP32-WROOM Pin | Connect To |
 | :--- | :--- | :--- | :--- |
-| **SSR control** | `17` | `22` | SSR control input |
-| **Relay coil** | `6` | `17` | Relay coil (active-LOW, closes SSR circuit) |
+| **SSR control** | `17` | `22` | SSR control input (active-LOW) |
+| **Relay coil** | `6` | `17` | Relay coil (active-LOW, opens SSR circuit) |
 | **1-Wire data** | `16` | `23` | DS18B20 DQ pin (+ 4.7K pull-up to 3.3V) |
 | **PWM fan** | `7` | `5` | Fan PWM input (LEDC ch4, 10 kHz) |
 | **Zero-crossing** | `15` | `19` | ZX sensor output (open-collector, pull-up to 3.3V) |
 | **Common ground** | `GND` | `GND` | All sensor grounds |
 | **Power** | `3.3V` / `5V` | `3.3V` / `5V` | SSR control, relay, ZX (as rated) |
-| **UART1 RX/TX (JSY1)** | `4/5` | `18/15` | JSY-MK-194 RX/TX (4800 baud, 8N1) |
+| **UART1 RX/TX (JSY1)** | `RX=4, TX=5` | `RX=18, TX=15` | JSY-MK-194 RX/TX (4800 baud, 8N1) |
 | **UART2 RX/TX (JSY2)** | `16/17` | `32/33` | Second JSY-MK-194 RX/TX |
 | **NeoPixel** | `48` | `2` | Onboard WS2812 LED |
 | **LCD SDA** | `8` | `8` | I2C SDA — LCD1602A backpack (PCF8574) |
@@ -530,10 +530,10 @@ The system exposes **six distinct web pages** for configuration and monitoring:
 
 > **Note: Config defaults vs. Wiring.** The Wiring Guide columns show the recommended physical pin assignments for each board target (used on this custom PCB). These differ from the `Config` struct defaults (e.g., `ssr_pin=12`), which are generic starting values for any build. When migrating from one board target to another, update both your wiring **and** the `Config` fields accordingly.
 
-**Note:** The control logic uses standard active-HIGH for the SSR and active-LOW for the safety relay:
-- `digitalWrite(ssr_pin, HIGH)` = SSR **ON** (power to load)
-- `digitalWrite(ssr_pin, LOW)` = SSR **OFF** (no power to load)
-- The relay (pin 6 on S3, pin 17 on WROOM) is active-LOW: `LOW` closes the SSR circuit (normal), `HIGH` opens it (safety cut-off).
+**Note:** The control logic uses standard active-LOW for the SSR and active-LOW for the safety relay:
+- `digitalWrite(ssr_pin, LOW)` = SSR **ON** (power to load)
+- `digitalWrite(ssr_pin, HIGH)` = SSR **OFF** (no power to load)
+- The relay (pin 6 on S3, pin 17 on WROOM) is active-LOW: `LOW` energizes the relay (circuit CLOSED, SSR powered), `HIGH` de-energizes it (circuit OPEN, SSR cut-off).
 
 **Pin validation:** The firmware now validates GPIO by **role + board target** (ESP32-S3 vs ESP32-WROOM), not only by numeric range. Some pins are rejected for SSR/relay/fan/ZX roles because of boot strapping, USB, flash/PSRAM, input-only restrictions, or board-specific caveats.
 
