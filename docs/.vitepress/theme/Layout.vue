@@ -43,11 +43,7 @@ const injectHero = () => {
   }
 
   // Hero container may have zero dimensions on first paint — retry after layout
-  setTimeout(resize, 300); resize()
-
-  // ResizeObserver: re-size canvas when hero gets proper dimensions (fixes first-load blank page)
-  const heroRo = new ResizeObserver(() => { resize() })
-  heroRo.observe(heroContainer)
+  setTimeout(resize, 80); resize()
   window.addEventListener('resize', resize)
 
   const ctx = canvasEl.getContext('2d')
@@ -111,17 +107,6 @@ const injectHero = () => {
   rafId = requestAnimationFrame(loop)
 }
 
-// Animate hero title/desc after hero is properly sized (fixes first-load invisible content)
-const animateHero = () => {
-  const title = document.querySelector('.VPHero .main .title')
-  const desc = document.querySelector('.VPHero .main .description')
-  if (!title && !desc) return
-  const titleAnim = 'heroTitleEntrance 0.6s cubic-bezier(0.23, 1, 0.32, 1) both'
-  const descAnim = 'heroDescEntrance 0.7s cubic-bezier(0.23, 1, 0.32, 1) both'
-  if (title) { title.style.animation = titleAnim; title.style.animationDelay = '0.05s' }
-  if (desc) { desc.style.animation = descAnim; desc.style.animationDelay = '0.2s' }
-}
-
 // Inject license badge after features section (inside VPHome)
 const injectLicenseBadge = () => {
   const homeFeatures = document.querySelector('.VPHomeFeatures')
@@ -174,14 +159,7 @@ const scheduleInjectLicenseBadge = () => {
 }
 
 // ── Scroll-reveal: fade-in elements as they enter the viewport ──
-let scrollRevealObserver = null
 const setupScrollReveal = () => {
-  // Disconnect previous observer on route change
-  if (scrollRevealObserver) { scrollRevealObserver.disconnect(); scrollRevealObserver = null }
-  // Remove old marker if present
-  const oldMarker = document.getElementById('scroll-reveal-observer')
-  if (oldMarker) oldMarker.remove()
-
   // Elements to observe — exclude hero, nav, sidebar, footer
   const selectors = [
     '.vp-doc h2', '.vp-doc h3', '.vp-doc h4',
@@ -193,11 +171,14 @@ const setupScrollReveal = () => {
     '.vp-doc .custom-block',
   ]
 
-  scrollRevealObserver = new IntersectionObserver((entries) => {
+  // Skip if already initialized
+  if (document.getElementById('scroll-reveal-observer')) return
+
+  const observer = new IntersectionObserver((entries) => {
     for (const entry of entries) {
       if (entry.isIntersecting) {
         entry.target.classList.add('reveal-visible')
-        entry.target.observer?.unobserve(entry.target)
+        observer.unobserve(entry.target)
       }
     }
   }, {
@@ -209,8 +190,7 @@ const setupScrollReveal = () => {
   for (const el of elements) {
     // Skip elements already inside .reveal (home features), they have their own animation
     if (el.closest('.reveal')) continue
-    el.observer = scrollRevealObserver
-    scrollRevealObserver.observe(el)
+    observer.observe(el)
   }
 
   // Mark as initialized
@@ -244,7 +224,6 @@ const setupProgressBar = () => {
 // Re-inject on page entry (handles VitePress client-side navigation back to homepage)
 onMounted(() => {
   injectHero()
-  setTimeout(animateHero, 100)
   scheduleInjectLicenseBadge()
   setupScrollReveal()
   setupProgressBar()
@@ -253,7 +232,6 @@ onMounted(() => {
 watch(route, () => {
   nextTick(() => {
     injectHero()
-    setTimeout(animateHero, 100)
     scheduleInjectLicenseBadge()
     setupScrollReveal()
     setupProgressBar()
@@ -320,16 +298,6 @@ watch(route, () => {
   pointer-events: none;
   z-index: 99 !important;
   animation: sunPulse 70s ease-in-out infinite alternate;
-}
-
-@keyframes heroTitleEntrance {
-  from { opacity: 0; transform: translateY(-16px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes heroDescEntrance {
-  from { opacity: 0; transform: translateY(-8px); }
-  to   { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes sunPulse {
