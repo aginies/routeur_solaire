@@ -78,7 +78,7 @@
   <line x1="640" y1="265" x2="640" y2="280" stroke="#4b5563" stroke-width="1.5" marker-end="url(#ah)"/>
   <rect x="575" y="280" width="130" height="55" rx="10" fill="#f1f5f9" stroke="#64748b" stroke-width="2" filter="url(#sh)"/>
   <text x="640" y="303" text-anchor="middle" font-family="system-ui,sans-serif" font-size="12" font-weight="600" fill="#334155">🌡️ DS18B20</text>
-  <text x="640" y="321" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" fill="#334155" font-style="italic">1-Wire / Temp SSR</text>
+  <text x="640" y="321" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" fill="#334155" font-style="italic">1-Wire / Temp dissipateur SSR</text>
 
   <!-- Feedback loop: Load → Meter (routed to avoid overlap) -->
   <path d="M 340 270 L 340 330 L 190 330" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#ah)"/>
