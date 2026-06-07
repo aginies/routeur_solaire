@@ -7,7 +7,7 @@ description: "Référence API REST du routeur PV : endpoint /status, calibration
 
 Le routeur expose une API REST et plusieurs endpoints de diagnostic pour le débogage en production. Cette page documente les interfaces accessibles via HTTP (généralement `http://<ip_du_routeur>/`).
 
-## Endpoint `/status` — État Complèt du Système
+## Endpoint `/status` — État Complet du Système
 
 L'endpoint `GET /status` retourne un objet JSON avec l'état complet du routeur à un instant T :
 
@@ -15,60 +15,89 @@ L'endpoint `GET /status` retourne un objet JSON avec l'état complet du routeur 
 
 | Champ | Type | Description |
 |-------|------|-------------|
-| `state_name` | string | Nom de l'état actuel (NORMAL, BOOST, NIGHT, EMERGENCY_FAULT, SAFE_TIMEOUT) |
-| `ssr_duty_pct` | float | Pourcentage de puissance SSR (0–100%) |
-| `eq2_status` | string | État de l'équipement 2 |
+| `grid_power` | float | Puissance réseau (W). Positif = import, Négatif = export. |
+| `equipment_power` | float | Puissance totale redirigée (W) |
+| `eq1_real_power` | float | Puissance réelle Eq1 mesurée (W) |
+| `equip2_power` | float | Puissance Eq2 mesurée (W) |
+| `boost_active` | bool | Boost manuel actif |
+| `boost_remaining` | int | Minutes restantes du boost |
+| `force_mode` | bool | Mode forcé actif |
+| `emergency_mode` | bool | État d'urgence actif |
+| `emergency_reason` | string | Raison de l'urgence (ex: "ESP32 Overheat!", "SSR Temp Sensor Fault!") |
+| `ssr_temp` | float/null | Température SSR (°C), null si sonde déconnectée |
+| `esp_temp` | float | Température interne ESP32 (°C) |
+| `fan_active` | bool | État du ventilateur |
+| `fan_percent` | int | Vitesse du ventilateur (0-100) |
+| `grid_source` | string | Source de mesure : "JSY1", "JSY2", "MQTT", "HTTP" |
+| `shelly_link` | bool | Shelly connecté |
+| `shelly_error` | bool | Shelly en erreur |
+| `mqtt_status` | bool | Broker MQTT connecté |
+| `control_mode` | string | Mode SSR actuel : "trame", "burst", "phase", "cycle_stealing" |
+| `night_mode` | bool | Mode nuit actif |
+| `equip2_bypassed` | bool | Eq2 bypassé par météo |
+| `equip2_max_power` | float | Puissance Eq2 configurée (W) |
 
-### Métriques Réseau & Production
-
-| Champ | Type | Description |
-|-------|------|-------------|
-| `grid_power` | float | Puissance réseau (W). Positif = export, Négatif = import. |
-| `eq1_power` | float | Puissance de l'équipement 1 (W) |
-| `eq2_power` | float | Puissance de l'équipement 2 (W) |
-
-### Températures
-
-| Champ | Type | Description |
-|-------|------|-------------|
-| `ssr_temp_celsius` | float | Température SSR (°C) — mesure externe via DS18B20 |
-| `env_temp_celsius` | float | Température ambiante (°C) — autre sonde DS18B20 |
-| `esp32_temp` | float | Température interne de l'ESP32 (°C) |
-
-### Données AC (Phase)
-
-| Champ | Type | Description |
-|-------|------|-------------|
-| `half_cycle_parity` | string | Parité du dernier demi-cycle ("odd" ou "even") |
-| `zx_counter` | uint64 | Nombre total de passages par zéro détectés (cumulatif) |
-| `grid_hz_est` | float | Fréquence estimée du réseau (Hz), dérivie des interruptions ZX |
-
-### Métriques Météo
+### Données de Santé
 
 | Champ | Type | Description |
 |-------|------|-------------|
-| `weather_clouds_low` | int | Couverture nuageuse basse (%) |
-| `weather_clouds_mid` | int | Couverture nuageuse moyenne (%) |
-| `weather_clouds_high` | int | Couverture nuageuse haute (%) |
-| `weather_solar_confidence` | float | Indice de confiance solaire (0–100) |
-| `weather_age` | uint32 | Âge des données météo en secondes |
-| `weather_icon` | string | Icône météo actuelle (emoji ou nom du code) |
-
-### Métriques RTC & Version
-
-| Champ | Type | Description |
-|-------|------|-------------|
-| `rtc_time` | string | Heure RTC (`%H:%M`) — horloge interne ESP32 |
-| `rtc_date` | string | Date RTC (`%d/%m/%Y`) |
-| `firmware_version` | string | Version compilée du firmware |
+| `free_ram` | uint32 | RAM interne libre (octets) |
+| `total_ram` | uint32 | RAM interne totale (octets) |
+| `free_psram` | uint32 | PSRAM libre (octets) |
+| `total_psram` | uint32 | PSRAM totale (octets) |
+| `uptime` | uint32 | Temps de fonctionnement (secondes) |
+| `rssi` | int | Puissance du signal WiFi (dBm) |
+| `version` | string | Version du firmware |
+| `build_time` | string | Date/heure de compilation |
 
 ### Indicateurs de Fonctionnalité
 
 | Champ | Type | Description |
 |-------|------|-------------|
-| `stats_enabled` | bool | Les statistiques sont activées (désactivé sur WROOM) |
-| `history_enabled` | bool | L'historique graphique est activé (désactivé sur WROOM) |
-| `data_log_enabled` | bool | Le journal de données est activé (désactivé sur WROOM) |
+| `stats_enabled` | bool | Statistiques activées (désactivé sur WROOM) |
+| `history_enabled` | bool | Historique graphique activé (désactivé sur WROOM) |
+| `data_log_enabled` | bool | Journal de données activé (désactivé sur WROOM) |
+| `max_stats_days` | int | Jours de rétention de statistiques |
+| `e_ssr_temp` | bool | Surveillance température SSR |
+| `e_equip1` | bool | Équipement 1 activé |
+| `e_equip2` | bool | Équipement 2 activé |
+| `equip1_name` | string | Nom de l'équipement 1 |
+| `equip2_name` | string | Nom de l'équipement 2 |
+| `shelly_mqtt_enabled` | bool | Mode MQTT Shelly activé |
+| `mqtt_enabled` | bool | MQTT activé |
+
+### Données AC (Phase)
+
+Toutes les données AC sont regroupées sous l'objet `ac` :
+
+| Champ | Type | Description |
+|-------|------|-------------|
+| `ac.zx_counter` | uint32 | Nombre total de passages par zéro (cumulatif) |
+| `ac.zx_last_us` | uint32 | Dernier passage par zéro (microsecondes) |
+| `ac.half_cycle_parity` | string | Parité du dernier demi-cycle ("odd" ou "even") |
+| `ac.full_cycle_index` | int | Index du cycle complet actuel |
+| `ac.grid_hz_est` | float | Fréquence estimée du réseau (Hz) |
+
+### Mode Trame (Bresenham)
+
+Données regroupées sous l'objet `trame` :
+
+| Champ | Type | Description |
+|-------|------|-------------|
+| `trame.enabled` | bool | Mode Trame actif |
+| `trame.fire_full_cycle` | bool | Feux de cycle complet en cours |
+| `trame.decision_on_odd_cross` | bool | Décision sur passage impair |
+| `trame.decision_age_ms` | uint32 | Âge de la dernière décision (ms) |
+
+### Contrôle de Phase
+
+Données regroupées sous l'objet `phase` :
+
+| Champ | Type | Description |
+|-------|------|-------------|
+| `phase.enabled` | bool | Mode Phase actif |
+| `phase.timer_arm_pending` | bool | Timer en attente d'armage |
+| `phase.last_requested_wait_us` | int | Dernier délai demandé (µs) |
 
 ### Validation des Broches (`pin_validation`)
 

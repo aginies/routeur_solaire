@@ -9,22 +9,23 @@ Le routeur intègre plusieurs couches de protection pour garantir un fonctionnem
 
 ## États du Système (State Machine)
 
-Le système fonctionne selon une machine à états avec quatre priorités :
+Le système fonctionne selon une machine à états avec cinq priorités :
 
 | État | Description | SSR Duty Cycle | Relais Sécurité |
 |------|-------------|----------------|-----------------|
-| **NORMAL** | Fonctionnement normal — le PID régule la puissance | Contrôlé par PID | Fermé (alimenté) |
-| **BOOST** | Mode Boost Manuel ou Forçage Horaire activés | Limitée à `max_duty_percent` | Fermé (alimenté) |
-| **NIGHT** | Mode Nuit actif — aucune production solaire | 0% | Ouvert (coupé) |
-| **EMERGENCY_FAULT** | Défaut critique détecté | 0% | Ouvert (coupé) |
-| **SAFE_TIMEOUT** | Perte de contact avec le capteur Shelly | 0% | Ouvert (coupé) |
+| **NORMAL** | Fonctionnement normal — le PID régule la puissance | Contrôlé par PID | Ouvert (circuit FERMÉ, SSR alimenté) |
+| **BOOST** | Mode Boost Manuel ou Forçage Horaire activés | Limitée à `max_duty_percent` | Ouvert (circuit FERMÉ, SSR alimenté) |
+| **NIGHT** | Mode Nuit actif — aucune production solaire | 0% | Fermé (circuit OUVERT, SSR coupé) |
+| **EMERGENCY_FAULT** | Défaut critique détecté | 0% | Fermé (circuit OUVERT, SSR coupé) |
+| **SAFE_TIMEOUT** | Perte de contact avec le capteur Shelly | 0% | Fermé (circuit OUVERT, SSR coupé) |
 
 ### Ordre des Priorités
 
-1. **Priorité 0 — EMERGENCY_FAULT** : Surchauffe (ESP32 ou SSR), défaut du capteur de température SSR, timeout Shelly.
+1. **Priorité 0 — EMERGENCY_FAULT** : Surchauffe (ESP32 ou SSR), défaut du capteur de température SSR.
 2. **Priorité 1 — SAFE_TIMEOUT** : Le capteur Shelly n'a pas été pollé dans les `safety_timeout` secondes.
 3. **Priorité 2 — BOOST** : Mode Boost Manuel (`boost_active`) ou Forçage Horaire (`forcedWindow`).
 4. **Priorité 3 — NIGHT** : Mode Nuit (hors heures solaires).
+5. **Priorité 4 — NORMAL** : Fonctionnement normal (PID régule la puissance).
 
 ---
 

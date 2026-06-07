@@ -12,28 +12,27 @@ L'interface web permet de configurer tous les aspects du routeur. Voici le déta
 ### Wi-Fi
 - **SSID / Mot de passe** : Identifiants de votre réseau local.
 - **IP Fixe** : Vous pouvez configurer une IP statique (IP, Subnet, Gateway, DNS) pour éviter que l'adresse ne change.
-- **Mode Point d'Accès** : Si "Utiliser un réseau existant" est à *False*, l'ESP32 crée son propre Wi-Fi (`RouteurSolaire_XXXX`) pour la configuration initiale.
+- **Mode Point d'Accès** : Si "Utiliser un réseau existant" est à *False*, l'ESP32 crée son propre Wi-Fi (`W_Solaire`, mot de passe `12345678`) pour la configuration initiale.
 
 ### MQTT & Domotique
 Le routeur peut être intégré à votre système domotique (ex: **Home Assistant**) via MQTT.
-- **Topic de base** : Par défaut `routeur_solaire`. Tous les messages seront publiés sous cette racine.
+- **Topic de base** : Par défaut `GuiboSolar` (configurable via `mqtt_name`). Tous les messages seront publiés sous cette racine.
 - **Topics Publiés** :
-    - `status` : `online` ou `offline` (LWT — Last Will and Testament).
-    - `power` : Puissance réseau actuelle (W).
-    - `eq1_power` : Puissance consommée par l'équipement 1 (W).
-    - `eq2_power` : Puissance de l'équipement 2 (W).
-    - `eq1_percent` : Pourcentage de puissance envoyé au SSR (%).
-    - `ssr_temp` : Température du SSR (°C).
-    - `env_temp` : Température ambiante mesurée par le capteur DS18B20 (°C).
-    - `fan_active` : État du ventilateur (`ON`/`OFF`).
-    - `fan_percent` : Vitesse du ventilateur en pourcentage (%).
-    - `eq2_status` : État de l'équipement 2 (ON, OFF, PENDING_ON, etc.).
+    - `<topic>/power` : Puissance réseau actuelle (W). Positif = import, Négatif = export.
+    - `<topic>/equipment_power` : Puissance redirigée vers l'équipement 1 (W).
+    - `<topic>/equipment_percent` : Pourcentage de puissance envoyé au SSR (%).
+    - `<topic>/esp32_temp` : Température interne ESP32 (°C).
+    - `<topic>/ssr_temp` : Température SSR (°C), uniquement si `e_ssr_temp = true`.
+    - `<topic>/fan_active` : État du ventilateur (`ON`/`OFF`).
+    - `<topic>/fan_percent` : Vitesse du ventilateur (0-100).
+    - `<topic>/status_json` : État complet du système en JSON.
+    - LWT (`<topic>/status`) : `online` ou `offline` (Last Will and Testament).
 - **Exemple Home Assistant** :
 ```yaml
 mqtt:
   sensor:
     - name: "Solaire Puissance Réseau"
-      state_topic: "routeur_solaire/power"
+      state_topic: "GuiboSolar/power"
       unit_of_measurement: "W"
 ```
 
@@ -144,5 +143,18 @@ Un écran LCD 1602A avec backpack I2C (PCF8574) peut être connecté sur les bro
 
 - **Ligne 1** : Défilement du SSID Wi-Fi + adresse IP
 - **Ligne 2** : `P:XXXXW R:YYYYW` (puissance réseau / puissance redirigée)
+- **Configuration** : `e_lcd = true` (activé par défaut), `lcd_cols = 16`, `lcd_rows = 2`, `lcd_i2c_addr = 0x27` (certains backpacks utilisent `0x3F`)
+- **Scan I2C** : Au démarrage, le firmware scanne le bus I2C — si aucun périphérique n'est détecté, l'écran reste inactif sans planter le système.
 
-L'écran est activé par défaut (`e_lcd = true`). Si votre backpack utilise l'adresse `0x3F` au lieu de `0x27`, modifiez `lcd_i2c_addr` dans `config.json`. Au démarrage, le firmware scanne le bus I2C — si aucun périphérique n'est détecté, l'écran reste inactif sans planter le système.
+### Sécurité & Périphériques
+
+- **`shelly_timeout`** (défaut : `2`) : Délai d'attente pour les requêtes HTTP vers le Shelly (secondes).
+- **`safety_timeout`** (défaut : `10`) : Seuil de péremption des données capteur. Au-delà, le système passe en état SAFE_TIMEOUT.
+- **`e_ssr_temp`** (défaut : `true`) : Surveillance température SSR via DS18B20.
+- **`ssr_max_temp`** (défaut : `65.0`) : Seuil de surchauffe SSR (°C).
+- **`e_fan`** (défaut : `true`) : Contrôle automatique du ventilateur.
+- **`fan_temp_offset`** (défaut : `10`) : Déclenchement du ventilateur `fan_temp_offset` °C avant `ssr_max_temp`.
+- **`lcd_cols`** (défaut : `16`) : Nombre de colonnes de l'écran LCD.
+- **`lcd_rows`** (défaut : `2`) : Nombre de lignes de l'écran LCD.
+- **`night_poll_interval`** (défaut : `15`) : Intervalle de polling en mode nuit (secondes).
+- **`half_period_us`** (défaut : `9900`) : Période demi-onde en microsecondes (utilisée pour le calibrage phase).

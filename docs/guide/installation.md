@@ -92,12 +92,12 @@ Le mode natif utilise des stubs (`NATIVE_TEST`) pour Arduino, LittleFS et les pr
 
 ## Premier démarrage
 
-Au premier démarrage, si aucun Wi-Fi n'est configuré (ou si le réseau est introuvable), l'ESP32 créera un point d'accès nommé `RouteurSolaire_XXXX`. Connectez-vous à ce réseau et ouvrez `http://192.168.4.1` pour accéder à l'interface de configuration initiale.
+Au premier démarrage, si aucun Wi-Fi n'est configuré (ou si le réseau est introuvable), l'ESP32 créera un point d'accès nommé `W_Solaire` (mot de passe : `12345678`, IP : `192.168.66.1`). Connectez-vous à ce réseau et ouvrez `http://192.168.66.1` pour accéder à l'interface de configuration initiale.
 
 ## Dépannage rapide
 
 - **LED interne fixe** : L'ESP32 est probablement en AP mode, attendant une connexion Wi-Fi.
-- **Pas d'accès Web** : Vérifiez que vous êtes bien sur le réseau `RouteurSolaire_XXXX` ou dans le même sous-réseau WiFi.
+- **Pas d'accès Web** : Vérifiez que vous êtes bien sur le réseau `W_Solaire` ou dans le même sous-réseau WiFi.
 - **Erreurs LittleFS** : Essayez `./flash.sh --erase` pour réinitialiser la mémoire non volatile.
 - **PSRAM non détectée** : Vérifiez que votre variante matérielle correspond au module (`N16R8` ou `N8R2`).
 
