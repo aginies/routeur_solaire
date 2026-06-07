@@ -39,7 +39,7 @@ jobs:
       - name: Cache PlatformIO
         uses: actions/cache@v4
         with:
-          key: ${{ runner.os }}-pio-${{ hashFiles('platformio.ini') }}
+          key: ${{ runner.os }}-pio-${{ hashFiles('platformio.ini', 'platformio.lock') }}
           path: |
             ~/.platformio
             .pio
@@ -82,7 +82,7 @@ jobs:
             echo "=== Changes since $LATEST_TAG ===" > /tmp/release_notes.md
           fi
           echo "" >> /tmp/release_notes.md
-          git log "${LATEST_TAG:-HEAD}..HEAD" --pretty=format:"%s" --no-merges | while IFS= read -r commit; do
+          while IFS= read -r commit; do
             if [[ "$commit" =~ ^feat: ]]; then
               echo "- :sparkles: ${commit#feat: }" >> /tmp/release_notes.md
             elif [[ "$commit" =~ ^fix: ]]; then
@@ -94,7 +94,7 @@ jobs:
             else
               echo "- :label: $commit" >> /tmp/release_notes.md
             fi
-          done
+          done < <(git log "${LATEST_TAG:-HEAD}..HEAD" --pretty=format:"%s" --no-merges)
           echo "body<<EOF" >> $GITHUB_OUTPUT
           cat /tmp/release_notes.md >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
