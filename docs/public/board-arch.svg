@@ -1,85 +1,74 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 420" width="100%" height="100%">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 380" width="100%" height="100%">
   <defs>
-    <marker id="arrowhead2" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
-      <polygon points="0 0, 10 3.5, 0 7" fill="#374151"/>
+    <marker id="ah2" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#4b5563"/>
     </marker>
-    <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
-      <feDropShadow dx="2" dy="2" stdDeviation="3" flood-opacity="0.15"/>
+    <filter id="sh2" x="-4%" y="-4%" width="108%" height="112%">
+      <feDropShadow dx="1" dy="2" stdDeviation="2" flood-opacity="0.12"/>
     </filter>
   </defs>
 
   <!-- Title -->
-  <text x="400" y="30" text-anchor="middle" font-family="system-ui, sans-serif" font-size="18" font-weight="600" fill="#1f2937">Architecture Carte (PCB)</text>
+  <text x="450" y="28" text-anchor="middle" font-family="system-ui,sans-serif" font-size="15" font-weight="600" fill="#1f2937">Architecture Carte (PCB)</text>
 
-  <!-- Power input chain: USB-C → LDO → ESP32 -->
-  <g>
-    <!-- USB-C block -->
-    <rect x="340" y="55" width="120" height="60" rx="10" fill="#fbbf24" stroke="#f59e0b" stroke-width="2" filter="url(#shadow)"/>
-    <text x="400" y="80" text-anchor="middle" font-family="system-ui, sans-serif" font-size="13" font-weight="600" fill="#78350f">🔌 USB-C</text>
-    <text x="400" y="98" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" fill="#78350f">5V / Serial</text>
+  <!-- ===== Power chain: top to center ===== -->
+  <!-- USB-C -->
+  <rect x="370" y="45" width="160" height="55" rx="10" fill="#fef3c7" stroke="#f59e0b" stroke-width="2" filter="url(#sh2)"/>
+  <text x="450" y="68" text-anchor="middle" font-family="system-ui,sans-serif" font-size="13" font-weight="600" fill="#92400e">🔌 USB-C</text>
+  <text x="450" y="84" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" fill="#a16207" font-style="italic">5V / Serial</text>
 
-    <!-- Arrow down -->
-    <line x1="400" y1="115" x2="400" y2="140" stroke="#374151" stroke-width="2" marker-end="url(#arrowhead2)"/>
+  <!-- Arrow down -->
+  <line x1="450" y1="100" x2="450" y2="118" stroke="#4b5563" stroke-width="2" marker-end="url(#ah2)"/>
 
-    <!-- LDO block -->
-    <rect x="340" y="140" width="120" height="60" rx="10" fill="#fed7aa" stroke="#f97316" stroke-width="2" filter="url(#shadow)"/>
-    <text x="400" y="165" text-anchor="middle" font-family="system-ui, sans-serif" font-size="13" font-weight="600" fill="#9a3412">⚡ AMS1117-3.3</text>
-    <text x="400" y="183" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" fill="#9a3412">5V → 3.3V / 800mA</text>
+  <!-- LDO -->
+  <rect x="370" y="118" width="160" height="55" rx="10" fill="#fed7aa" stroke="#f97316" stroke-width="2" filter="url(#sh2)"/>
+  <text x="450" y="141" text-anchor="middle" font-family="system-ui,sans-serif" font-size="13" font-weight="600" fill="#9a3412">⚡ AMS1117-3.3</text>
+  <text x="450" y="157" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" fill="#b45309" font-style="italic">5V → 3.3V / 800mA</text>
 
-    <!-- Arrow down -->
-    <line x1="400" y1="200" x2="400" y2="225" stroke="#374151" stroke-width="2" marker-end="url(#arrowhead2)"/>
+  <!-- Arrow down -->
+  <line x1="450" y1="173" x2="450" y2="195" stroke="#4b5563" stroke-width="2" marker-end="url(#ah2)"/>
 
-    <!-- ESP32-S3 block (center) -->
-    <rect x="310" y="225" width="180" height="100" rx="14" fill="#3b82f6" stroke="#1d4ed8" stroke-width="2.5" filter="url(#shadow)"/>
-    <text x="400" y="255" text-anchor="middle" font-family="system-ui, sans-serif" font-size="15" font-weight="700" fill="#ffffff">🖥️ ESP32-S3</text>
-    <text x="400" y="275" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" fill="#dbeafe">WROOM-1 N16R8</text>
-    <text x="400" y="295" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" fill="#dbeafe">16MB Flash + 8MB PSRAM</text>
-    <text x="400" y="315" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" fill="#dbeafe">USB-CDC / UART1/2 / I2C</text>
-  </g>
+  <!-- ESP32-S3 (center, prominent) -->
+  <rect x="330" y="195" width="240" height="90" rx="14" fill="#3b82f6" stroke="#1d4ed8" stroke-width="2.5" filter="url(#sh2)"/>
+  <text x="450" y="223" text-anchor="middle" font-family="system-ui,sans-serif" font-size="15" font-weight="700" fill="#ffffff">🖥️ ESP32-S3</text>
+  <text x="450" y="243" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" fill="#dbeafe">WROOM-1 N16R8</text>
+  <text x="450" y="261" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" fill="#bfdbfe">16MB Flash + 8MB PSRAM</text>
 
-  <!-- Left side: JSY meter -->
-  <g>
-    <line x1="310" y1="275" x2="255" y2="275" stroke="#374151" stroke-width="2" marker-end="url(#arrowhead2)"/>
-    <rect x="40" y="245" width="210" height="60" rx="10" fill="#fef3c7" stroke="#eab308" stroke-width="2" filter="url(#shadow)"/>
-    <text x="145" y="270" text-anchor="middle" font-family="system-ui, sans-serif" font-size="13" font-weight="600" fill="#854d0e">⚡ JSY-MK-194G</text>
-    <text x="145" y="290" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" fill="#854d0e">UART1 (IO4/RX, IO5/TX)</text>
-    <text x="145" y="306" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#854d0e" font-style="italic">Modbus-RTU / ZX</text>
-  </g>
+  <!-- ===== Peripherals: left side ===== -->
+  <!-- JSY meter (left) -->
+  <line x1="330" y1="240" x2="275" y2="240" stroke="#4b5563" stroke-width="2" marker-end="url(#ah2)"/>
+  <rect x="40" y="205" width="230" height="70" rx="10" fill="#fef3c7" stroke="#eab308" stroke-width="2" filter="url(#sh2)"/>
+  <text x="155" y="230" text-anchor="middle" font-family="system-ui,sans-serif" font-size="12" font-weight="600" fill="#854d0e">⚡ JSY-MK-194G</text>
+  <text x="155" y="248" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" fill="#a16207">UART1 (IO4/RX, IO5/TX)</text>
+  <text x="155" y="264" text-anchor="middle" font-family="system-ui,sans-serif" font-size="9" fill="#a16207" font-style="italic">Modbus-RTU / ZX</text>
 
-  <!-- Right side: SSR -->
-  <g>
-    <line x1="490" y1="275" x2="545" y2="275" stroke="#374151" stroke-width="2" marker-end="url(#arrowhead2)"/>
-    <rect x="545" y="245" width="215" height="60" rx="10" fill="#dcfce7" stroke="#22c55e" stroke-width="2" filter="url(#shadow)"/>
-    <text x="652" y="270" text-anchor="middle" font-family="system-ui, sans-serif" font-size="13" font-weight="600" fill="#166534">🔌 SSR (Triac)</text>
-    <text x="652" y="290" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" fill="#166534">IO17 / 0-100% PID</text>
-    <text x="652" y="306" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#166534" font-style="italic">→ Chauffe-eau</text>
-  </g>
+  <!-- SSR (right) -->
+  <line x1="570" y1="240" x2="625" y2="240" stroke="#4b5563" stroke-width="2" marker-end="url(#ah2)"/>
+  <rect x="630" y="205" width="230" height="70" rx="10" fill="#dcfce7" stroke="#22c55e" stroke-width="2" filter="url(#sh2)"/>
+  <text x="745" y="230" text-anchor="middle" font-family="system-ui,sans-serif" font-size="12" font-weight="600" fill="#166534">🔌 SSR (Triac)</text>
+  <text x="745" y="248" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" fill="#166534">IO17 / 0-100% PID</text>
+  <text x="745" y="264" text-anchor="middle" font-family="system-ui,sans-serif" font-size="9" fill="#166534" font-style="italic">→ Chauffe-eau</text>
 
-  <!-- Bottom left: Relay + Fan -->
-  <g>
-    <line x1="360" y1="325" x2="255" y2="355" stroke="#374151" stroke-width="1.5" marker-end="url(#arrowhead2)"/>
-    <rect x="40" y="340" width="210" height="60" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" filter="url(#shadow)"/>
-    <text x="145" y="363" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="#166534">🔒 Relais Sécurité + Ventilateur</text>
-    <text x="145" y="382" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" fill="#166534">IO6 (Relay) / IO7 (Fan PWM)</text>
-    <text x="145" y="398" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#166534" font-style="italic">Fail-safe / Refroidissement SSR</text>
-  </g>
+  <!-- ===== Bottom row: Relay+Fan and DS18B20 ===== -->
+  <!-- Arrow down-left -->
+  <line x1="400" y1="285" x2="275" y2="310" stroke="#4b5563" stroke-width="1.5" marker-end="url(#ah2)"/>
+  <rect x="40" y="305" width="230" height="60" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" filter="url(#sh2)"/>
+  <text x="155" y="328" text-anchor="middle" font-family="system-ui,sans-serif" font-size="12" font-weight="600" fill="#166534">🔒 Relais Sécurité + Ventilateur</text>
+  <text x="155" y="346" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" fill="#166534">IO6 (Relay) / IO7 (Fan PWM)</text>
 
-  <!-- Bottom right: Temperature sensor -->
-  <g>
-    <line x1="440" y1="325" x2="545" y2="355" stroke="#374151" stroke-width="1.5" marker-end="url(#arrowhead2)"/>
-    <rect x="545" y="340" width="215" height="60" rx="10" fill="#f1f5f9" stroke="#64748b" stroke-width="2" filter="url(#shadow)"/>
-    <text x="652" y="363" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="#334155">🌡️ DS18B20 (Température)</text>
-    <text x="652" y="382" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" fill="#334155">IO16 / 1-Wire / Pull-up 4.7kΩ</text>
-    <text x="652" y="398" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#334155" font-style="italic">Surveillance SSR</text>
-  </g>
+  <!-- Arrow down-right -->
+  <line x1="500" y1="285" x2="625" y2="310" stroke="#4b5563" stroke-width="1.5" marker-end="url(#ah2)"/>
+  <rect x="630" y="305" width="230" height="60" rx="10" fill="#f1f5f9" stroke="#64748b" stroke-width="2" filter="url(#sh2)"/>
+  <text x="745" y="328" text-anchor="middle" font-family="system-ui,sans-serif" font-size="12" font-weight="600" fill="#334155">🌡️ DS18B20 (Température)</text>
+  <text x="745" y="346" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" fill="#334155">IO16 / 1-Wire / Pull-up 4.7kΩ</text>
 
-  <!-- Power rail indicator -->
-  <rect x="20" y="55" width="25" height="350" rx="4" fill="#fbbf24" stroke="#f59e0b" stroke-width="1" stroke-dasharray="3,3"/>
-  <text x="32" y="235" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#92400e" transform="rotate(-90, 32, 235)" font-weight="600">ALIMENTATION</text>
+  <!-- Power rail label (left edge) -->
+  <rect x="12" y="45" width="20" height="320" rx="4" fill="#fbbf24" stroke="#f59e0b" stroke-width="1" stroke-dasharray="3,3"/>
+  <text x="22" y="210" text-anchor="middle" font-family="system-ui,sans-serif" font-size="9" fill="#92400e" transform="rotate(-90, 22, 210)" font-weight="600">5V / 3.3V</text>
 
-  <!-- Ground rail indicator -->
-  <rect x="755" y="55" width="25" height="350" rx="4" fill="#94a3b8" stroke="#64748b" stroke-width="1" stroke-dasharray="3,3"/>
-  <text x="767" y="235" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#475569" transform="rotate(90, 767, 235)" font-weight="600">GND</text>
+  <!-- Ground rail label (right edge) -->
+  <rect x="868" y="45" width="20" height="320" rx="4" fill="#94a3b8" stroke="#64748b" stroke-width="1" stroke-dasharray="3,3"/>
+  <text x="878" y="210" text-anchor="middle" font-family="system-ui,sans-serif" font-size="9" fill="#475569" transform="rotate(90, 878, 210)" font-weight="600">GND</text>
 
 </svg>

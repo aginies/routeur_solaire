@@ -18,14 +18,6 @@ hero:
 
 ---
 
-## Architecture Système
-
-![Architecture Système](/system-arch.svg)
-
-## Architecture Carte
-
-![Architecture Carte](/board-arch.svg)
-
 ## Fonctionnalités
 
 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-top: 2rem;">
@@ -103,3 +95,17 @@ hero:
 </div>
 
 </div>
+
+---
+
+## Architecture Système
+
+Vue d'ensemble du flux de données : mesure → décision → action, avec les intégrations météo et domotique.
+
+![Architecture Système](/system-arch.svg)
+
+## Architecture Carte
+
+Vue bloc de la PCB principale : alimentation, ESP32-S3, et tous les périphériques connectés.
+
+![Architecture Carte](/board-arch.svg)
