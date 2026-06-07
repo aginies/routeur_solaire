@@ -105,6 +105,15 @@ jobs:
           pattern: firmware-*
           path: artifacts
 
+      - name: Rename firmware files
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          for dir in artifacts/firmware-*; do
+            env=$(basename "$dir" | sed "s/firmware-${VERSION}//")
+            mv "$dir/firmware.bin" "$dir/firmware-${VERSION}-${env}.bin"
+          done
+          ls -la artifacts/firmware-*
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
