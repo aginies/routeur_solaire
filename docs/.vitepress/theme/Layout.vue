@@ -51,6 +51,18 @@ const injectHero = () => {
 
   let rafId = null
   const particles = []
+  let isPaused = false
+  // Pause animation when tab is hidden to save CPU
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && rafId) {
+      cancelAnimationFrame(rafId)
+      rafId = null
+      isPaused = true
+    } else if (!document.hidden && isPaused) {
+      isPaused = false
+      rafId = requestAnimationFrame(loop)
+    }
+  })
   // Sync: the sun's opacity oscillates ~70s cycle with specific peaks
   function sunAlpha(now) {
     const t = (now / 1000) % 70   /* match sunPulse 70s period */
@@ -103,7 +115,7 @@ const injectHero = () => {
   }
 
   // Start with a full batch so we see them moving outwards immediately
-  for (let i = 0; i < 120; i++) { const p = {}; initP(p); particles.push(p); p.life = Math.random() * 700 | 0 }
+  for (let i = 0; i < 60; i++) { const p = {}; initP(p); particles.push(p); p.life = Math.random() * 700 | 0 }
   rafId = requestAnimationFrame(loop)
 }
 
@@ -126,7 +138,16 @@ const injectLicenseBadge = () => {
   homeFeatures.parentNode.insertBefore(container, homeFeatures.nextSibling)
 
   // Scroll-to-top handler (update display directly)
-  const updateScrollTop = () => { const btn = document.getElementById('scrollToTop'); if (btn) btn.style.display = window.scrollY > 300 ? 'block' : 'none' }
+  let scrollTopTicking = false
+  const updateScrollTop = () => {
+    if (scrollTopTicking) return
+    scrollTopTicking = true
+    requestAnimationFrame(() => {
+      const btn = document.getElementById('scrollToTop')
+      if (btn) btn.style.display = window.scrollY > 300 ? 'block' : 'none'
+      scrollTopTicking = false
+    })
+  }
   window.addEventListener('scroll', updateScrollTop, { passive: true })
   updateScrollTop()
 
@@ -199,22 +220,34 @@ const setupScrollReveal = () => {
   document.body.appendChild(marker)
 }
 
-// Observe DOM mutations for late-rendered content.
-const observer = new MutationObserver(() => {
-  scheduleInjectLicenseBadge()
-  setupScrollReveal()
-})
+// Observe DOM mutations for late-rendered content (throttled).
+let mutationScheduled = false
+const observer = typeof MutationObserver !== 'undefined' ? new MutationObserver(() => {
+  if (mutationScheduled) return
+  mutationScheduled = true
+  setTimeout(() => {
+    mutationScheduled = false
+    scheduleInjectLicenseBadge()
+    setupScrollReveal()
+  }, 300)
+}) : null
 
 // ── Reading progress bar ──
 const setupProgressBar = () => {
   const bar = document.getElementById('reading-progress')
   if (!bar) return
 
+  let progressTicking = false
   const updateProgress = () => {
-    const scrollTop = window.scrollY
-    const docHeight = document.documentElement.scrollHeight - window.innerHeight
-    const progress = docHeight > 0 ? (scrollTop / docHeight) * 100 : 0
-    bar.style.width = progress + '%'
+    if (progressTicking) return
+    progressTicking = true
+    requestAnimationFrame(() => {
+      const scrollTop = window.scrollY
+      const docHeight = document.documentElement.scrollHeight - window.innerHeight
+      const progress = docHeight > 0 ? (scrollTop / docHeight) * 100 : 0
+      bar.style.width = progress + '%'
+      progressTicking = false
+    })
   }
 
   window.addEventListener('scroll', updateProgress, { passive: true })
@@ -227,7 +260,7 @@ onMounted(() => {
   scheduleInjectLicenseBadge()
   setupScrollReveal()
   setupProgressBar()
-  setTimeout(() => observer.observe(document.body, { childList: true, subtree: true }), 100)
+  if (observer) setTimeout(() => observer.observe(document.body, { childList: true, subtree: true }), 100)
 })
 watch(route, () => {
   nextTick(() => {
