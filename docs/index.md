@@ -3,9 +3,6 @@ layout: home
 
 hero:
   name: "Routeur Solaire"
-  image:
-    src: /solar-icon.svg
-    alt: "Routeur Solaire"
   text: "Optimisez votre Autoconsommation"
   tagline: "Firmware libre pour ESP32 — routage photovoltaïque haute performance"
   actions:
